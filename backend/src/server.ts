@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
+import mongoose from 'mongoose';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import connectDB from './lib/db';
@@ -26,24 +27,34 @@ const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(s => s.trim())
   : ['http://localhost:3000', 'https://sowaatmenswear.vercel.app'];
 
-app.use(cors({
+const corsOptions = {
   origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-app.options('*', cors());
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Health check endpoints
 app.get('/', (req, res) => {
-  res.json({ status: "ok", message: "SoWhat Fashion API is running" });
+  res.json({
+    status: "ok",
+    message: "SoWhat Fashion API is running",
+    dbConnected: mongoose.connection.readyState === 1,
+  });
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    dbState: mongoose.connection.readyState,
+    allowedOrigins,
+  });
 });
 
 // Routes
@@ -61,10 +72,21 @@ app.use('/api/catalogue', catalogueRoutes);
 app.use(errorHandler);
 
 // Connect to DB and start server
-connectDB().then(() => {
+const startServer = async () => {
+  try {
+    await connectDB();
+    console.log('✅ Database connected');
+  } catch (err) {
+    console.error('❌ Database connection failed:', err);
+    // Don't exit — start server anyway so health checks work
+  }
+
   app.listen(PORT, () => {
     console.log(`🚀 So What Menswear API running on port ${PORT}`);
+    console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
   });
-});
+};
+
+startServer();
 
 export default app;
