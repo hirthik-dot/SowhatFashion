@@ -17,6 +17,8 @@ interface AuthState {
   isAuthModalOpen: boolean;
   redirectUrl: string | null;
   wishlist: string[];
+  /** Short-lived message shown after OTP / Google sign-in */
+  signInToast: string | null;
   setUser: (user: User | null) => void;
   logout: () => void;
   openAuthModal: (redirectUrl?: string) => void;
@@ -24,6 +26,8 @@ interface AuthState {
   toggleWishlist: (productId: string) => void;
   setWishlist: (wishlist: string[]) => void;
   setRedirectUrl: (url: string | null) => void;
+  showSignInToast: (message?: string) => void;
+  clearSignInToast: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -32,6 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthModalOpen: false,
   redirectUrl: null,
   wishlist: [],
+  signInToast: null,
 
   setUser: (user) => set({ user, isLoggedIn: !!user }),
   logout: () => {
@@ -39,8 +44,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('token');
       document.cookie = 'user_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     }
-    set({ user: null, isLoggedIn: false, wishlist: [] });
+    set({ user: null, isLoggedIn: false, wishlist: [], signInToast: null });
   },
+  showSignInToast: (message) =>
+    set({ signInToast: message?.trim() || 'Successfully signed in' }),
+  clearSignInToast: () => set({ signInToast: null }),
   openAuthModal: (redirectUrl?: string) => set({ isAuthModalOpen: true, redirectUrl: redirectUrl || null }),
   closeAuthModal: () => set({ isAuthModalOpen: false }),
   setWishlist: (wishlist) => set({ wishlist }),

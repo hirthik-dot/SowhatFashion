@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { getProducts, getMegaDropdown, getSidebarConfig, getProductCounts, getCategories } from '@/lib/api';
 import { formatPrice, calculateDiscount, cn } from '@/lib/utils';
 import Footer from '@/components/layout/Footer';
+import { userInitials, userFirstName } from '@/lib/auth-user';
 
 // --- SVGs ---
 const Truck = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/><path d="M14 9h4l4 4v5c0 .6-.4 1-1 1h-2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>;
@@ -375,7 +376,7 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
   }, [searchParams]);
 
   const totalItems = useCartStore((s) => s.getTotalItems());
-  const { openAuthModal } = useAuthStore();
+  const { openAuthModal, user, isLoggedIn } = useAuthStore();
 
   const updateUrlParam = (key: string, value: string | null) => {
      const params = new URLSearchParams(searchParams.toString());
@@ -460,9 +461,41 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
             </div>
 
             <div className="flex items-center gap-5 md:gap-7 flex-shrink-0">
-               <button onClick={() => openAuthModal()} className="hidden md:block bg-[var(--gold)] text-black uppercase font-semibold px-6 h-[44px] text-[13px] tracking-wide hover:opacity-90 transition-opacity rounded-sm">
-                 Sign In
-               </button>
+               {isLoggedIn && user ? (
+                 <Link
+                   href="/account"
+                   className="flex items-center justify-center gap-2 rounded-sm bg-[var(--gold)] px-3 h-[40px] md:h-[44px] text-black hover:opacity-90 transition-opacity"
+                   title="My account"
+                 >
+                   <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black/10 text-[10px] font-bold uppercase">
+                     {user.avatar ? (
+                       <img src={user.avatar} alt="" className="h-full w-full object-cover" />
+                     ) : (
+                       userInitials(user)
+                     )}
+                   </span>
+                   <span className="hidden text-left text-[13px] font-semibold leading-tight sm:block max-w-[6.5rem] truncate normal-case">
+                     {userFirstName(user)}
+                   </span>
+                 </Link>
+               ) : (
+                 <>
+                   <button
+                     type="button"
+                     onClick={() => openAuthModal()}
+                     className="md:hidden rounded-sm border border-[var(--border)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--text-primary)]"
+                   >
+                     Sign in
+                   </button>
+                   <button
+                     type="button"
+                     onClick={() => openAuthModal()}
+                     className="hidden md:block bg-[var(--gold)] text-black uppercase font-semibold px-6 h-[44px] text-[13px] tracking-wide hover:opacity-90 transition-opacity rounded-sm"
+                   >
+                     Sign In
+                   </button>
+                 </>
+               )}
                
                <Link href="/account?tab=wishlist" className="hidden md:flex flex-col items-center gap-[4px] text-[var(--text-secondary)] hover:text-black">
                  <HeartIcon size={22} className="text-black" />

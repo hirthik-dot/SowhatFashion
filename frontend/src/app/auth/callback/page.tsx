@@ -38,7 +38,10 @@ function AuthCallbackContent() {
           const data = await res.json();
           if (data.success && data.user) {
             const normalized = normalizeAuthUser(data.user);
-            if (normalized) useAuthStore.getState().setUser(normalized);
+            if (normalized) {
+              useAuthStore.getState().setUser(normalized);
+              useAuthStore.getState().showSignInToast('Successfully signed in');
+            }
           }
         } catch (err) {
           console.error('Failed to fetch user:', err);

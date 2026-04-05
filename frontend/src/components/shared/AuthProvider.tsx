@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import AuthModal from '@/components/shared/AuthModal';
+import SignInToast from '@/components/shared/SignInToast';
 import { normalizeAuthUser } from '@/lib/auth-user';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -42,6 +43,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   return (
     <>
       {children}
+      <SignInToast />
       <AuthModal />
     </>
   );

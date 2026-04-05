@@ -7,7 +7,8 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export default function AuthModal() {
-  const { isAuthModalOpen, closeAuthModal, setUser, redirectUrl, setRedirectUrl } = useAuthStore();
+  const { isAuthModalOpen, closeAuthModal, setUser, redirectUrl, setRedirectUrl, showSignInToast } =
+    useAuthStore();
   const [email, setEmail] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -90,6 +91,7 @@ export default function AuthModal() {
         }
         const normalized = normalizeAuthUser(data.user);
         if (normalized) setUser(normalized);
+        showSignInToast('Successfully signed in');
         closeAuthModal();
         if (redirectUrl && redirectUrl.startsWith('/')) {
           router.push(redirectUrl);
