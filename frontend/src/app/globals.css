@@ -1,0 +1,261 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #F8F6F2;
+  --border: #E8E4DF;
+  --gold: #C9A84C;
+  --gold-hover: #A8882E;
+  --gold-light: #F5E6C0;
+  --navbar-bg: #1A1A1A;
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B6B6B;
+  --sale-red: #C0392B;
+  --success: #2E7D52;
+}
+
+
+
+body {
+  font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
+  color: var(--text-primary);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-playfair), 'Playfair Display', serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Marquee animation */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+}
+.animate-marquee-fast {
+  animation: marquee 15s linear infinite;
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* Slide up */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.8s ease-out forwards;
+}
+
+/* Pulse dot */
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+.animate-pulse-dot {
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+/* Zoom on hover for images */
+.hover-zoom {
+  overflow: hidden;
+}
+.hover-zoom img {
+  transition: transform 0.5s ease;
+}
+.hover-zoom:hover img {
+  transform: scale(1.08);
+}
+
+/* Gold button */
+.btn-gold {
+  background-color: var(--gold);
+  color: #000;
+  font-weight: 600;
+  padding: 12px 32px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 14px;
+}
+.btn-gold:hover {
+  background-color: var(--gold-hover);
+}
+
+.btn-gold-outline {
+  background: transparent;
+  color: var(--gold);
+  font-weight: 600;
+  padding: 12px 32px;
+  border: 2px solid var(--gold);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 14px;
+}
+.btn-gold-outline:hover {
+  background-color: var(--gold);
+  color: #000;
+}
+
+/* Hide scrollbar for horizontal scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Product card hover overlay */
+.product-card-overlay {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.product-card:hover .product-card-overlay {
+  opacity: 1;
+}
+
+/* Countdown box */
+.countdown-box {
+  background: var(--gold);
+  color: #000;
+  font-weight: 700;
+  min-width: 48px;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 32px;
+  border-radius: 6px;
+}
+@media (min-width: 768px) {
+  .countdown-box {
+    font-size: 20px;
+    border-radius: 4px;
+  }
+}
+.countdown-box-dark {
+  background: rgba(201, 168, 76, 0.15);
+  color: var(--gold);
+  border: 1px solid var(--gold);
+}
+
+/* Admin styles */
+.admin-sidebar {
+  background: var(--navbar-bg);
+  min-height: 100vh;
+  width: 260px;
+}
+.admin-sidebar a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: #aaa;
+  transition: all 0.2s;
+  text-decoration: none;
+  font-size: 14px;
+}
+.admin-sidebar a:hover,
+.admin-sidebar a.active {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.admin-sidebar a.active {
+  border-left: 3px solid var(--gold);
+}
+
+/* Toast */
+@keyframes toastSlide {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.toast-enter {
+  animation: toastSlide 0.3s ease-out forwards;
+}
+
+/* Size pill */
+.size-pill {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+.size-pill:hover {
+  border-color: var(--gold);
+}
+.size-pill.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #000;
+}
+.size-pill.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Category tab */
+.category-tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.category-tab:hover {
+  color: var(--text-primary);
+}
+.category-tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+/* Carousel dots */
+.carousel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.carousel-dot.active {
+  background: var(--gold);
+  transform: scale(1.2);
+}
