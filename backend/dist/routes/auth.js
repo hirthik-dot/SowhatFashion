@@ -127,6 +127,30 @@ router.post('/verify-otp', async (req, res) => {
         res.status(500).json({ success: false, error: 'Server error' });
     }
 });
+// POST /api/auth/google (USER using NextAuth)
+router.post('/google', async (req, res) => {
+    try {
+        const { email, name, avatar, googleId } = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, error: 'Email required' });
+        }
+        let user = await User_1.User.findOne({ email });
+        if (!user) {
+            user = await User_1.User.create({ email, name, avatar, googleId, isEmailVerified: true });
+        }
+        else {
+            if (!user.googleId)
+                user.googleId = googleId;
+            if (!user.avatar)
+                user.avatar = avatar;
+            await user.save();
+        }
+        res.json({ success: true, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar } });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
 // POST /api/auth/login (ADMIN)
 router.post('/login', async (req, res) => {
     try {

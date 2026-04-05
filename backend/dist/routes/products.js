@@ -10,7 +10,7 @@ const router = (0, express_1.Router)();
 // GET /api/products - all active products with filters
 router.get('/', async (req, res) => {
     try {
-        const { category, featured, newArrival, sort, limit, page } = req.query;
+        const { category, featured, newArrival, sort, limit, page, size, minPrice, maxPrice, discount, promotions, search } = req.query;
         const filter = { isActive: true };
         if (category)
             filter.category = category;
@@ -18,20 +18,65 @@ router.get('/', async (req, res) => {
             filter.isFeatured = true;
         if (newArrival === 'true')
             filter.isNewArrival = true;
+        // Size filter: ?size=M,L,XL → products that have ANY of those sizes
+        if (size) {
+            const sizeArr = size.split(',').map(s => s.trim().toUpperCase());
+            filter.sizes = { $in: sizeArr };
+        }
+        // Price range filter
+        if (minPrice || maxPrice) {
+            const priceField = 'price'; // filter on base price
+            filter[priceField] = {};
+            if (minPrice)
+                filter[priceField].$gte = parseInt(minPrice);
+            if (maxPrice)
+                filter[priceField].$lte = parseInt(maxPrice);
+        }
+        // Promotion filters: ?promotions=flash-sale,new-arrivals
+        if (promotions) {
+            const promoArr = promotions.split(',');
+            const promoConditions = [];
+            promoArr.forEach(p => {
+                if (p === 'new-arrivals')
+                    promoConditions.push({ isNewArrival: true });
+                if (p === 'flash-sale')
+                    promoConditions.push({ isFeatured: true });
+            });
+            if (promoConditions.length > 0) {
+                filter.$or = promoConditions;
+            }
+        }
+        // Search filter
+        if (search) {
+            filter.name = { $regex: search, $options: 'i' };
+        }
         let sortObj = { createdAt: -1 };
-        if (sort === 'price_asc')
+        if (sort === 'price_asc' || sort === 'Price: Low-High')
             sortObj = { price: 1 };
-        if (sort === 'price_desc')
+        if (sort === 'price_desc' || sort === 'Price: High-Low')
             sortObj = { price: -1 };
-        if (sort === 'newest')
+        if (sort === 'newest' || sort === 'Newest')
             sortObj = { createdAt: -1 };
+        if (sort === 'Discount')
+            sortObj = { discountPrice: 1 };
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 50;
         const skip = (pageNum - 1) * limitNum;
-        const [products, total] = await Promise.all([
+        let [products, total] = await Promise.all([
             Product_1.default.find(filter).sort(sortObj).skip(skip).limit(limitNum),
             Product_1.default.countDocuments(filter),
         ]);
+        // Post-query discount filter (computed field)
+        if (discount) {
+            const discountMin = parseInt(discount);
+            products = products.filter(p => {
+                if (!p.discountPrice || p.discountPrice >= p.price)
+                    return false;
+                const pct = Math.round(((p.price - p.discountPrice) / p.price) * 100);
+                return pct >= discountMin;
+            });
+            total = products.length;
+        }
         res.json({
             products,
             total,

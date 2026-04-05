@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const cors_1 = __importDefault(require("cors"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const db_1 = __importDefault(require("./lib/db"));
@@ -19,19 +20,45 @@ const settings_1 = __importDefault(require("./routes/settings"));
 const payment_1 = __importDefault(require("./routes/payment"));
 const upload_1 = __importDefault(require("./routes/upload"));
 const users_1 = __importDefault(require("./routes/users"));
+const catalogue_1 = __importDefault(require("./routes/catalogue"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
-// Middleware
+// CORS — dynamic origin check (must be FIRST middleware)
+const allowedOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+    : ['http://localhost:3000'];
 app.use((0, cors_1.default)({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, origin || '*');
+        }
+        else {
+            callback(new Error('CORS: origin ' + origin + ' not allowed'));
+        }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
+app.options('*', (0, cors_1.default)());
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
-// Health check endpoint
+// Health check endpoints
+app.get('/', (req, res) => {
+    res.json({
+        status: "ok",
+        message: "SoWhat Fashion API is running",
+        dbConnected: mongoose_1.default.connection.readyState === 1,
+    });
+});
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        dbState: mongoose_1.default.connection.readyState,
+        allowedOrigins,
+    });
 });
 // Routes
 app.use('/api/auth', auth_1.default);
@@ -42,13 +69,29 @@ app.use('/api/settings', settings_1.default);
 app.use('/api/payment', payment_1.default);
 app.use('/api/upload', upload_1.default);
 app.use('/api/users', users_1.default);
+app.use('/api/catalogue', catalogue_1.default);
 // Error handler
 app.use(errorHandler_1.default);
+// Global catch-all error handler
+app.use((err, req, res, next) => {
+    console.error('Global error:', err.stack);
+    res.status(500).json({ error: err.message });
+});
 // Connect to DB and start server
-(0, db_1.default)().then(() => {
+const startServer = async () => {
+    try {
+        await (0, db_1.default)();
+        console.log('✅ Database connected');
+    }
+    catch (err) {
+        console.error('❌ Database connection failed:', err);
+        // Don't exit — start server anyway so health checks work
+    }
     app.listen(PORT, () => {
         console.log(`🚀 So What Menswear API running on port ${PORT}`);
+        console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
     });
-});
+};
+startServer();
 exports.default = app;
 //# sourceMappingURL=server.js.map

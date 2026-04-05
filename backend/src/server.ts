@@ -28,16 +28,16 @@ const allowedOrigins = process.env.FRONTEND_URL
   : ['http://localhost:3000'];
 
 app.use(cors({
-  origin: (origin, callback) => {
+  origin: function(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
+      callback(null, origin || '*');
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error('CORS: origin ' + origin + ' not allowed'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
