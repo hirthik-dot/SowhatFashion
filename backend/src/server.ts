@@ -30,7 +30,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Health check endpoint
+// Health check endpoints
+app.get('/', (req, res) => {
+  res.json({ status: "ok", message: "SoWhat Fashion API is running" });
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

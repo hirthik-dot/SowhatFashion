@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useCartStore } from '@/lib/cart-store';
 import { formatPrice, calculateDiscount } from '@/lib/utils';
@@ -15,6 +15,11 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const [descOpen, setDescOpen] = useState(false);
   const addItem = useCartStore((s) => s.addItem);
   const router = useRouter();
+  const [currentUrl, setCurrentUrl] = useState('');
+
+  useEffect(() => {
+    setCurrentUrl(window.location.href);
+  }, []);
 
   const handleTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
   const handleTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
@@ -209,7 +214,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
 
         <div className="mt-8 flex flex-col md:flex-row gap-4">
           <a 
-            href={`https://wa.me/?text=Check out this product: ${typeof window !== 'undefined' ? window.location.href : ''}`}
+            href={`https://wa.me/?text=Check out this product: ${currentUrl}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 bg-[#25D366]/10 text-[#25D366] py-3 px-4 rounded font-medium border border-[#25D366]/20 transition-colors hover:bg-[#25D366]/20 w-full md:w-auto h-[48px]"
