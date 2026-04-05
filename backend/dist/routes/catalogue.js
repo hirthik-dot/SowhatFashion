@@ -204,7 +204,8 @@ router.get('/product-counts', async (req, res) => {
         const Product = (await Promise.resolve().then(() => __importStar(require('../models/Product')))).default;
         const baseFilter = { isActive: true };
         if (req.query.category) {
-            baseFilter.category = req.query.category;
+            let catVal = req.query.category.trim().replace(/s$/i, '');
+            baseFilter.category = { $regex: new RegExp(`^${catVal}$`, 'i') };
         }
         const [totalCount, sizeAgg, categoryAgg, newArrivalsCount, featuredCount,] = await Promise.all([
             Product.countDocuments(baseFilter),
@@ -242,8 +243,8 @@ router.get('/product-counts', async (req, res) => {
         });
         res.json({
             total: totalCount,
-            sizes,
-            categories,
+            size: sizes,
+            category: categories,
             promotions: {
                 'new-arrivals': newArrivalsCount,
                 'flash-sale': featuredCount, // map featured to flash sale for demo

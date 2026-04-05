@@ -38,29 +38,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const slugify_1 = __importDefault(require("slugify"));
-const ProductSchema = new mongoose_1.Schema({
+const CategorySchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
     slug: { type: String, unique: true },
-    category: {
-        type: String,
-        required: true,
-    },
-    subCategory: { type: String, default: '' },
-    images: [{ type: String }],
-    price: { type: Number, required: true, min: 0 },
-    discountPrice: { type: Number, default: 0, min: 0 },
-    sizes: [{ type: String, enum: ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'] }],
-    stock: { type: Number, required: true, default: 0, min: 0 },
-    tags: [{ type: String }],
-    isFeatured: { type: Boolean, default: false },
-    isNewArrival: { type: Boolean, default: false },
+    parentSlug: { type: String, default: null },
+    megaDropdownLabel: { type: String, default: '' },
+    order: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
 }, { timestamps: true });
-ProductSchema.pre('save', function (next) {
+CategorySchema.pre('save', function (next) {
     if (this.isModified('name') || !this.slug) {
         this.slug = (0, slugify_1.default)(this.name, { lower: true, strict: true });
     }
     next();
 });
-exports.default = mongoose_1.default.model('Product', ProductSchema);
-//# sourceMappingURL=Product.js.map
+exports.default = mongoose_1.default.model('Category', CategorySchema);
+//# sourceMappingURL=Category.js.map

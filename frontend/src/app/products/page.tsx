@@ -28,7 +28,14 @@ export default async function ProductsPage({
       <div className="max-w-7xl mx-auto px-4 py-8 md:py-16 w-full flex-grow">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <h1 className="text-3xl font-playfair font-bold uppercase tracking-widest text-[#1a1a1a]">
-            {resolvedSearchParams.category ? `${resolvedSearchParams.category}S` : resolvedSearchParams.featured ? 'Featured' : resolvedSearchParams.newArrival ? 'New Arrivals' : 'All Products'}
+            {resolvedSearchParams.category
+              ? (() => {
+                  const catMap: Record<string, string> = { tshirt: 'T-Shirts', shirt: 'Shirts', pant: 'Pants', tshirts: 'T-Shirts', shirts: 'Shirts', pants: 'Pants' };
+                  return catMap[resolvedSearchParams.category.toLowerCase()] || resolvedSearchParams.category.toUpperCase();
+                })()
+              : resolvedSearchParams.featured ? 'Featured'
+              : resolvedSearchParams.newArrival ? 'New Arrivals'
+              : 'All Products'}
           </h1>
           
           <div className="flex items-center gap-4 text-sm w-full md:w-auto">

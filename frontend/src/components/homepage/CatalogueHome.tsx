@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
-import { getProducts, getMegaDropdown, getSidebarConfig, getProductCounts } from '@/lib/api';
+import { getProducts, getMegaDropdown, getSidebarConfig, getProductCounts, getCategories } from '@/lib/api';
 import { formatPrice, calculateDiscount, cn } from '@/lib/utils';
 import Footer from '@/components/layout/Footer';
 
@@ -204,9 +204,45 @@ const DesktopMegaDropdown = ({ category }: { category: string }) => {
   );
 };
 
+const DynamicMegaDropdown = ({ parentSlug, subCategories }: { parentSlug: string; subCategories: any[] }) => {
+  const groups = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    subCategories.forEach((sub: any) => {
+      const label = sub.megaDropdownLabel || 'Other';
+      if (!map[label]) map[label] = [];
+      map[label].push(sub);
+    });
+    return Object.entries(map);
+  }, [subCategories]);
+
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="absolute top-full left-0 right-0 w-full bg-white shadow-xl border-t border-[var(--border)] z-50 animate-fade-in py-8 px-12 pb-12">
+      <div className="max-w-7xl mx-auto flex gap-12">
+        {groups.map(([header, items]) => (
+          <div key={header} className="min-w-[160px]">
+             <h4 className="font-semibold text-sm text-[var(--text-primary)] mb-4">{header}</h4>
+             <ul className="space-y-3">
+                {items.map((sub: any) => (
+                   <li key={sub.slug}>
+                      <Link href={`/products?category=${parentSlug}&subCategory=${sub.slug}`} className="text-sm text-[var(--text-secondary)] hover:text-[var(--gold)] transition-colors">
+                         {sub.name}
+                      </Link>
+                   </li>
+                ))}
+             </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const ProductCardMax = ({ product }: any) => {
   const { wishlist, toggleWishlist, isLoggedIn, openAuthModal } = useAuthStore();
   const wishlisted = useMemo(() => wishlist.includes(product._id), [wishlist, product._id]);
+  const [isHovered, setIsHovered] = useState(false);
   
   const discount = calculateDiscount(product.price, product.discountPrice);
   const imageUrl = product.images?.[0] || '/placeholder.jpg';
@@ -234,7 +270,13 @@ const ProductCardMax = ({ product }: any) => {
 
   return (
     <Link href={`/products/${product.slug}`} className="block group font-sans">
-      <div className="relative">
+      <div 
+        className="relative"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onTouchStart={() => setIsHovered(true)}
+        onTouchEnd={() => setIsHovered(false)}
+      >
         <div className="aspect-[4/5] bg-[var(--surface)] overflow-hidden relative">
           <Image 
             src={imageUrl} 
@@ -243,6 +285,15 @@ const ProductCardMax = ({ product }: any) => {
             className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" 
             sizes="(max-width: 768px) 50vw, 25vw"
           />
+          {product.images?.[1] && (
+            <Image
+              src={product.images[1]}
+              alt={product.name}
+              fill
+              className={`object-cover transition-all duration-300 group-hover:scale-[1.03] ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+              sizes="(max-width: 768px) 50vw, 25vw"
+            />
+          )}
           <button 
             onClick={handleWishlist} 
             className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center transition-opacity md:opacity-0 group-hover:opacity-100 ${wishlisted ? 'opacity-100' : ''}`}
@@ -296,12 +347,18 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
   const [isMounted, setIsMounted] = useState(false);
   const [mobileDraftParams, setMobileDraftParams] = useState<URLSearchParams>(new URLSearchParams());
 
-  const categories = ['T-Shirts', 'Shirts', 'Pants', 'Offers', 'Sale'];
+  // Dynamic categories from DB
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
+  const categories = useMemo(() => {
+    const dynamic = dbCategories.map((c: any) => ({ name: c.name, slug: c.slug, subCategories: c.subCategories || [] }));
+    return [...dynamic, { name: 'Offers', slug: 'offers', subCategories: [] }, { name: 'Sale', slug: 'sale', subCategories: [] }];
+  }, [dbCategories]);
 
   useEffect(() => { setIsMounted(true); }, []);
 
-  // Fetch Sidebar Config once
+  // Fetch categories + sidebar config once on mount
   useEffect(() => {
+     getCategories().then(res => { if (Array.isArray(res)) setDbCategories(res); }).catch(() => {});
      getSidebarConfig().then(res => setSidebarConfig(res)).catch(() => {});
   }, []);
 
@@ -378,11 +435,11 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
           <div className="max-w-[1600px] mx-auto px-4 md:px-8 h-[60px] md:h-[72px] flex items-center justify-between gap-4 md:gap-8">
             
             <div className="flex items-center flex-shrink-0">
-               <button className="md:hidden p-2 -ml-2 mr-2" onClick={() => setMobileCategoryOpen(categories[0])}>
+               <button className="md:hidden p-2 -ml-2 mr-2" onClick={() => setMobileCategoryOpen(categories[0]?.slug || null)}>
                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                </button>
-               <Link href="/" className="bg-[var(--navbar-bg)] text-[var(--gold)] w-10 h-10 md:w-12 md:h-12 flex items-center justify-center font-playfair font-bold text-xl md:text-2xl rounded-sm">
-                 SW
+               <Link href="/" className="flex items-center justify-center rounded-sm overflow-hidden">
+                 <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={48} height={48} className="object-cover w-10 h-10 md:w-12 md:h-12" />
                </Link>
             </div>
 
@@ -437,30 +494,30 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
            <div className="max-w-[1600px] mx-auto flex justify-center h-[50px] gap-8">
               {categories.map(cat => (
                  <Link 
-                   href={`/products?category=${cat.toLowerCase().replace('-', '')}`}
-                   key={cat} 
+                   href={`/products?category=${cat.slug}`}
+                   key={cat.slug} 
                    className={cn(
                      "px-2 flex items-center text-[13px] font-bold uppercase tracking-widest transition-colors border-b-2",
-                     searchParams.get('category') === cat.toLowerCase().replace('-', '') ? "text-[var(--gold)] border-[var(--gold)]" : "text-[var(--text-primary)] border-transparent hover:text-[var(--gold)] hover:border-[var(--gold)]"
+                     searchParams.get('category') === cat.slug ? "text-[var(--gold)] border-[var(--gold)]" : "text-[var(--text-primary)] border-transparent hover:text-[var(--gold)] hover:border-[var(--gold)]"
                    )}
-                   onMouseEnter={() => setHoveredCategory(cat)}
+                   onMouseEnter={() => setHoveredCategory(cat.slug)}
                  >
-                   {cat}
+                   {cat.name}
                  </Link>
               ))}
            </div>
-           {hoveredCategory && <DesktopMegaDropdown category={hoveredCategory} />}
+           {hoveredCategory && (() => { const found = categories.find(c => c.slug === hoveredCategory); return found && found.subCategories?.length > 0 ? <DynamicMegaDropdown parentSlug={found.slug} subCategories={found.subCategories} /> : null; })()}
         </div>
         
         {/* Mobile Category Nav Row */}
         <div className="md:hidden flex items-center gap-6 overflow-x-auto px-4 py-3 bg-white border-b border-[var(--border)] no-scrollbar">
            {categories.map(cat => (
               <button 
-                key={cat} 
-                className={cn("whitespace-nowrap font-bold text-xs uppercase tracking-wider", searchParams.get('category') === cat.toLowerCase().replace('-','') ? "text-[var(--gold)]" : "text-[var(--text-secondary)]")} 
-                onClick={() => setMobileCategoryOpen(cat)}
+                key={cat.slug} 
+                className={cn("whitespace-nowrap font-bold text-xs uppercase tracking-wider", searchParams.get('category') === cat.slug ? "text-[var(--gold)]" : "text-[var(--text-secondary)]")} 
+                onClick={() => setMobileCategoryOpen(cat.slug)}
               >
-                 {cat}
+                 {cat.name}
               </button>
            ))}
         </div>
@@ -535,7 +592,7 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
                <div>
                   {searchParams.get('category') && (
                      <h1 className="text-2xl md:text-3xl font-playfair font-bold uppercase tracking-widest text-[var(--text-primary)] mb-2">
-                        {searchParams.get('category')?.toUpperCase()}
+                                                 {(() => { const m: Record<string, string> = { tshirt:'T-SHIRTS', shirt:'SHIRTS', pant:'PANTS', tshirts:'T-SHIRTS', shirts:'SHIRTS', pants:'PANTS' }; return m[searchParams.get('category')!.toLowerCase()] || searchParams.get('category')!.toUpperCase(); })()}
                      </h1>
                   )}
                   <div className="text-sm text-[var(--text-secondary)] font-medium">Showing {activeProducts.length} products</div>
@@ -624,10 +681,10 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
                 <button onClick={() => setMobileCategoryOpen(null)} className="p-2 -ml-2 text-gray-500 hover:text-black">
                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 </button>
-                <h3 className="font-bold text-sm uppercase tracking-widest">{mobileCategoryOpen}</h3>
+                <h3 className="font-bold text-sm uppercase tracking-widest">{categories.find(c => c.slug === mobileCategoryOpen)?.name || mobileCategoryOpen}</h3>
              </div>
              <div className="flex-1 overflow-y-auto w-full pb-safe">
-                <MobileMegaDropdown category={mobileCategoryOpen} onClose={() => setMobileCategoryOpen(null)} />
+                {(() => { const found = categories.find(c => c.slug === mobileCategoryOpen); if (!found?.subCategories?.length) return <div className="p-4 text-sm text-[var(--text-secondary)]">No subcategories</div>; const groups: Record<string, any[]> = {}; found.subCategories.forEach((sub: any) => { const l = sub.megaDropdownLabel || 'Other'; if (!groups[l]) groups[l] = []; groups[l].push(sub); }); return <div className="p-4">{Object.entries(groups).map(([h, items]) => <div key={h} className="border-b border-[var(--border)] last:border-0"><h4 className="py-4 text-sm font-bold uppercase tracking-wider">{h}</h4><div className="pb-4 space-y-3 pl-2">{items.map((s: any) => <button key={s.slug} className="block text-sm text-[var(--text-secondary)] w-full text-left py-2" onClick={() => { setMobileCategoryOpen(null); router.push(`/products?category=${found.slug}&subCategory=${s.slug}`); }}>{s.name}</button>)}</div></div>)}</div>; })()}
              </div>
           </div>
        )}

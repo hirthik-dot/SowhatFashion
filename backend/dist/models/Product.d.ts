@@ -2,7 +2,8 @@ import mongoose, { Document } from 'mongoose';
 export interface IProduct extends Document {
     name: string;
     slug: string;
-    category: 'tshirt' | 'shirt' | 'pant';
+    category: string;
+    subCategory: string;
     images: string[];
     price: number;
     discountPrice: number;

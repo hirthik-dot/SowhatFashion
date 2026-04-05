@@ -136,6 +136,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/'
     });
 
     res.json({ success: true, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar } });
@@ -197,6 +198,7 @@ router.post('/login', async (req: Request, res: Response) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, 
+      path: '/'
     });
 
     res.json({ message: 'Login successful', admin: { id: admin._id, email: admin.email } });
@@ -205,19 +207,20 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/auth/logout (COMBINED)
 router.post('/logout', (req: Request, res: Response) => {
   res.cookie('token', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     expires: new Date(0),
+    path: '/'
   });
   res.cookie('user_token', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     expires: new Date(0),
+    path: '/'
   });
   
   // also optionally clear next-auth.session-token

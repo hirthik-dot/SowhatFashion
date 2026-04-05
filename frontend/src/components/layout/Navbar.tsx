@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
@@ -36,9 +37,8 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
               <button className="md:hidden p-2 -ml-2" onClick={() => setMenuOpen(!menuOpen)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
               </button>
-              <Link href="/" className="text-xl font-bold tracking-wider" style={{ fontFamily: 'var(--font-playfair)' }}>
-                <span className={scrolled ? 'text-[var(--text-primary)]' : 'text-white'}>SO</span>
-                <span className="text-[var(--gold)]">WAAT</span>
+              <Link href="/" className="flex-shrink-0">
+                <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={50} height={50} className="object-contain" />
               </Link>
             </div>
             <div className="flex items-center gap-5">
@@ -88,7 +88,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMenuOpen(false)} />
           <div className={`absolute top-0 left-0 w-[80%] max-w-[300px] h-full bg-white transform transition-transform duration-300 ease-in-out flex flex-col ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-              <span className="font-bold tracking-wider" style={{ fontFamily: 'var(--font-playfair)' }}>SOWAAT</span>
+              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={40} height={40} className="object-contain" />
               <button onClick={() => setMenuOpen(false)} className="p-2">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
@@ -133,10 +133,8 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
             </button>
 
             {/* Logo - Center */}
-            <Link href="/" className="absolute left-1/2 -translate-x-1/2 text-center w-full max-w-[200px] md:max-w-none">
-              <h1 className="text-[14px] md:text-xl font-bold tracking-[0.1em] md:tracking-[0.15em] whitespace-nowrap" style={{ fontFamily: 'var(--font-playfair)' }}>
-                SOWAAT <span className="text-[var(--gold)]">MENS WEAR</span>
-              </h1>
+            <Link href="/" className="absolute left-1/2 -translate-x-1/2 text-center w-full max-w-[200px] md:max-w-none flex justify-center">
+              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={80} height={50} className="object-contain h-10 w-auto md:h-12" />
             </Link>
 
             {/* Right icons */}
@@ -212,9 +210,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
           {/* Drawer Content */}
           <div className={`absolute top-0 left-0 w-[80%] max-w-[300px] h-full bg-white transform transition-transform duration-300 ease-in-out flex flex-col ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-              <span className="font-bold tracking-wider" style={{ fontFamily: 'var(--font-playfair)' }}>
-                SOWAAT
-              </span>
+              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={40} height={40} className="object-contain" />
               <button onClick={() => setMenuOpen(false)} className="p-2">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>

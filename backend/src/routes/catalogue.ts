@@ -178,7 +178,8 @@ router.get('/product-counts', async (req: Request, res: Response) => {
     const Product = (await import('../models/Product')).default;
     const baseFilter: any = { isActive: true };
     if (req.query.category) {
-      baseFilter.category = req.query.category;
+      let catVal = (req.query.category as string).trim().replace(/s$/i, '');
+      baseFilter.category = { $regex: new RegExp(`^${catVal}$`, 'i') };
     }
 
     const [
@@ -223,8 +224,8 @@ router.get('/product-counts', async (req: Request, res: Response) => {
 
     res.json({
       total: totalCount,
-      sizes,
-      categories,
+      size: sizes,
+      category: categories,
       promotions: {
         'new-arrivals': newArrivalsCount,
         'flash-sale': featuredCount, // map featured to flash sale for demo

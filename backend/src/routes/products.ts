@@ -7,10 +7,19 @@ const router = Router();
 // GET /api/products - all active products with filters
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { category, featured, newArrival, sort, limit, page, size, minPrice, maxPrice, discount, promotions, search } = req.query;
+    const { category, subCategory, featured, newArrival, sort, limit, page, size, minPrice, maxPrice, discount, promotions, search } = req.query;
 
     const filter: any = { isActive: true };
-    if (category) filter.category = category;
+    if (category) {
+      // Normalize: strip trailing 's' for plurals, case-insensitive match
+      let catVal = (category as string).trim();
+      // 'tshirts' → 'tshirt', 'shirts' → 'shirt', 'pants' → 'pant'
+      catVal = catVal.replace(/s$/i, '');
+      filter.category = { $regex: new RegExp(`^${catVal}$`, 'i') };
+    }
+    if (subCategory) {
+      filter.subCategory = { $regex: new RegExp(`^${(subCategory as string).trim()}$`, 'i') };
+    }
     if (featured === 'true') filter.isFeatured = true;
     if (newArrival === 'true') filter.isNewArrival = true;
 

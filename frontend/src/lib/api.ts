@@ -97,6 +97,10 @@ export const adminLogin = async (email: string, password: string) => {
     credentials: 'include',
     body: JSON.stringify({ email, password }),
   });
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || 'Login failed');
+  }
   return res.json();
 };
 
@@ -315,3 +319,90 @@ export const adminUpdateSidebarConfig = async (filters: any[]) => {
   });
   return res.json();
 };
+
+// ============ CATEGORIES ============
+
+// Public — get categories with hierarchy (for navbar mega dropdown)
+export const getCategories = async () => {
+  const res = await fetch(`${API}/api/categories`, {
+    next: { revalidate: 300 },
+  });
+  return res.json();
+};
+
+// Admin — get flat list of all categories (including inactive)
+export const adminGetCategories = async () => {
+  const res = await fetch(`${API}/api/categories/all`, {
+    credentials: 'include',
+  });
+  return res.json();
+};
+
+// Admin — create category
+export const adminCreateCategory = async (data: any) => {
+  const res = await fetch(`${API}/api/categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+  return res.json();
+};
+
+// Admin — update category
+export const adminUpdateCategory = async (id: string, data: any) => {
+  const res = await fetch(`${API}/api/categories/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+  return res.json();
+};
+
+// Admin — delete category
+export const adminDeleteCategory = async (id: string) => {
+  const res = await fetch(`${API}/api/categories/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  return res.json();
+};
+
+// ============ ADMIN DASHBOARD & CUSTOMERS ============
+
+export const adminGetStats = async () => {
+  const res = await fetch(`${API}/api/admin/stats`, {
+    credentials: 'include',
+  });
+  return res.json();
+};
+
+export const adminGetRevenueChart = async (period: string = 'week') => {
+  const res = await fetch(`${API}/api/admin/revenue-chart?period=${period}`, {
+    credentials: 'include',
+  });
+  return res.json();
+};
+
+export const adminGetPopularProducts = async () => {
+  const res = await fetch(`${API}/api/admin/popular-products`, {
+    credentials: 'include',
+  });
+  return res.json();
+};
+
+export const adminGetCustomers = async () => {
+  const res = await fetch(`${API}/api/admin/customers`, {
+    credentials: 'include',
+  });
+  return res.json();
+};
+
+export const adminGetCustomerById = async (id: string) => {
+  const res = await fetch(`${API}/api/admin/customers/${id}`, {
+    credentials: 'include',
+  });
+  return res.json();
+};
+

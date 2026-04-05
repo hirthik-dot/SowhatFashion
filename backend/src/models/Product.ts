@@ -4,7 +4,8 @@ import slugify from 'slugify';
 export interface IProduct extends Document {
   name: string;
   slug: string;
-  category: 'tshirt' | 'shirt' | 'pant';
+  category: string;
+  subCategory: string;
   images: string[];
   price: number;
   discountPrice: number;
@@ -24,8 +25,8 @@ const ProductSchema = new Schema<IProduct>(
     category: {
       type: String,
       required: true,
-      enum: ['tshirt', 'shirt', 'pant'],
     },
+    subCategory: { type: String, default: '' },
     images: [{ type: String }],
     price: { type: Number, required: true, min: 0 },
     discountPrice: { type: Number, default: 0, min: 0 },

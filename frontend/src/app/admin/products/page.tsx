@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
-import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage } from '@/lib/api';
+import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage, adminGetCategories } from '@/lib/api';
 import { formatPrice } from '@/lib/utils';
 import Image from 'next/image';
 
@@ -15,7 +15,8 @@ export default function AdminProductsPage() {
   
   const initialForm = {
     name: '',
-    category: 'tshirt',
+    category: '',
+    subCategory: '',
     price: 0,
     discountPrice: 0,
     sizes: ['M', 'L'],
@@ -27,6 +28,7 @@ export default function AdminProductsPage() {
     isActive: true
   };
   const [formData, setFormData] = useState(initialForm);
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
 
   const fetchProducts = async () => {
     try {
@@ -41,6 +43,7 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+    adminGetCategories().then(res => setDbCategories(Array.isArray(res) ? res : [])).catch(() => {});
   }, []);
 
   const handleOpenModal = (product?: any) => {
@@ -48,6 +51,7 @@ export default function AdminProductsPage() {
       setEditingId(product._id);
       setFormData({
         ...product,
+        subCategory: product.subCategory || '',
         tags: product.tags?.join(', ') || ''
       });
     } else {
@@ -213,10 +217,21 @@ export default function AdminProductsPage() {
 
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Category</label>
-                      <select required value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]">
-                        <option value="tshirt">T-Shirt</option>
-                        <option value="shirt">Shirt</option>
-                        <option value="pant">Pant</option>
+                      <select required value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value, subCategory: ''})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]">
+                        <option value="">Select Category</option>
+                        {dbCategories.filter(c => !c.parentSlug).map(c => (
+                          <option key={c._id} value={c.slug}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Sub Category</label>
+                      <select value={formData.subCategory} onChange={(e) => setFormData({...formData, subCategory: e.target.value})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]">
+                        <option value="">None</option>
+                        {dbCategories.filter(c => c.parentSlug === formData.category).map(c => (
+                          <option key={c._id} value={c.slug}>{c.name}</option>
+                        ))}
                       </select>
                     </div>
 

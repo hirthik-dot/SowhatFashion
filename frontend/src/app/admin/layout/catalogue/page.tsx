@@ -6,6 +6,7 @@ import {
   adminUpdateMegaDropdown,
   adminGetSidebarConfig,
   adminUpdateSidebarConfig,
+  getCategories,
 } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,9 +26,10 @@ type SidebarFilter = {
   rangeConfig?: RangeConfig;
 };
 
-const CATEGORIES = ['tshirts', 'shirts', 'pants', 'offers', 'sale'] as const;
+const FALLBACK_CATEGORIES = ['tshirts', 'shirts', 'pants', 'offers', 'sale'] as const;
 const CAT_LABELS: Record<string, string> = {
   tshirts: 'T-Shirts', shirts: 'Shirts', pants: 'Pants', offers: 'Offers', sale: 'Sale',
+  tshirt: 'T-Shirts', shirt: 'Shirts', pant: 'Pants',
 };
 
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
@@ -74,6 +76,25 @@ function MegaDropdownEditor() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
+
+  // Fetch categories from DB
+  useEffect(() => {
+    getCategories().then(res => {
+      if (Array.isArray(res) && res.length > 0) {
+        setDbCategories(res);
+        // Set initial selected category from DB
+        if (!selectedCat || selectedCat === 'tshirts') {
+          setSelectedCat(res[0].slug);
+        }
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Categories list: use DB categories if available, otherwise fallback
+  const categoryList = dbCategories.length > 0
+    ? dbCategories.map(c => ({ slug: c.slug, name: c.name, subCategories: c.subCategories || [] }))
+    : FALLBACK_CATEGORIES.map(c => ({ slug: c, name: CAT_LABELS[c] || c, subCategories: [] }));
 
   const loadDropdown = useCallback(async (cat: string) => {
     setLoading(true);
@@ -143,7 +164,7 @@ function MegaDropdownEditor() {
             onChange={e => setSelectedCat(e.target.value)}
             className="border border-[var(--border)] rounded-md px-3 py-2 text-sm font-medium bg-white focus:outline-none focus:border-[var(--gold)]"
           >
-            {CATEGORIES.map(c => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+            {categoryList.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
           </select>
         </div>
       </div>
@@ -207,6 +228,25 @@ function MegaDropdownEditor() {
           </button>
         </>
       )}
+
+      {/* Subcategories from Category Collection */}
+      {(() => {
+        const found = categoryList.find(c => c.slug === selectedCat);
+        if (!found?.subCategories?.length) return null;
+        return (
+          <div className="mt-8 border border-[var(--border)] rounded-lg bg-white p-5">
+            <h3 className="font-bold text-sm mb-3">Subcategories for {found.name} <span className="text-xs font-normal text-[var(--text-secondary)]">(from Category DB — manage in Categories page)</span></h3>
+            <div className="flex flex-wrap gap-2">
+              {found.subCategories.map((sub: any) => (
+                <span key={sub.slug} className="text-xs bg-gray-100 border border-[var(--border)] rounded-full px-3 py-1.5 text-[var(--text-secondary)] font-medium">
+                  {sub.name} <span className="text-gray-400">({sub.slug})</span>
+                  {sub.megaDropdownLabel && <span className="ml-1 text-[10px] bg-gray-200 px-1 rounded">{sub.megaDropdownLabel}</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {toast && (
         <div className="fixed bottom-8 right-8 bg-black text-white px-6 py-3 rounded-lg shadow-xl text-sm font-medium animate-fade-in z-50">

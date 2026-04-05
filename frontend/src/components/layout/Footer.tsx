@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   return (
@@ -8,7 +9,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-1 md:col-span-1">
             <Link href="/" className="inline-block mb-4">
-              <span className="text-xl font-bold tracking-[0.15em] font-playfair">SOWAAT <span className="text-[var(--gold)]">MENS WEAR</span></span>
+              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={80} height={50} className="object-contain h-12 w-auto" />
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed mb-6">
               Premium menswear designed for the modern gentleman. Elevate your style with our curated collections.

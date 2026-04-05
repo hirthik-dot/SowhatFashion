@@ -10,7 +10,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const checkAuth = async () => {
       try {
         const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-        const res = await fetch(`${url}/api/auth/me`);
+        const res = await fetch(`${url}/api/auth/me`, {
+          credentials: 'include',
+        });
         if (res.ok) {
            const data = await res.json();
            if (data.success && data.user) {

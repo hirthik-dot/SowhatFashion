@@ -21,6 +21,7 @@ const payment_1 = __importDefault(require("./routes/payment"));
 const upload_1 = __importDefault(require("./routes/upload"));
 const users_1 = __importDefault(require("./routes/users"));
 const catalogue_1 = __importDefault(require("./routes/catalogue"));
+const categories_1 = __importDefault(require("./routes/categories"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // CORS — dynamic origin check (must be FIRST middleware)
@@ -70,6 +71,7 @@ app.use('/api/payment', payment_1.default);
 app.use('/api/upload', upload_1.default);
 app.use('/api/users', users_1.default);
 app.use('/api/catalogue', catalogue_1.default);
+app.use('/api/categories', categories_1.default);
 // Error handler
 app.use(errorHandler_1.default);
 // Global catch-all error handler

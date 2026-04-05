@@ -1,8 +1,115 @@
+'use client';
+
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/shared/ProductCard';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useState } from 'react';
+
+function MagazineBentoCard({ product, className, type = 'small' }: any) {
+  const [isHovered, setIsHovered] = useState(false);
+  if (!product) return null;
+  const isMain = type === 'main';
+
+  return (
+    <div 
+      className={className}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onTouchStart={() => setIsHovered(true)}
+      onTouchEnd={() => setIsHovered(false)}
+    >
+      <Link href={`/products/${product.slug}`} className="absolute inset-0 bg-[var(--surface)] hover-zoom overflow-hidden">
+        <Image src={product.images?.[0] || '/placeholder.jpg'} alt={product.name} fill className="object-cover" sizes={isMain ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 768px) 50vw, 25vw"} />
+        {product.images?.[1] && (
+          <Image
+            src={product.images[1]}
+            alt={product.name}
+            fill
+            className={`object-cover transition-opacity duration-300 ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+            sizes={isMain ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 768px) 50vw, 25vw"}
+          />
+        )}
+        <div className={`absolute inset-x-0 bottom-0 ${isMain ? 'p-6' : 'p-4'} bg-gradient-to-t from-black/80 to-transparent text-white ${isMain ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity z-20'}`}>
+          <h3 className={isMain ? "text-2xl font-playfair mb-1" : "text-sm font-medium"}>{product.name}</h3>
+          {isMain && <p className="font-bold">₹{product.discountPrice || product.price}</p>}
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+function MagazineFlashCard({ product }: any) {
+  const [isHovered, setIsHovered] = useState(false);
+  return (
+    <div className="w-[200px] shrink-0 md:w-auto bg-white/5 p-4 rounded-xl border border-white/10 hover:border-[var(--gold)]/50 transition-colors text-left backdrop-blur-sm">
+      <div 
+        className="aspect-[4/5] relative rounded mb-4 overflow-hidden"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onTouchStart={() => setIsHovered(true)}
+        onTouchEnd={() => setIsHovered(false)}
+      >
+        <Image src={product.images?.[0] || '/placeholder.jpg'} alt={product.name} fill className="object-cover" />
+        {product.images?.[1] && (
+          <Image
+            src={product.images[1]}
+            alt={product.name}
+            fill
+            className={`object-cover transition-opacity duration-300 ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+          />
+        )}
+        <span className="absolute top-2 left-2 bg-[var(--sale-red)] text-white text-xs font-bold px-2 py-1 rounded z-20">SALE</span>
+      </div>
+      <h3 className="font-playfair text-[15px] md:text-lg mb-2 truncate">{product.name}</h3>
+      <div className="flex justify-between items-center">
+        <div>
+          <span className="text-[var(--gold)] font-bold text-base md:text-lg">₹{product.discountPrice || product.price}</span>
+          {product.discountPrice > 0 && <span className="text-[10px] md:text-xs text-white/50 line-through ml-1 md:ml-2">₹{product.price}</span>}
+        </div>
+        <Link href={`/products/${product.slug}`} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:bg-[var(--gold)] transition-colors shrink-0">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function MagazineCuratedCard({ product }: any) {
+  const [isHovered, setIsHovered] = useState(false);
+  return (
+    <div className="py-6 flex items-center gap-6 group">
+      <div 
+        className="w-16 h-20 relative shrink-0 bg-gray-100"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onTouchStart={() => setIsHovered(true)}
+        onTouchEnd={() => setIsHovered(false)}
+      >
+        <Image src={product.images?.[0] || '/placeholder.jpg'} alt={product.name} fill className="object-cover" />
+        {product.images?.[1] && (
+          <Image
+            src={product.images[1]}
+            alt={product.name}
+            fill
+            className={`object-cover transition-opacity duration-300 ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+          />
+        )}
+      </div>
+      <div className="flex-1">
+        <h3 className="font-bold text-lg group-hover:text-[var(--gold)] transition-colors">{product.name}</h3>
+        <p className="text-[var(--text-secondary)] text-sm">{product.category.toUpperCase()}</p>
+      </div>
+      <div className="text-right">
+        <p className="font-bold">₹{product.discountPrice || product.price}</p>
+        <Link href={`/products/${product.slug}`} className="text-xs font-bold tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-1 mt-1 text-[var(--gold)]">
+          BUY <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function MagazineHome({ products, offers, settings }: any) {
   const featuredProducts = products?.filter((p: any) => p.isFeatured).slice(0, 5) || [];
@@ -78,65 +185,13 @@ export default function MagazineHome({ products, offers, settings }: any) {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-2">
           {/* Main Large */}
-          {featuredProducts[0] && (
-            <div className="col-span-2 md:row-span-2 relative aspect-[3/4] md:aspect-auto group border border-[var(--border)]">
-              <Link href={`/products/${featuredProducts[0].slug}`} className="absolute inset-0 bg-[var(--surface)] hover-zoom overflow-hidden">
-                <Image src={featuredProducts[0].images?.[0] || '/placeholder.jpg'} alt="Main" fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
-                <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
-                  <h3 className="text-2xl font-playfair mb-1">{featuredProducts[0].name}</h3>
-                  <p className="font-bold">₹{featuredProducts[0].discountPrice || featuredProducts[0].price}</p>
-                </div>
-              </Link>
-            </div>
-          )}
+          {featuredProducts[0] && <MagazineBentoCard product={featuredProducts[0]} type="main" className="col-span-2 md:row-span-2 relative aspect-[3/4] md:aspect-auto group border border-[var(--border)]" />}
           
-          {/* Small 1 */}
-          {featuredProducts[1] && (
-            <div className="relative aspect-square group border border-[var(--border)]">
-              <Link href={`/products/${featuredProducts[1].slug}`} className="absolute inset-0 bg-[var(--surface)] hover-zoom overflow-hidden">
-                <Image src={featuredProducts[1].images?.[0] || '/placeholder.jpg'} alt="Item 1" fill className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
-                <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                  <h3 className="text-sm font-medium">{featuredProducts[1].name}</h3>
-                </div>
-              </Link>
-            </div>
-          )}
-
-          {/* Small 2 */}
-          {featuredProducts[2] && (
-            <div className="relative aspect-square group border border-[var(--border)]">
-              <Link href={`/products/${featuredProducts[2].slug}`} className="absolute inset-0 bg-[var(--surface)] hover-zoom overflow-hidden">
-                <Image src={featuredProducts[2].images?.[0] || '/placeholder.jpg'} alt="Item 2" fill className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
-                <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                  <h3 className="text-sm font-medium">{featuredProducts[2].name}</h3>
-                </div>
-              </Link>
-            </div>
-          )}
-
-          {/* Small 3 */}
-          {featuredProducts[3] && (
-            <div className="relative aspect-square group border border-[var(--border)]">
-              <Link href={`/products/${featuredProducts[3].slug}`} className="absolute inset-0 bg-[var(--surface)] hover-zoom overflow-hidden">
-                <Image src={featuredProducts[3].images?.[0] || '/placeholder.jpg'} alt="Item 3" fill className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
-                <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                  <h3 className="text-sm font-medium">{featuredProducts[3].name}</h3>
-                </div>
-              </Link>
-            </div>
-          )}
-
-          {/* Small 4 */}
-          {featuredProducts[4] && (
-             <div className="relative aspect-square group border border-[var(--border)]">
-               <Link href={`/products/${featuredProducts[4].slug}`} className="absolute inset-0 bg-[var(--surface)] hover-zoom overflow-hidden">
-                 <Image src={featuredProducts[4].images?.[0] || '/placeholder.jpg'} alt="Item 4" fill className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
-                 <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                   <h3 className="text-sm font-medium">{featuredProducts[4].name}</h3>
-                 </div>
-               </Link>
-             </div>
-          )}
+          {/* Small 1-4 */}
+          {featuredProducts[1] && <MagazineBentoCard product={featuredProducts[1]} className="relative aspect-square group border border-[var(--border)]" />}
+          {featuredProducts[2] && <MagazineBentoCard product={featuredProducts[2]} className="relative aspect-square group border border-[var(--border)]" />}
+          {featuredProducts[3] && <MagazineBentoCard product={featuredProducts[3]} className="relative aspect-square group border border-[var(--border)]" />}
+          {featuredProducts[4] && <MagazineBentoCard product={featuredProducts[4]} className="relative aspect-square group border border-[var(--border)]" />}
         </div>
       </section>
 
@@ -161,22 +216,7 @@ export default function MagazineHome({ products, offers, settings }: any) {
 
           <div className="max-w-5xl mx-auto flex overflow-x-auto no-scrollbar md:grid md:grid-cols-3 gap-4 md:gap-6 relative z-10 px-4 pb-4 -mx-4 md:mx-auto">
             {(flashSale.products || featuredProducts).slice(0, 3).map((product: any) => (
-              <div key={product._id} className="w-[200px] shrink-0 md:w-auto bg-white/5 p-4 rounded-xl border border-white/10 hover:border-[var(--gold)]/50 transition-colors text-left backdrop-blur-sm">
-                <div className="aspect-[4/5] relative rounded mb-4 overflow-hidden">
-                  <Image src={product.images?.[0] || '/placeholder.jpg'} alt={product.name} fill className="object-cover" />
-                  <span className="absolute top-2 left-2 bg-[var(--sale-red)] text-white text-xs font-bold px-2 py-1 rounded">SALE</span>
-                </div>
-                <h3 className="font-playfair text-[15px] md:text-lg mb-2 truncate">{product.name}</h3>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="text-[var(--gold)] font-bold text-base md:text-lg">₹{product.discountPrice || product.price}</span>
-                    {product.discountPrice > 0 && <span className="text-[10px] md:text-xs text-white/50 line-through ml-1 md:ml-2">₹{product.price}</span>}
-                  </div>
-                  <Link href={`/products/${product.slug}`} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:bg-[var(--gold)] transition-colors shrink-0">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                  </Link>
-                </div>
-              </div>
+              <MagazineFlashCard key={product._id} product={product} />
             ))}
           </div>
         </section>
@@ -201,21 +241,7 @@ export default function MagazineHome({ products, offers, settings }: any) {
           <h2 className="text-3xl md:text-5xl font-playfair font-bold mb-10">Curated Staples</h2>
           <div className="divide-y divide-[var(--border)]">
             {products?.slice(0, 4).map((product: any) => (
-              <div key={product._id} className="py-6 flex items-center gap-6 group">
-                <div className="w-16 h-20 relative shrink-0 bg-gray-100">
-                  <Image src={product.images?.[0] || '/placeholder.jpg'} alt={product.name} fill className="object-cover" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-lg group-hover:text-[var(--gold)] transition-colors">{product.name}</h3>
-                  <p className="text-[var(--text-secondary)] text-sm">{product.category.toUpperCase()}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold">₹{product.discountPrice || product.price}</p>
-                  <Link href={`/products/${product.slug}`} className="text-xs font-bold tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-1 mt-1 text-[var(--gold)]">
-                    BUY <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                  </Link>
-                </div>
-              </div>
+              <MagazineCuratedCard key={product._id} product={product} />
             ))}
           </div>
         </div>

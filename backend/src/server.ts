@@ -18,6 +18,8 @@ import paymentRoutes from './routes/payment';
 import uploadRoutes from './routes/upload';
 import usersRoutes from './routes/users';
 import catalogueRoutes from './routes/catalogue';
+import categoryRoutes from './routes/categories';
+import adminRoutes from './routes/admin';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -72,6 +74,8 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/catalogue', catalogueRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Error handler
 app.use(errorHandler);

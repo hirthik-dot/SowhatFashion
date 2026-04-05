@@ -26,6 +26,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
   const addItem = useCartStore((s) => s.addItem);
   const { wishlist, toggleWishlist, isLoggedIn, openAuthModal } = useAuthStore();
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
+  const [isHovered, setIsHovered] = useState(false);
 
   const discount = calculateDiscount(product.price, product.discountPrice);
   const hasDiscount = discount > 0;
@@ -101,7 +102,13 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
 
   return (
     <Link href={`/products/${product.slug}`} className="block group">
-      <div className="product-card relative bg-white rounded-lg overflow-hidden border border-transparent hover:border-[var(--gold)] transition-all duration-300 hover:shadow-lg">
+      <div 
+        className="product-card relative bg-white rounded-lg overflow-hidden border border-transparent hover:border-[var(--gold)] transition-all duration-300 hover:shadow-lg"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onTouchStart={() => setIsHovered(true)}
+        onTouchEnd={() => setIsHovered(false)}
+      >
         {/* Image */}
         <div className="relative aspect-square md:aspect-[3/4] overflow-hidden bg-[var(--surface)]">
           <Image
@@ -111,6 +118,15 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             className="object-cover group-hover:scale-105 transition-transform duration-700"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
+          {product.images?.[1] && (
+            <Image
+              src={product.images[1]}
+              alt={product.name}
+              fill
+              className={`object-cover group-hover:scale-105 transition-all duration-500 ease-in-out ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            />
+          )}
 
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5">
