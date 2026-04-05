@@ -5,6 +5,9 @@ interface User {
   name: string;
   email: string;
   avatar?: string;
+  phone?: string;
+  dob?: string;
+  gender?: string;
   savedAddresses?: any[];
 }
 
@@ -31,7 +34,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   wishlist: [],
 
   setUser: (user) => set({ user, isLoggedIn: !!user }),
-  logout: () => set({ user: null, isLoggedIn: false, wishlist: [] }),
+  logout: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      document.cookie = 'user_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+    }
+    set({ user: null, isLoggedIn: false, wishlist: [] });
+  },
   openAuthModal: (redirectUrl?: string) => set({ isAuthModalOpen: true, redirectUrl: redirectUrl || null }),
   closeAuthModal: () => set({ isAuthModalOpen: false }),
   setWishlist: (wishlist) => set({ wishlist }),

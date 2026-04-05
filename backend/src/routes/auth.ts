@@ -81,6 +81,7 @@ router.post('/send-otp', async (req: Request, res: Response) => {
 // POST /api/auth/verify-otp (USER)
 router.post('/verify-otp', async (req: Request, res: Response) => {
   try {
+    console.log('Backend /api/auth/verify-otp Received req.body:', req.body);
     const { email, otp, purpose, name } = req.body;
 
     if (!email || !otp || !purpose) {
@@ -141,7 +142,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
       path: '/'
     });
 
-    res.json({ success: true, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar } });
+    res.json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Server error' });
   }
@@ -154,7 +155,7 @@ router.get('/google',
 
 // GET /api/auth/google/callback
 router.get('/google/callback', 
-  passport.authenticate('google', { failureRedirect: process.env.CLIENT_URL + '/login?error=google_failed', session: false }),
+  passport.authenticate('google', { failureRedirect: `${process.env.CLIENT_URL}/?error=google_failed`, session: false }),
   (req: Request, res: Response) => {
     const user = req.user as any;
     // Generate JWT token
@@ -266,7 +267,12 @@ router.post('/logout', (req: Request, res: Response) => {
 router.get('/me', async (req: Request, res: Response) => {
   try {
     // 1. Check for User authentication
-    const userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+    let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+    
+    const authHeader = req.headers.authorization;
+    if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
+      userToken = authHeader.split(' ')[1];
+    }
     
     if (userToken) {
        try {
@@ -314,6 +320,61 @@ router.get('/me', async (req: Request, res: Response) => {
     return res.status(401).json({ success: false, message: 'Not authenticated' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+});
+
+// PUT /api/auth/profile (USER)
+router.put('/profile', async (req: Request, res: Response) => {
+  try {
+    let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+    const authHeader = req.headers.authorization;
+    if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
+      userToken = authHeader.split(' ')[1];
+    }
+
+    if (!userToken) {
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    }
+
+    const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
+    const decoded = jwt.verify(userToken, secret) as any;
+    const userId = decoded.id || decoded.sub;
+
+    const { name, phone, dob, gender } = req.body;
+    let user = await User.findById(userId);
+    
+    if (!user && decoded.email) {
+      user = await User.findOne({ email: decoded.email });
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (name !== undefined) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+    if (dob !== undefined) user.dob = dob;
+    if (gender !== undefined) user.gender = gender;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        phone: user.phone,
+        dob: user.dob,
+        gender: user.gender,
+        savedAddresses: user.savedAddresses,
+        wishlist: user.wishlist
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: (error as Error).message });
   }
 });
 

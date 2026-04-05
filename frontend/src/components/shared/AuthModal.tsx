@@ -61,14 +61,20 @@ export default function AuthModal() {
     setError('');
     setLoading(true);
     try {
+      const payload = { email, otp: otpValue, purpose: 'login' };
+      console.log('Frontend /api/auth/verify-otp Sending req.body:', payload);
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otpValue, purpose: 'login' })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       
       if (data.success) {
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+        }
         setUser(data.user);
         closeAuthModal();
         if (redirectUrl) {

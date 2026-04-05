@@ -22,14 +22,32 @@ function AuthCallbackContent() {
 
     if (token) {
       // Store token in cookies so the API can read it automatically
-      // We set max-age to 7 days
       document.cookie = `user_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      // Also save to localStorage
+      localStorage.setItem('token', token);
       
-      const destination = redirectUrl || '/';
-      setRedirectUrl(null);
-      
-      // Force reload to let the root layout fetch /api/auth/me and hydrate the store
-      window.location.href = destination;
+      const fetchUser = async () => {
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${token}` // Optional if API relies on the cookie or header
+            }
+          });
+          const data = await res.json();
+          if (data.success && data.user) {
+            useAuthStore.getState().setUser(data.user);
+          }
+        } catch (err) {
+          console.error('Failed to fetch user:', err);
+        } finally {
+          const destination = redirectUrl || '/';
+          setRedirectUrl(null);
+          // Redirect without full reload, since state is updated
+          router.push(destination);
+        }
+      };
+
+      fetchUser();
     } else {
       router.push('/');
     }

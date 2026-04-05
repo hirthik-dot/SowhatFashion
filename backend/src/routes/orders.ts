@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import Order from '../models/Order';
 import authMiddleware from '../middleware/authMiddleware';
 import rateLimit from 'express-rate-limit';
@@ -9,6 +10,36 @@ const lookupLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   message: { message: 'Too many requests from this IP, please try again in a minute.' }
+});
+
+// GET /api/orders/my-orders (USER)
+router.get('/my-orders', async (req: Request, res: Response) => {
+  try {
+    let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+    
+    const authHeader = req.headers.authorization;
+    if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
+      userToken = authHeader.split(' ')[1];
+    }
+
+    if (!userToken) {
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    }
+
+    const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
+    const decoded = jwt.verify(userToken, secret) as any;
+    const email = decoded.email;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Invalid token, cannot find email' });
+    }
+
+    const orders = await Order.find({ 'customer.email': email }).sort({ createdAt: -1 });
+
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: (error as Error).message });
+  }
 });
 
 // GET /api/orders - all orders with pagination (protected)
