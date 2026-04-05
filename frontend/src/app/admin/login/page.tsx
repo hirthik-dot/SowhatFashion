@@ -19,9 +19,9 @@ export default function AdminLoginPage() {
     setError('');
 
     try {
-      await adminLogin(email, password);
-      await checkAuth(); // Refresh auth state
-      router.push('/admin');
+      const res = await adminLogin(email, password);
+      if (res.token) localStorage.setItem('admin_token', res.token);
+      window.location.href = '/admin';
     } catch (err: any) {
       setError('Invalid email or password');
     } finally {

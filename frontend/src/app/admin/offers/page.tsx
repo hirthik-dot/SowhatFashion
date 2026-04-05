@@ -1,235 +1,572 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import AdminHeader from '@/components/admin/AdminHeader';
-import { adminGetOffers, adminCreateOffer, adminUpdateOffer, adminDeleteOffer, adminGetProducts } from '@/lib/api';
+import { arrayMove } from '@dnd-kit/sortable';
+import {
+  adminGetOffers,
+  adminCreateOffer,
+  adminUpdateOffer,
+  adminDeleteOffer,
+  adminUploadImage,
+  adminReorderOffers,
+  adminToggleOfferField,
+} from '@/lib/api';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+type Template = 'fullbleed' | 'splitcard' | 'spotlight';
+
+const emptyForm = () => ({
+  title: '',
+  subtitle: '',
+  description: '',
+  carouselTemplate: 'fullbleed' as Template,
+  image: '',
+  backgroundImage: '',
+  accentColor: '',
+  discountPercent: 0,
+  discountLabel: '',
+  ctaText: 'SHOP NOW',
+  products: [] as string[],
+  startTime: new Date().toISOString().slice(0, 16),
+  endTime: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 16),
+  noExpiry: false,
+  hasCountdown: true,
+  isActive: true,
+  showOnCarousel: true,
+  type: 'flash' as 'flash' | 'combo' | 'seasonal',
+  comboDetails: '',
+});
 
 export default function AdminOffersPage() {
   const [offers, setOffers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  const initialForm = {
-    title: '',
-    description: '',
-    type: 'flash',
-    image: '',
-    discountPercent: 0,
-    comboDetails: '',
-    products: [] as string[],
-    startTime: new Date().toISOString().slice(0, 16),
-    endTime: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-    isActive: true,
-    showOnHomepage: true
-  };
-  const [formData, setFormData] = useState(initialForm);
+  const [form, setForm] = useState(emptyForm);
+  const [productSearch, setProductSearch] = useState('');
+  const [searchHits, setSearchHits] = useState<any[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      const [offersRes, productsRes] = await Promise.all([
-        adminGetOffers(),
-        adminGetProducts()
-      ]);
-      setOffers(offersRes);
-      setProducts(productsRes.products || []);
-    } catch (error) {
-      console.error('Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
+  const load = useCallback(async () => {
+    const data = await adminGetOffers();
+    setOffers(Array.isArray(data) ? data : []);
   }, []);
 
-  const handleOpenModal = (offer?: any) => {
-    if (offer) {
-      setEditingId(offer._id);
-      setFormData({
-        ...offer,
-        products: offer.products.map((p:any) => p._id),
-        startTime: new Date(offer.startTime).toISOString().slice(0, 16),
-        endTime: new Date(offer.endTime).toISOString().slice(0, 16),
-      });
-    } else {
-      setEditingId(null);
-      setFormData(initialForm);
-    }
-    setIsModalOpen(true);
-  };
+  useEffect(() => {
+    load().catch(() => {}).finally(() => setLoading(false));
+  }, [load]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingId) {
-        await adminUpdateOffer(editingId, formData);
-      } else {
-        await adminCreateOffer(formData);
-      }
-      setIsModalOpen(false);
-      fetchData();
-    } catch (error) {
-      alert('Failed to save offer');
+  useEffect(() => {
+    if (!productSearch.trim()) {
+      setSearchHits([]);
+      return;
     }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this offer?')) {
+    const id = setTimeout(async () => {
       try {
-        await adminDeleteOffer(id);
-        fetchData();
-      } catch (error) {
-        alert('Failed to delete offer');
+        const res = await fetch(`${API}/api/products?search=${encodeURIComponent(productSearch)}&limit=25`);
+        const data = await res.json();
+        setSearchHits(data.products || []);
+      } catch {
+        setSearchHits([]);
       }
+    }, 280);
+    return () => clearTimeout(id);
+  }, [productSearch]);
+
+  const carouselLive = useMemo(() => {
+    const now = Date.now();
+    return offers.filter((o) => {
+      if (!o.isActive || !o.showOnCarousel) return false;
+      if (o.endTime && new Date(o.endTime).getTime() < now) return false;
+      return true;
+    });
+  }, [offers]);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+    setSelectedProducts([]);
+    setProductSearch('');
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (o: any) => {
+    setEditingId(o._id);
+    setForm({
+      title: o.title || '',
+      subtitle: o.subtitle || '',
+      description: o.description || '',
+      carouselTemplate: o.carouselTemplate || 'fullbleed',
+      image: o.image || '',
+      backgroundImage: o.backgroundImage || '',
+      accentColor: o.accentColor || '',
+      discountPercent: o.discountPercent ?? 0,
+      discountLabel: o.discountLabel || '',
+      ctaText: o.ctaText || 'SHOP NOW',
+      products: (o.products || []).map((p: any) => p._id || p),
+      startTime: o.startTime ? new Date(o.startTime).toISOString().slice(0, 16) : emptyForm().startTime,
+      endTime: o.endTime ? new Date(o.endTime).toISOString().slice(0, 16) : emptyForm().endTime,
+      noExpiry: !o.endTime,
+      hasCountdown: o.hasCountdown !== false,
+      isActive: o.isActive !== false,
+      showOnCarousel: !!o.showOnCarousel,
+      type: o.type || 'flash',
+      comboDetails: o.comboDetails || '',
+    });
+    setSelectedProducts((o.products || []).filter(Boolean));
+    setProductSearch('');
+    setDrawerOpen(true);
+  };
+
+  const persist = async () => {
+    setSaving(true);
+    try {
+      const payload: any = {
+        title: form.title,
+        subtitle: form.subtitle,
+        description: form.description,
+        carouselTemplate: form.carouselTemplate,
+        image: form.image,
+        backgroundImage: form.backgroundImage,
+        accentColor: form.accentColor,
+        discountPercent: Number(form.discountPercent) || 0,
+        discountLabel: form.discountLabel,
+        ctaText: form.ctaText,
+        products: form.products,
+        startTime: new Date(form.startTime).toISOString(),
+        endTime: form.noExpiry ? null : new Date(form.endTime).toISOString(),
+        hasCountdown: form.hasCountdown,
+        isActive: form.isActive,
+        showOnCarousel: form.showOnCarousel,
+        showOnHomepage: form.showOnCarousel,
+        type: form.type,
+        comboDetails: form.comboDetails,
+      };
+      if (editingId) {
+        await adminUpdateOffer(editingId, payload);
+      } else {
+        await adminCreateOffer(payload);
+      }
+      setDrawerOpen(false);
+      await load();
+    } catch (e) {
+      console.error(e);
+      alert('Save failed');
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const removeOffer = async (id: string) => {
+    if (!confirm('Delete this offer?')) return;
+    try {
+      await adminDeleteOffer(id);
+      await load();
+    } catch {
+      alert('Delete failed');
+    }
+  };
+
+  const moveCarousel = async (id: string, dir: -1 | 1) => {
+    const carousel = [...offers].filter((o) => o.showOnCarousel).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const idx = carousel.findIndex((o) => o._id === id);
+    const sw = idx + dir;
+    if (idx < 0 || sw < 0 || sw >= carousel.length) return;
+    const reordered = arrayMove(carousel, idx, sw);
+    const payload = reordered.map((o, i) => ({ id: o._id, order: i }));
+    try {
+      await adminReorderOffers(payload);
+      await load();
+    } catch {
+      alert('Reorder failed');
+    }
+  };
+
+  const uploadField = async (field: 'image' | 'backgroundImage', file: File) => {
+    const res = await adminUploadImage(file);
+    if (res?.url) setForm((f) => ({ ...f, [field]: res.url }));
+  };
+
+  const addProduct = (p: any) => {
+    if (form.products.includes(p._id)) return;
+    setForm((f) => ({ ...f, products: [...f.products, p._id] }));
+    setSelectedProducts((prev) => [...prev, p]);
+    setProductSearch('');
+    setSearchHits([]);
+  };
+
+  const removeProduct = (id: string) => {
+    setForm((f) => ({ ...f, products: f.products.filter((x) => x !== id) }));
+    setSelectedProducts((prev) => prev.filter((p) => p._id !== id));
   };
 
   return (
     <div>
-      <AdminHeader title="Offers & Promotions" />
-      
+      <AdminHeader title="Offers" />
       <div className="p-6 md:p-8 max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl font-bold font-playfair">Active Offers</h2>
-          <button onClick={() => handleOpenModal()} className="btn-gold rounded px-6 py-2.5 shadow-sm text-sm">
-            Create Offer
+          <h2 className="text-xl font-bold font-playfair">Offers & carousel</h2>
+          <button type="button" onClick={openCreate} className="btn-gold rounded px-6 py-2.5 text-sm font-bold">
+            + Create
           </button>
         </div>
 
-        <div className="bg-white rounded-xl border border-[var(--border)] shadow-sm overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-gray-50 border-b border-[var(--border)] text-xs uppercase tracking-wider text-[var(--text-secondary)]">
+        <div className="mb-10 border border-[var(--border)] rounded-xl p-4 bg-white">
+          <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-[var(--text-secondary)]">
+            Active carousel ({carouselLive.length} live)
+          </h3>
+          <div className="flex flex-wrap gap-4">
+            {carouselLive.map((o) => (
+              <div key={o._id} className="border border-[var(--border)] rounded-lg p-3 w-[200px] bg-[var(--surface)]">
+                <div className="relative h-24 bg-gray-100 mb-2 rounded overflow-hidden">
+                  {o.image ? (
+                    <Image src={o.image} alt="" fill className="object-cover" sizes="200px" />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-gray-400">No image</div>
+                  )}
+                </div>
+                <div className="text-xs font-bold truncate">{o.title}</div>
+                <div className="text-[10px] text-[var(--text-secondary)]">{o.carouselTemplate}</div>
+                <div className="flex gap-2 mt-2">
+                  <button type="button" className="text-xs text-[var(--gold)] font-bold" onClick={() => openEdit(o)}>
+                    Edit
+                  </button>
+                  <button type="button" className="text-xs" onClick={() => moveCarousel(o._id, -1)}>
+                    ↑
+                  </button>
+                  <button type="button" className="text-xs" onClick={() => moveCarousel(o._id, 1)}>
+                    ↓
+                  </button>
+                </div>
+              </div>
+            ))}
+            {carouselLive.length === 0 && <p className="text-sm text-[var(--text-secondary)]">No slides on carousel.</p>}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[var(--border)] overflow-x-auto">
+          <table className="w-full text-sm text-left min-w-[640px]">
+            <thead className="bg-gray-50 border-b text-xs uppercase text-[var(--text-secondary)]">
               <tr>
-                <th className="px-6 py-4 font-semibold">Title</th>
-                <th className="px-6 py-4 font-semibold">Type</th>
-                <th className="px-6 py-4 font-semibold">Discount</th>
-                <th className="px-6 py-4 font-semibold">Duration</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                <th className="px-4 py-3">Title</th>
+                <th className="px-4 py-3">Template</th>
+                <th className="px-4 py-3">Carousel</th>
+                <th className="px-4 py-3">Active</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
               {loading ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center">Loading...</td></tr>
-              ) : offers.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-[var(--text-secondary)]">No offers found.</td></tr>
-              ) : offers.map((offer) => (
-                <tr key={offer._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-black">{offer.title}</td>
-                  <td className="px-6 py-4">
-                    <span className="uppercase text-[10px] font-bold tracking-wider bg-gray-200 px-2 py-1 rounded">{offer.type}</span>
-                  </td>
-                  <td className="px-6 py-4">{offer.discountPercent}%</td>
-                  <td className="px-6 py-4 text-xs text-[var(--text-secondary)]">
-                    {new Date(offer.startTime).toLocaleDateString()} - <br/>
-                    {new Date(offer.endTime).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4">
-                     <span className={`w-2.5 h-2.5 rounded-full inline-block mr-2 ${offer.isActive ? 'bg-[var(--success)]' : 'bg-gray-400'}`}></span>
-                    {offer.isActive ? 'Active' : 'Draft'}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-3">
-                    <button onClick={() => handleOpenModal(offer)} className="text-[var(--gold-hover)] hover:underline font-semibold">Edit</button>
-                    <button onClick={() => handleDelete(offer._id)} className="text-[var(--sale-red)] hover:underline font-semibold">Delete</button>
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center">
+                    Loading…
                   </td>
                 </tr>
-              ))}
+              ) : (
+                offers.map((o) => (
+                  <tr key={o._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium">{o.title}</td>
+                    <td className="px-4 py-3">{o.carouselTemplate}</td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await adminToggleOfferField(o._id, 'showOnCarousel');
+                          await load();
+                        }}
+                        className={o.showOnCarousel ? 'text-green-600 font-bold' : 'text-gray-400'}
+                      >
+                        {o.showOnCarousel ? 'ON' : 'OFF'}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await adminToggleOfferField(o._id, 'isActive');
+                          await load();
+                        }}
+                        className={o.isActive ? 'text-green-600 font-bold' : 'text-gray-400'}
+                      >
+                        {o.isActive ? 'ON' : 'OFF'}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-right space-x-2">
+                      <button type="button" className="text-[var(--gold)] font-semibold" onClick={() => openEdit(o)}>
+                        Edit
+                      </button>
+                      <button type="button" className="text-red-500 font-semibold" onClick={() => removeOffer(o._id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
+      </div>
 
-        {isModalOpen && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="p-6 border-b border-[var(--border)] flex justify-between items-center bg-gray-50">
-                <h2 className="text-xl font-bold font-playfair">{editingId ? 'Edit Offer' : 'Create Offer'}</h2>
-                <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-black">
-                  ✕
-                </button>
-              </div>
-              
-              <div className="p-6 overflow-y-auto flex-grow">
-                <form id="offer-form" onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1 md:col-span-2">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Offer Title</label>
-                      <input required type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
-                    </div>
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+          <div className="w-full max-w-[700px] bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+              <h2 className="text-lg font-bold font-playfair">{editingId ? 'Edit offer' : 'Create offer'}</h2>
+              <button type="button" onClick={() => setDrawerOpen(false)} className="text-2xl leading-none text-gray-500">
+                ×
+              </button>
+            </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Type</label>
-                      <select required value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]">
-                        <option value="flash">Flash Sale</option>
-                        <option value="combo">Combo Offer</option>
-                        <option value="seasonal">Seasonal</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Discount %</label>
-                      <input required type="number" min="0" max="100" value={formData.discountPercent} onChange={(e) => setFormData({...formData, discountPercent: Number(e.target.value)})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Start Time</label>
-                      <input required type="datetime-local" value={formData.startTime} onChange={(e) => setFormData({...formData, startTime: e.target.value})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">End Time</label>
-                      <input required type="datetime-local" value={formData.endTime} onChange={(e) => setFormData({...formData, endTime: e.target.value})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
-                    </div>
-
-                    <div className="space-y-1 md:col-span-2">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Description</label>
-                      <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} rows={2} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]"></textarea>
-                    </div>
-
-                    {formData.type === 'combo' && (
-                      <div className="space-y-1 md:col-span-2">
-                        <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Combo Details</label>
-                        <textarea value={formData.comboDetails} onChange={(e) => setFormData({...formData, comboDetails: e.target.value})} rows={2} placeholder="E.g., Buy 2 Get 1 Free on selected t-shirts" className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]"></textarea>
-                      </div>
-                    )}
-
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Included Products (Hold Ctrl to select multiple)</label>
-                      <select multiple value={formData.products} onChange={(e) => {
-                        const values = Array.from(e.target.selectedOptions, option => option.value);
-                        setFormData({...formData, products: values});
-                      }} className="w-full h-32 border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]">
-                        {products.map(p => (
-                          <option key={p._id} value={p._id}>{p.name} (₹{p.price})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)] flex gap-6">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={formData.isActive} onChange={(e) => setFormData({...formData, isActive: e.target.checked})} className="w-5 h-5 accent-[var(--success)]" />
-                        <span className="font-semibold text-sm">Active</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={formData.showOnHomepage} onChange={(e) => setFormData({...formData, showOnHomepage: e.target.checked})} className="w-5 h-5 accent-[var(--gold)]" />
-                        <span className="font-semibold text-sm">Show on Homepage</span>
-                      </label>
-                    </div>
-
+            <div className="p-6 space-y-8 flex-1">
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Basic</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold">Title *</label>
+                    <input
+                      className="w-full border border-[var(--border)] rounded px-3 py-2 mt-1"
+                      value={form.title}
+                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    />
                   </div>
-                </form>
-              </div>
+                  <div>
+                    <label className="text-xs font-semibold">Subtitle</label>
+                    <input
+                      className="w-full border border-[var(--border)] rounded px-3 py-2 mt-1"
+                      value={form.subtitle}
+                      onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold">Description</label>
+                    <textarea
+                      className="w-full border border-[var(--border)] rounded px-3 py-2 mt-1 min-h-[80px]"
+                      value={form.description}
+                      onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </section>
 
-              <div className="p-6 border-t border-[var(--border)] bg-gray-50 flex justify-end gap-3">
-                <button onClick={() => setIsModalOpen(false)} type="button" className="px-6 py-2 border border-gray-300 rounded font-semibold text-gray-700 hover:bg-gray-100">Cancel</button>
-                <button type="submit" form="offer-form" className="btn-gold rounded px-8 py-2">Save Offer</button>
-              </div>
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Carousel template *</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(
+                    [
+                      ['fullbleed', 'Full bleed'],
+                      ['splitcard', 'Split card'],
+                      ['spotlight', 'Spotlight'],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, carouselTemplate: id }))}
+                      className={`border-2 rounded-lg p-4 text-left text-sm font-semibold transition-colors ${
+                        form.carouselTemplate === id ? 'border-[var(--gold)] bg-[var(--surface)]' : 'border-[var(--border)]'
+                      }`}
+                    >
+                      <div className="h-16 bg-gray-100 rounded mb-2 flex items-center justify-center text-[10px] text-gray-500">
+                        Preview
+                      </div>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Offer image *</h3>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-[var(--border)] rounded-lg py-8 cursor-pointer hover:border-[var(--gold)]">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadField('image', f);
+                    }}
+                  />
+                  <span className="text-sm font-medium">Upload image</span>
+                  {form.image && (
+                    <div className="relative w-full h-32 mt-4 mx-4">
+                      <Image src={form.image} alt="" fill className="object-contain" sizes="400px" />
+                    </div>
+                  )}
+                </label>
+              </section>
+
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Discount</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs">Discount %</label>
+                    <input
+                      type="number"
+                      className="w-full border rounded px-3 py-2 mt-1"
+                      value={form.discountPercent}
+                      onChange={(e) => setForm((f) => ({ ...f, discountPercent: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs">Custom label (overrides %)</label>
+                    <input
+                      className="w-full border rounded px-3 py-2 mt-1"
+                      value={form.discountLabel}
+                      onChange={(e) => setForm((f) => ({ ...f, discountLabel: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="text-xs">CTA text</label>
+                  <input
+                    className="w-full border rounded px-3 py-2 mt-1"
+                    value={form.ctaText}
+                    onChange={(e) => setForm((f) => ({ ...f, ctaText: e.target.value }))}
+                  />
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Schedule</h3>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs">Start</label>
+                    <input
+                      type="datetime-local"
+                      className="w-full border rounded px-3 py-2 mt-1"
+                      value={form.startTime}
+                      onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs">End</label>
+                    <input
+                      type="datetime-local"
+                      disabled={form.noExpiry}
+                      className="w-full border rounded px-3 py-2 mt-1 disabled:opacity-50"
+                      value={form.endTime}
+                      onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.noExpiry}
+                      onChange={(e) => setForm((f) => ({ ...f, noExpiry: e.target.checked }))}
+                    />
+                    No expiry
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.hasCountdown}
+                      onChange={(e) => setForm((f) => ({ ...f, hasCountdown: e.target.checked }))}
+                    />
+                    Show countdown
+                  </label>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Legacy type (Allen Solly / listing)</h3>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={form.type}
+                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as any }))}
+                >
+                  <option value="flash">Flash</option>
+                  <option value="combo">Combo</option>
+                  <option value="seasonal">Seasonal</option>
+                </select>
+                {form.type === 'combo' && (
+                  <textarea
+                    className="w-full border rounded px-3 py-2 mt-2 min-h-[60px]"
+                    placeholder="Combo details"
+                    value={form.comboDetails}
+                    onChange={(e) => setForm((f) => ({ ...f, comboDetails: e.target.value }))}
+                  />
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Products</h3>
+                <input
+                  className="w-full border rounded px-3 py-2 mb-2"
+                  placeholder="Search products…"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                />
+                {searchHits.length > 0 && (
+                  <div className="border rounded max-h-40 overflow-y-auto mb-3 bg-white shadow-sm">
+                    {searchHits.map((p) => (
+                      <button
+                        key={p._id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b last:border-0"
+                        onClick={() => addProduct(p)}
+                      >
+                        {p.name} · ₹{p.price}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {selectedProducts.map((p) => (
+                    <div key={p._id} className="flex items-center gap-3 border rounded px-3 py-2">
+                      <div className="relative w-10 h-10 rounded overflow-hidden bg-gray-100 shrink-0">
+                        <Image src={p.images?.[0] || '/placeholder.jpg'} alt="" fill className="object-cover" sizes="40px" />
+                      </div>
+                      <span className="flex-1 text-sm truncate">{p.name}</span>
+                      <button type="button" className="text-red-500 text-sm" onClick={() => removeProduct(p._id)}>
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-3">Visibility</h3>
+                <label className="flex items-center gap-2 text-sm mb-2">
+                  <input
+                    type="checkbox"
+                    checked={form.showOnCarousel}
+                    onChange={(e) => setForm((f) => ({ ...f, showOnCarousel: e.target.checked }))}
+                  />
+                  Show on homepage carousel
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+                  />
+                  Offer active
+                </label>
+              </section>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex justify-end gap-3">
+              <button type="button" className="px-6 py-2 border rounded font-semibold" onClick={() => setDrawerOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !form.title.trim() || !form.image}
+                className="px-8 py-2 bg-[var(--gold)] text-black font-bold rounded disabled:opacity-40"
+                onClick={persist}
+              >
+                {saving ? 'Saving…' : 'Save offer'}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

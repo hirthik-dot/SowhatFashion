@@ -33,14 +33,56 @@ export const getAllProductSlugs = async () => {
 export const getOffers = async (showOnHomepage?: boolean) => {
   const params = showOnHomepage ? '?showOnHomepage=true' : '';
   const res = await fetch(`${API}/api/offers${params}`, {
-    next: { revalidate: 30 },
+    next: { revalidate: 60 },
   });
   return res.json();
 };
 
-export const getOfferById = async (id: string) => {
-  const res = await fetch(`${API}/api/offers/${id}`, {
+/** All active, non-expired offers (public) */
+export const getPublicOffers = async () => {
+  const res = await fetch(`${API}/api/offers`, {
     next: { revalidate: 60 },
+  });
+  return res.json();
+};
+
+export const getCarouselOffers = async () => {
+  const res = await fetch(`${API}/api/offers?showOnCarousel=true`, {
+    next: { revalidate: 60 },
+  });
+  return res.json();
+};
+
+export const getOfferBySlugOrId = async (slugOrId: string) => {
+  const res = await fetch(`${API}/api/offers/${encodeURIComponent(slugOrId)}`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) throw new Error('Offer not found');
+  return res.json();
+};
+
+export const getOfferById = getOfferBySlugOrId;
+
+export const getActiveOfferSlugs = async (): Promise<string[]> => {
+  const res = await fetch(`${API}/api/offers/active-slugs`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) return [];
+  return res.json();
+};
+
+// ============ NEW ARRIVALS (PUBLIC) ============
+export const getNewArrivals = async (skip = 0, limit = 8) => {
+  const res = await fetch(`${API}/api/new-arrivals?skip=${skip}&limit=${limit}`, {
+    next: { revalidate: 300 },
+  });
+  return res.json();
+};
+
+// ============ HOMEPAGE SECTIONS ============
+export const getHomepageSections = async (theme: string) => {
+  const res = await fetch(`${API}/api/homepage-sections/${encodeURIComponent(theme)}`, {
+    next: { revalidate: 300 },
   });
   return res.json();
 };
@@ -158,9 +200,32 @@ export const adminDeleteProduct = async (id: string) => {
 
 // Admin Offers
 export const adminGetOffers = async () => {
-  const res = await fetch(`${API}/api/offers`, {
+  const res = await fetch(`${API}/api/offers?manage=true`, {
     credentials: 'include',
   });
+  if (!res.ok) throw new Error('Failed to load offers');
+  return res.json();
+};
+
+export const adminReorderOffers = async (rows: { id: string; order: number }[]) => {
+  const res = await fetch(`${API}/api/offers/reorder`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(rows),
+  });
+  if (!res.ok) throw new Error('Reorder failed');
+  return res.json();
+};
+
+export const adminToggleOfferField = async (id: string, field: 'isActive' | 'showOnCarousel') => {
+  const res = await fetch(`${API}/api/offers/${id}/toggle`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ field }),
+  });
+  if (!res.ok) throw new Error('Toggle failed');
   return res.json();
 };
 
@@ -189,6 +254,73 @@ export const adminDeleteOffer = async (id: string) => {
     method: 'DELETE',
     credentials: 'include',
   });
+  return res.json();
+};
+
+// Admin New Arrivals
+export const adminListNewArrivals = async () => {
+  const res = await fetch(`${API}/api/admin/new-arrivals`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to load new arrivals');
+  return res.json();
+};
+
+export const adminAddNewArrival = async (productId: string, weekLabel?: string) => {
+  const res = await fetch(`${API}/api/admin/new-arrivals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ productId, weekLabel }),
+  });
+  return res.json();
+};
+
+export const adminDeleteNewArrival = async (id: string) => {
+  const res = await fetch(`${API}/api/admin/new-arrivals/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  return res.json();
+};
+
+export const adminReorderNewArrivals = async (rows: { id: string; order: number }[]) => {
+  const res = await fetch(`${API}/api/admin/new-arrivals/reorder`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(rows),
+  });
+  if (!res.ok) throw new Error('Reorder failed');
+  return res.json();
+};
+
+export const adminToggleNewArrival = async (id: string) => {
+  const res = await fetch(`${API}/api/admin/new-arrivals/${id}/toggle`, {
+    method: 'PATCH',
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Toggle failed');
+  return res.json();
+};
+
+// Admin Homepage Sections
+export const adminGetHomepageSectionStats = async (theme: string) => {
+  const res = await fetch(`${API}/api/homepage-sections/admin/${encodeURIComponent(theme)}/stats`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed stats');
+  return res.json();
+};
+
+export const adminPutHomepageSections = async (theme: string, sections: unknown[]) => {
+  const res = await fetch(`${API}/api/homepage-sections/admin/${encodeURIComponent(theme)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ sections }),
+  });
+  if (!res.ok) throw new Error('Save failed');
   return res.json();
 };
 

@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const Order_1 = __importDefault(require("../models/Order"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
@@ -12,6 +13,30 @@ const lookupLimiter = (0, express_rate_limit_1.default)({
     windowMs: 60 * 1000,
     max: 5,
     message: { message: 'Too many requests from this IP, please try again in a minute.' }
+});
+// GET /api/orders/my-orders (USER)
+router.get('/my-orders', async (req, res) => {
+    try {
+        let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+        const authHeader = req.headers.authorization;
+        if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
+            userToken = authHeader.split(' ')[1];
+        }
+        if (!userToken) {
+            return res.status(401).json({ success: false, message: 'Not authenticated' });
+        }
+        const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
+        const decoded = jsonwebtoken_1.default.verify(userToken, secret);
+        const email = decoded.email;
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Invalid token, cannot find email' });
+        }
+        const orders = await Order_1.default.find({ 'customer.email': email }).sort({ createdAt: -1 });
+        res.json({ success: true, orders });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
 });
 // GET /api/orders - all orders with pagination (protected)
 router.get('/', authMiddleware_1.default, async (req, res) => {

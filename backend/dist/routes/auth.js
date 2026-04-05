@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const passport_1 = __importDefault(require("passport"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const resend_1 = require("resend");
 const Admin_1 = __importDefault(require("../models/Admin"));
@@ -36,7 +37,8 @@ const otpRateLimits = new Map();
 // POST /api/auth/send-otp (USER)
 router.post('/send-otp', async (req, res) => {
     try {
-        const { email, purpose } = req.body;
+        const { email: rawEmail, purpose } = req.body;
+        const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
         if (!email || !purpose) {
             return res.status(400).json({ success: false, error: 'Email and purpose are required' });
         }
@@ -75,7 +77,10 @@ router.post('/send-otp', async (req, res) => {
 // POST /api/auth/verify-otp (USER)
 router.post('/verify-otp', async (req, res) => {
     try {
-        const { email, otp, purpose, name } = req.body;
+        const { email: rawEmail, purpose, name } = req.body;
+        const otpRaw = req.body.otp ?? req.body.code;
+        const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+        const otp = otpRaw != null ? String(otpRaw).trim() : '';
         if (!email || !otp || !purpose) {
             return res.status(400).json({ success: false, error: 'Email, OTP, and purpose required' });
         }
@@ -98,7 +103,8 @@ router.post('/verify-otp', async (req, res) => {
         if (purpose === 'login') {
             user = await User_1.User.findOne({ email });
             if (!user) {
-                return res.json({ success: true, needsRegistration: true });
+                const defaultName = email.split('@')[0] || 'Customer';
+                user = await User_1.User.create({ email, name: defaultName, isEmailVerified: true });
             }
         }
         else if (purpose === 'register') {
@@ -122,11 +128,21 @@ router.post('/verify-otp', async (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000,
             path: '/'
         });
-        res.json({ success: true, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar } });
+        res.json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar } });
     }
     catch (error) {
         res.status(500).json({ success: false, error: 'Server error' });
     }
+});
+// GET /api/auth/google (Init OAuth)
+router.get('/google', passport_1.default.authenticate('google', { scope: ['profile', 'email'] }));
+// GET /api/auth/google/callback
+router.get('/google/callback', passport_1.default.authenticate('google', { failureRedirect: `${process.env.CLIENT_URL}/?error=google_failed`, session: false }), (req, res) => {
+    const user = req.user;
+    const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
+    const token = jsonwebtoken_1.default.sign({ id: user._id, email: user.email, name: user.name }, secret, { expiresIn: '7d' });
+    // Redirect to frontend with token
+    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
 });
 // POST /api/auth/google (USER using NextAuth)
 router.post('/google', async (req, res) => {
@@ -177,7 +193,7 @@ router.post('/login', async (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000,
             path: '/'
         });
-        res.json({ message: 'Login successful', admin: { id: admin._id, email: admin.email } });
+        res.json({ message: 'Login successful', token, admin: { id: admin._id, email: admin.email } });
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -220,7 +236,11 @@ router.post('/logout', (req, res) => {
 router.get('/me', async (req, res) => {
     try {
         // 1. Check for User authentication
-        const userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+        let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+        const authHeader = req.headers.authorization;
+        if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
+            userToken = authHeader.split(' ')[1];
+        }
         if (userToken) {
             try {
                 const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
@@ -249,7 +269,10 @@ router.get('/me', async (req, res) => {
             }
         }
         // 2. Check for Admin authentication
-        const adminToken = req.cookies?.token;
+        let adminToken = req.cookies?.token;
+        if (!adminToken && authHeader && authHeader.startsWith('Bearer ')) {
+            adminToken = authHeader.split(' ')[1];
+        }
         if (adminToken) {
             try {
                 const decoded = jsonwebtoken_1.default.verify(adminToken, process.env.JWT_SECRET);
@@ -266,6 +289,56 @@ router.get('/me', async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+// PUT /api/auth/profile (USER)
+router.put('/profile', async (req, res) => {
+    try {
+        let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+        const authHeader = req.headers.authorization;
+        if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
+            userToken = authHeader.split(' ')[1];
+        }
+        if (!userToken) {
+            return res.status(401).json({ success: false, message: 'Not authenticated' });
+        }
+        const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
+        const decoded = jsonwebtoken_1.default.verify(userToken, secret);
+        const userId = decoded.id || decoded.sub;
+        const { name, phone, dob, gender } = req.body;
+        let user = await User_1.User.findById(userId);
+        if (!user && decoded.email) {
+            user = await User_1.User.findOne({ email: decoded.email });
+        }
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        if (name !== undefined)
+            user.name = name;
+        if (phone !== undefined)
+            user.phone = phone;
+        if (dob !== undefined)
+            user.dob = dob;
+        if (gender !== undefined)
+            user.gender = gender;
+        await user.save();
+        res.json({
+            success: true,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
+                phone: user.phone,
+                dob: user.dob,
+                gender: user.gender,
+                savedAddresses: user.savedAddresses,
+                wishlist: user.wishlist
+            }
+        });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 });
 exports.default = router;

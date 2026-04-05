@@ -1,13 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   adminGetMegaDropdown,
   adminUpdateMegaDropdown,
   adminGetSidebarConfig,
   adminUpdateSidebarConfig,
   getCategories,
+  getHomepageSections,
+  adminGetHomepageSectionStats,
+  adminPutHomepageSections,
 } from '@/lib/api';
+import { mergeCatalogueHomeSections, type CatalogueHomeSection } from '@/lib/catalogue-sections';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type DropdownItem = { label: string; filterKey: string; filterValue: string };
@@ -501,66 +506,149 @@ function AddFilterModal({ onAdd, onClose }: { onAdd: (f: SidebarFilter) => void;
 
 // ─── Tab 3: Homepage Sections Editor ──────────────────────────────────────────
 function HomepageSectionsEditor() {
-  const [sections, setSections] = useState([
-    { id: 'hero', label: 'Hero Banner', visible: true, canDelete: true },
-    { id: 'flash_strip', label: 'Flash Sale Strip', visible: true, canDelete: true },
-    { id: 'todays_deals', label: "Today's Deals", visible: true, canDelete: true },
-    { id: 'products_grid', label: 'Products Grid', visible: true, canDelete: false },
-    { id: 'combo', label: 'Combo Offers', visible: true, canDelete: true },
-    { id: 'new_arrivals', label: 'New Arrivals', visible: true, canDelete: true },
-  ]);
+  const [sections, setSections] = useState<CatalogueHomeSection[]>([]);
+  const [stats, setStats] = useState({
+    carouselCount: 0,
+    newArrivalsCount: 0,
+    productsCount: 0,
+    comboCount: 0,
+  });
   const [toast, setToast] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const [secRes, st] = await Promise.all([
+        getHomepageSections('catalogue'),
+        adminGetHomepageSectionStats('catalogue'),
+      ]);
+      const merged = mergeCatalogueHomeSections(secRes?.sections);
+      setSections(merged);
+      setStats(st);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const toggle = (id: string) => {
-    setSections(sections.map(s => s.id === id ? { ...s, visible: !s.visible } : s));
+    setSections((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, isVisible: !s.isVisible } : s))
+    );
   };
 
   const remove = (id: string) => {
-    setSections(sections.filter(s => s.id !== id));
+    setSections((prev) => prev.filter((s) => s.id !== id));
   };
 
   const move = (idx: number, dir: -1 | 1) => {
     if ((dir === -1 && idx === 0) || (dir === 1 && idx === sections.length - 1)) return;
     const copy = [...sections];
     [copy[idx], copy[idx + dir]] = [copy[idx + dir], copy[idx]];
-    setSections(copy);
+    setSections(copy.map((s, i) => ({ ...s, order: i })));
   };
+
+  const save = async () => {
+    try {
+      await adminPutHomepageSections(
+        'catalogue',
+        sections.map((s, i) => ({ ...s, order: i }))
+      );
+      setToast('Saved — homepage will revalidate');
+      setTimeout(() => setToast(''), 3000);
+      await load();
+    } catch {
+      alert('Save failed');
+    }
+  };
+
+  const statLine = (id: string) => {
+    if (id === 'offer-carousel') return `${stats.carouselCount} offers currently live on carousel`;
+    if (id === 'new-arrivals') return `${stats.newArrivalsCount} products currently active`;
+    if (id === 'products-grid') return `${stats.productsCount} active products`;
+    if (id === 'combo-offers') return `${stats.comboCount} active combo offers`;
+    return '';
+  };
+
+  const manageHref = (id: string) => {
+    if (id === 'offer-carousel') return '/admin/offers';
+    if (id === 'new-arrivals') return '/admin/new-arrivals';
+    return '/admin/products';
+  };
+
+  if (loading) return <div className="p-4 text-sm text-[var(--text-secondary)]">Loading sections…</div>;
 
   return (
     <div>
-      <h2 className="text-lg font-bold mb-6">Homepage Sections (Catalogue Theme)</h2>
-      <p className="text-sm text-[var(--text-secondary)] mb-4">Drag to reorder ↕</p>
-
+      <h2 className="text-lg font-bold mb-2">Homepage Sections (Catalogue Theme)</h2>
+      <p className="text-sm text-[var(--text-secondary)] mb-6">Reorder sections for the storefront homepage. Eye toggles visibility on the live site.</p>
 
       <div className="space-y-2 mb-8">
         {sections.map((s, idx) => (
-          <div key={s.id} className="flex items-center gap-3 border border-[var(--border)] rounded-lg bg-white px-4 py-3">
-            <div className="flex flex-col gap-0.5 text-gray-300">
-              <button onClick={() => move(idx, -1)} className="hover:text-gray-600 text-xs">▲</button>
-              <button onClick={() => move(idx, 1)} className="hover:text-gray-600 text-xs">▼</button>
+          <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-2 border border-[var(--border)] rounded-lg bg-white px-4 py-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex flex-col gap-0.5 text-gray-300 shrink-0">
+                <button type="button" onClick={() => move(idx, -1)} className="hover:text-gray-600 text-xs">
+                  ▲
+                </button>
+                <button type="button" onClick={() => move(idx, 1)} className="hover:text-gray-600 text-xs">
+                  ▼
+                </button>
+              </div>
+              <span className="text-sm text-gray-400 font-mono shrink-0">≡</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium">{s.label}</div>
+                <div className="text-xs text-[var(--text-secondary)]">{statLine(s.id)}</div>
+                <Link
+                  href={manageHref(s.id)}
+                  className="text-xs text-[var(--gold)] font-semibold uppercase tracking-wide hover:underline mt-1 inline-block"
+                >
+                  Manage →
+                </Link>
+              </div>
             </div>
-            <span className="text-sm text-gray-400 font-mono">≡</span>
-            <span className="flex-1 text-sm font-medium">{s.label}</span>
-            <button onClick={() => toggle(s.id)} className={`text-sm ${s.visible ? 'text-green-600' : 'text-gray-300'}`}>👁</button>
-            {s.canDelete ? (
-              <button onClick={() => remove(s.id)} className="text-red-300 hover:text-red-500">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <div className="flex items-center gap-2 sm:justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => toggle(s.id)}
+                className={`text-sm font-bold px-2 ${s.isVisible ? 'text-green-600' : 'text-red-400'}`}
+                title="Toggle visibility"
+              >
+                👁
               </button>
-            ) : (
-              <span className="w-4" />
-            )}
+              {s.canDelete ? (
+                <button type="button" onClick={() => remove(s.id)} className="text-red-300 hover:text-red-500 p-1">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              ) : (
+                <span className="w-6" />
+              )}
+            </div>
           </div>
         ))}
       </div>
 
       <button
-        onClick={() => { setToast('Saved!'); setTimeout(() => setToast(''), 2000); }}
+        type="button"
+        onClick={save}
         className="bg-[var(--gold)] text-black font-bold px-8 py-3 text-sm uppercase hover:opacity-90 rounded-md"
       >
-        Save Order
+        Save order
       </button>
 
-      {toast && <div className="fixed bottom-8 right-8 bg-black text-white px-6 py-3 rounded-lg shadow-xl text-sm font-medium animate-fade-in z-50">{toast}</div>}
+      {toast && (
+        <div className="fixed bottom-8 right-8 bg-black text-white px-6 py-3 rounded-lg shadow-xl text-sm font-medium z-50">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

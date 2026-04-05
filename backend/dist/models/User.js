@@ -16,6 +16,9 @@ const addressSchema = new mongoose_1.default.Schema({
 const userSchema = new mongoose_1.default.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
+    phone: { type: String },
+    dob: { type: String },
+    gender: { type: String, enum: ['Male', 'Female', 'Other', 'Prefer not to say'] },
     avatar: { type: String },
     googleId: { type: String },
     isEmailVerified: { type: Boolean, default: false },

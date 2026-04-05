@@ -1,11 +1,24 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface HomepageSectionRow {
+  id: string;
+  label: string;
+  isVisible: boolean;
+  order: number;
+  canDelete: boolean;
+}
+
 export interface ISettings extends Document {
   activeHomepage: 'allensolly' | 'magazine' | 'catalogue';
   announcementText: string;
   instagramHandle: string;
   freeDeliveryAbove: number;
   whatsappNumber: string;
+  homepageSections?: {
+    catalogue?: HomepageSectionRow[];
+    allensolly?: HomepageSectionRow[];
+    magazine?: HomepageSectionRow[];
+  };
   placeholders: {
     allensolly: {
       heroImage: string;
@@ -53,6 +66,35 @@ const SettingsSchema = new Schema<ISettings>(
       catalogue: {
         carouselImages: { type: [String], default: [] },
       },
+    },
+    homepageSections: {
+      catalogue: [
+        {
+          id: String,
+          label: String,
+          isVisible: Boolean,
+          order: Number,
+          canDelete: Boolean,
+        },
+      ],
+      allensolly: [
+        {
+          id: String,
+          label: String,
+          isVisible: Boolean,
+          order: Number,
+          canDelete: Boolean,
+        },
+      ],
+      magazine: [
+        {
+          id: String,
+          label: String,
+          isVisible: Boolean,
+          order: Number,
+          canDelete: Boolean,
+        },
+      ],
     },
   },
   { timestamps: true }

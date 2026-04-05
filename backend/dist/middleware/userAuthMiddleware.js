@@ -7,7 +7,13 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = require("../models/User");
 const userAuthMiddleware = async (req, res, next) => {
     try {
-        const token = req.cookies?.user_token;
+        let token = req.cookies?.user_token ||
+            req.cookies?.['next-auth.session-token'] ||
+            req.cookies?.['__Secure-next-auth.session-token'];
+        const authHeader = req.headers.authorization;
+        if (!token && authHeader?.startsWith('Bearer ')) {
+            token = authHeader.slice(7);
+        }
         if (!token) {
             return res.status(401).json({ message: 'Authentication required' });
         }

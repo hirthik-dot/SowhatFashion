@@ -26,6 +26,9 @@ export declare const User: mongoose.Model<{
         isDefault: boolean;
     }>;
     wishlist: mongoose.Types.ObjectId[];
+    phone?: string | null | undefined;
+    dob?: string | null | undefined;
+    gender?: "Male" | "Female" | "Other" | "Prefer not to say" | null | undefined;
     avatar?: string | null | undefined;
     googleId?: string | null | undefined;
     lastLoginAt?: NativeDate | null | undefined;
@@ -56,6 +59,9 @@ export declare const User: mongoose.Model<{
         isDefault: boolean;
     }>;
     wishlist: mongoose.Types.ObjectId[];
+    phone?: string | null | undefined;
+    dob?: string | null | undefined;
+    gender?: "Male" | "Female" | "Other" | "Prefer not to say" | null | undefined;
     avatar?: string | null | undefined;
     googleId?: string | null | undefined;
     lastLoginAt?: NativeDate | null | undefined;
@@ -88,6 +94,9 @@ export declare const User: mongoose.Model<{
         isDefault: boolean;
     }>;
     wishlist: mongoose.Types.ObjectId[];
+    phone?: string | null | undefined;
+    dob?: string | null | undefined;
+    gender?: "Male" | "Female" | "Other" | "Prefer not to say" | null | undefined;
     avatar?: string | null | undefined;
     googleId?: string | null | undefined;
     lastLoginAt?: NativeDate | null | undefined;
@@ -124,6 +133,9 @@ export declare const User: mongoose.Model<{
         isDefault: boolean;
     }>;
     wishlist: mongoose.Types.ObjectId[];
+    phone?: string | null | undefined;
+    dob?: string | null | undefined;
+    gender?: "Male" | "Female" | "Other" | "Prefer not to say" | null | undefined;
     avatar?: string | null | undefined;
     googleId?: string | null | undefined;
     lastLoginAt?: NativeDate | null | undefined;
@@ -154,6 +166,9 @@ export declare const User: mongoose.Model<{
         isDefault: boolean;
     }>;
     wishlist: mongoose.Types.ObjectId[];
+    phone?: string | null | undefined;
+    dob?: string | null | undefined;
+    gender?: "Male" | "Female" | "Other" | "Prefer not to say" | null | undefined;
     avatar?: string | null | undefined;
     googleId?: string | null | undefined;
     lastLoginAt?: NativeDate | null | undefined;
@@ -186,6 +201,9 @@ export declare const User: mongoose.Model<{
         isDefault: boolean;
     }>;
     wishlist: mongoose.Types.ObjectId[];
+    phone?: string | null | undefined;
+    dob?: string | null | undefined;
+    gender?: "Male" | "Female" | "Other" | "Prefer not to say" | null | undefined;
     avatar?: string | null | undefined;
     googleId?: string | null | undefined;
     lastLoginAt?: NativeDate | null | undefined;

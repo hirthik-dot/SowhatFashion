@@ -7,9 +7,13 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
 import { getProducts, getMegaDropdown, getSidebarConfig, getProductCounts, getCategories } from '@/lib/api';
-import { formatPrice, calculateDiscount, cn } from '@/lib/utils';
-import Footer from '@/components/layout/Footer';
+import { cn } from '@/lib/utils';
 import { userInitials, userFirstName } from '@/lib/auth-user';
+import OfferCarousel from '@/components/catalogue/OfferCarousel';
+import NewArrivalsSection from '@/components/catalogue/NewArrivalsSection';
+import CatalogueComboOffersSection from '@/components/catalogue/CatalogueComboOffersSection';
+import CatalogueProductCard from '@/components/catalogue/CatalogueProductCard';
+import { mergeCatalogueHomeSections, type CatalogueHomeSection } from '@/lib/catalogue-sections';
 
 // --- SVGs ---
 const Truck = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/><path d="M14 9h4l4 4v5c0 .6-.4 1-1 1h-2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>;
@@ -20,20 +24,6 @@ const HeartIcon = ({ size = 20, className = '' }) => <svg width={size} height={s
 const BagIcon = ({ size = 20, className = '' }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
 const MoreIcon = ({ size = 20, className = '' }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>;
 const CloseIcon = ({ size = 16, className = '' }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-
-const MaxWishlistIcon = ({ filled = false, size = 16 }) => {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "var(--gold)" : "none"} stroke={filled ? "var(--gold)" : "currentColor"} strokeWidth="1.5">
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-      {!filled && (
-        <g strokeWidth="2">
-          <line x1="12" y1="9" x2="12" y2="15" />
-          <line x1="9" y1="12" x2="15" y2="12" />
-        </g>
-      )}
-    </svg>
-  );
-};
 
 // --- Filters Components ---
 const RangeSliderFilter = ({ filter, minPrice, maxPrice, onChange }: any) => {
@@ -240,96 +230,21 @@ const DynamicMegaDropdown = ({ parentSlug, subCategories }: { parentSlug: string
   );
 };
 
-const ProductCardMax = ({ product }: any) => {
-  const { wishlist, toggleWishlist, isLoggedIn, openAuthModal } = useAuthStore();
-  const wishlisted = useMemo(() => wishlist.includes(product._id), [wishlist, product._id]);
-  const [isHovered, setIsHovered] = useState(false);
-  
-  const discount = calculateDiscount(product.price, product.discountPrice);
-  const imageUrl = product.images?.[0] || '/placeholder.jpg';
-
-  const handleWishlist = async (e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!isLoggedIn) {
-       openAuthModal(); return;
-    }
-    toggleWishlist(product._id);
-    try {
-      const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      if (wishlisted) {
-         await fetch(`${url}/api/users/wishlist/${product._id}`, { method: 'DELETE' });
-      } else {
-         await fetch(`${url}/api/users/wishlist`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId: product._id }) });
-      }
-    } catch (err) {}
-  };
-
-  let offerText = '';
-  if (product.categories?.includes('flash_sale')) offerText = 'FLASH SALE';
-  else if (product.categories?.includes('combo')) offerText = 'COMBO OFFER';
-  else if (discount > 0) offerText = `${discount}% OFF`;
-
-  return (
-    <Link href={`/products/${product.slug}`} className="block group font-sans">
-      <div 
-        className="relative"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onTouchStart={() => setIsHovered(true)}
-        onTouchEnd={() => setIsHovered(false)}
-      >
-        <div className="aspect-[4/5] bg-[var(--surface)] overflow-hidden relative">
-          <Image 
-            src={imageUrl} 
-            alt={product.name} 
-            fill 
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" 
-            sizes="(max-width: 768px) 50vw, 25vw"
-          />
-          {product.images?.[1] && (
-            <Image
-              src={product.images[1]}
-              alt={product.name}
-              fill
-              className={`object-cover transition-all duration-300 group-hover:scale-[1.03] ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
-              sizes="(max-width: 768px) 50vw, 25vw"
-            />
-          )}
-          <button 
-            onClick={handleWishlist} 
-            className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center transition-opacity md:opacity-0 group-hover:opacity-100 ${wishlisted ? 'opacity-100' : ''}`}
-          >
-            <MaxWishlistIcon filled={wishlisted} size={18} />
-          </button>
-          <div className="absolute bottom-2 left-2 flex flex-col gap-1">
-            {offerText && (
-              <span className="bg-white text-[var(--text-primary)] text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide self-start shadow-sm leading-tight">
-                {offerText}
-              </span>
-            )}
-            {product.isNewArrival && (
-              <span className="bg-white text-[var(--text-primary)] text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide self-start shadow-sm leading-tight">
-                NEW
-              </span>
-            )}
-          </div>
-        </div>
-        
-        <div className="pt-3">
-           <div className="flex items-center gap-1.5 mb-1">
-              <span className="font-semibold text-sm md:text-base text-[var(--text-primary)]">{formatPrice(product.discountPrice || product.price)}</span>
-              {discount > 0 && (
-                <span className="text-xs text-[var(--text-secondary)] line-through">{formatPrice(product.price)}</span>
-              )}
-           </div>
-           <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">{product.name}</p>
-        </div>
-      </div>
-    </Link>
-  );
-};
-
-function CatalogueHomeContent({ products: initialProducts, offers, settings }: any) {
+function CatalogueHomeContent({
+  products: initialProducts,
+  settings,
+  carouselOffers = [],
+  newArrivalsInitial = { items: [], hasMore: false },
+  catalogueActiveOffers = [],
+  catalogueSectionsResponse = null,
+}: {
+  products: any[];
+  settings: any;
+  carouselOffers?: any[];
+  newArrivalsInitial?: { items: any[]; hasMore?: boolean };
+  catalogueActiveOffers?: any[];
+  catalogueSectionsResponse?: { sections?: CatalogueHomeSection[] } | null;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -414,6 +329,51 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
   }, [searchParams, sidebarConfig]);
 
   const currentSort = searchParams.get('sort') || 'Relevance';
+
+  const mergedSections = useMemo(
+    () => mergeCatalogueHomeSections(catalogueSectionsResponse?.sections),
+    [catalogueSectionsResponse]
+  );
+  const sortedSections = useMemo(
+    () => [...mergedSections].sort((a, b) => a.order - b.order),
+    [mergedSections]
+  );
+  const isHomeBrowse = !searchParams.get('category');
+
+  const renderMarketingOnly = (section: CatalogueHomeSection) => {
+    if (!section.isVisible) return null;
+    if (!isHomeBrowse) return null;
+    if (section.id === 'offer-carousel') {
+      if (!carouselOffers?.length) return null;
+      return <OfferCarousel key="offer-carousel" offers={carouselOffers} />;
+    }
+    if (section.id === 'new-arrivals') {
+      const items = newArrivalsInitial?.items || [];
+      if (!items.length) return null;
+      return (
+        <NewArrivalsSection
+          key="new-arrivals"
+          initialItems={items}
+          initialHasMore={Boolean(newArrivalsInitial?.hasMore)}
+        />
+      );
+    }
+    if (section.id === 'combo-offers') {
+      return <CatalogueComboOffersSection key="combo-offers" offers={catalogueActiveOffers || []} />;
+    }
+    return null;
+  };
+
+  const productsGridSection = mergedSections.find((s) => s.id === 'products-grid');
+  const showProductGrid = productsGridSection?.isVisible !== false;
+
+  const visibleOrdered = useMemo(
+    () => sortedSections.filter((s) => s.isVisible),
+    [sortedSections]
+  );
+  const gridIdx = visibleOrdered.findIndex((s) => s.id === 'products-grid');
+  const sectionsBeforeGrid = gridIdx >= 0 ? visibleOrdered.slice(0, gridIdx) : visibleOrdered;
+  const sectionsAfterGrid = gridIdx >= 0 ? visibleOrdered.slice(gridIdx + 1) : [];
 
   return (
     <div className="min-h-screen bg-[var(--surface)] text-[var(--text-primary)] font-sans pb-16 md:pb-0">
@@ -556,23 +516,10 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
         </div>
       </div>
 
-      {searchParams.get('category') ? null : (
-         <section className="bg-neutral-900 w-full h-[180px] md:h-[240px] text-white flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent z-10" />
-            <div className="absolute inset-0 opacity-40">
-              <Image src={offers?.[0]?.products?.[0]?.images?.[0] || "/placeholder.jpg"} alt="Hero" fill className="object-cover" priority sizes="100vw" />
-            </div>
-            <div className="relative z-20 text-center max-w-2xl px-4">
-               <h2 className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-[var(--gold)] mb-3 flex items-center justify-center gap-2 drop-shadow-md">
-                 <span className="w-4 h-4 bg-[var(--sale-red)] rounded-sm flex items-center justify-center text-white text-[10px]">🏷</span>
-                 FLASH SALE ON NOW — UP TO 50% OFF
-               </h2>
-               <h1 className="text-2xl md:text-5xl font-playfair font-bold mb-6 drop-shadow-lg leading-tight text-white">Shop the latest menswear deals</h1>
-            </div>
-         </section>
-      )}
+      {sectionsBeforeGrid.map((section) => renderMarketingOnly(section))}
 
-      {/* Main Container */}
+      {showProductGrid && (
+      <>
       <main className="max-w-[1600px] mx-auto py-6 md:py-8 px-4 md:px-8 flex flex-col md:flex-row gap-8">
          
          {/* Left Sidebar (Desktop) */}
@@ -687,7 +634,7 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-[2px] bg-[var(--border)] border border-[var(--border)]">
                    {activeProducts.map((product: any, idx: number) => (
                      <div key={product._id || idx} className="bg-white hover:z-20 relative p-3 md:p-5 group/card transition-shadow hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
-                        <ProductCardMax product={product} />
+                        <CatalogueProductCard product={product} />
                      </div>
                    ))}
                 </div>
@@ -814,6 +761,11 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
           </div>
         </div>
       )}
+      </>
+      )}
+
+      {sectionsAfterGrid.map((section) => renderMarketingOnly(section))}
+
     </div>
   );
 }

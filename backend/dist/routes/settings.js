@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const Settings_1 = __importDefault(require("../models/Settings"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
+const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const router = (0, express_1.Router)();
 // GET /api/settings - get settings (public)
 router.get('/', async (req, res) => {
@@ -30,6 +31,9 @@ router.put('/', authMiddleware_1.default, async (req, res) => {
         else {
             Object.assign(settings, req.body);
             await settings.save();
+        }
+        if (req.body?.homepageSections) {
+            await (0, revalidateFrontend_1.triggerRevalidate)(['/']);
         }
         res.json(settings);
     }

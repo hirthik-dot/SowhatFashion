@@ -11,8 +11,8 @@ export default function AdminHeader({ title }: { title: string }) {
   const handleLogout = async () => {
     try {
       await adminLogout();
-      router.push('/admin/login');
-      router.refresh();
+      localStorage.removeItem('admin_token');
+      window.location.href = '/admin/login';
     } catch (error) {
       console.error('Logout failed:', error);
     }

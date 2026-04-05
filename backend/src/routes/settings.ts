@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Settings from '../models/Settings';
 import authMiddleware from '../middleware/authMiddleware';
+import { triggerRevalidate } from '../lib/revalidateFrontend';
 
 const router = Router();
 
@@ -26,6 +27,9 @@ router.put('/', authMiddleware, async (req: Request, res: Response) => {
     } else {
       Object.assign(settings, req.body);
       await settings.save();
+    }
+    if (req.body?.homepageSections) {
+      await triggerRevalidate(['/']);
     }
     res.json(settings);
   } catch (error) {

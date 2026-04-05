@@ -1,10 +1,22 @@
 import mongoose, { Document } from 'mongoose';
+export interface HomepageSectionRow {
+    id: string;
+    label: string;
+    isVisible: boolean;
+    order: number;
+    canDelete: boolean;
+}
 export interface ISettings extends Document {
     activeHomepage: 'allensolly' | 'magazine' | 'catalogue';
     announcementText: string;
     instagramHandle: string;
     freeDeliveryAbove: number;
     whatsappNumber: string;
+    homepageSections?: {
+        catalogue?: HomepageSectionRow[];
+        allensolly?: HomepageSectionRow[];
+        magazine?: HomepageSectionRow[];
+    };
     placeholders: {
         allensolly: {
             heroImage: string;

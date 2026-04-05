@@ -12,6 +12,8 @@ import errorHandler from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import productRoutes from './routes/products';
 import offerRoutes from './routes/offers';
+import { newArrivalsPublicRoutes, newArrivalsAdminRoutes } from './routes/newArrivals';
+import homepageSectionsRoutes from './routes/homepageSections';
 import orderRoutes from './routes/orders';
 import settingsRoutes from './routes/settings';
 import paymentRoutes from './routes/payment';
@@ -41,7 +43,7 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 app.options('*', cors());
@@ -74,6 +76,9 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/offers', offerRoutes);
+app.use('/api/new-arrivals', newArrivalsPublicRoutes);
+app.use('/api/admin/new-arrivals', newArrivalsAdminRoutes);
+app.use('/api/homepage-sections', homepageSectionsRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/payment', paymentRoutes);

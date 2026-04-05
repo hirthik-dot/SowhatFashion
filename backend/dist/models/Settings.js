@@ -63,6 +63,35 @@ const SettingsSchema = new mongoose_1.Schema({
             carouselImages: { type: [String], default: [] },
         },
     },
+    homepageSections: {
+        catalogue: [
+            {
+                id: String,
+                label: String,
+                isVisible: Boolean,
+                order: Number,
+                canDelete: Boolean,
+            },
+        ],
+        allensolly: [
+            {
+                id: String,
+                label: String,
+                isVisible: Boolean,
+                order: Number,
+                canDelete: Boolean,
+            },
+        ],
+        magazine: [
+            {
+                id: String,
+                label: String,
+                isVisible: Boolean,
+                order: Number,
+                canDelete: Boolean,
+            },
+        ],
+    },
 }, { timestamps: true });
 exports.default = mongoose_1.default.model('Settings', SettingsSchema);
 //# sourceMappingURL=Settings.js.map

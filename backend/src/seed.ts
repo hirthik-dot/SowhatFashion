@@ -6,6 +6,7 @@ import Admin from './models/Admin';
 import Settings from './models/Settings';
 import Product from './models/Product';
 import Offer from './models/Offer';
+import NewArrival from './models/NewArrival';
 
 const seedData = async () => {
   try {
@@ -17,6 +18,7 @@ const seedData = async () => {
     await Settings.deleteMany({});
     await Product.deleteMany({});
     await Offer.deleteMany({});
+    await NewArrival.deleteMany({});
     console.log('Cleared existing data');
 
     // 1. Create admin user
@@ -208,32 +210,52 @@ const seedData = async () => {
     const offers = await Offer.create([
       {
         title: 'Weekend Flash Sale - Up to 40% Off',
+        subtitle: 'Up to 40% off on tees and shirts',
         description: 'Grab premium t-shirts and shirts at unbeatable prices this weekend!',
         type: 'flash',
-        image: '',
+        carouselTemplate: 'fullbleed',
+        image: products[0].images?.[0] || '',
         discountPercent: 40,
+        ctaText: 'SHOP THE SALE',
         comboDetails: '',
         products: [products[0]._id, products[1]._id, products[4]._id, products[5]._id],
         startTime: now,
         endTime: flashEnd,
         isActive: true,
         showOnHomepage: true,
+        showOnCarousel: true,
+        hasCountdown: true,
+        order: 0,
       },
       {
         title: 'Buy 2 Get 1 Free - Mix & Match',
+        subtitle: 'Fresh styles every week',
         description: 'Pick any 3 items and get the lowest priced one absolutely free!',
         type: 'combo',
-        image: '',
+        carouselTemplate: 'splitcard',
+        image: products[2].images?.[0] || '',
         discountPercent: 33,
-        comboDetails: 'Buy any 2 products from the collection and get the 3rd one free. Applicable on all categories.',
+        discountLabel: 'BUY 2 GET 1',
+        ctaText: 'EXPLORE NOW',
+        comboDetails:
+          'Buy any 2 products from the collection and get the 3rd one free. Applicable on all categories.',
         products: [products[0]._id, products[2]._id, products[8]._id, products[10]._id],
         startTime: now,
         endTime: comboEnd,
         isActive: true,
         showOnHomepage: true,
+        showOnCarousel: true,
+        hasCountdown: true,
+        order: 1,
       },
     ]);
     console.log(`✅ ${offers.length} offers created`);
+
+    await NewArrival.create([
+      { product: products[0]._id, weekLabel: 'This Week', order: 0 },
+      { product: products[1]._id, weekLabel: 'This Week', order: 1 },
+    ]);
+    console.log('✅ New arrivals created');
 
     console.log('\n🎉 Seed completed successfully!');
     console.log('Admin login: admin@sowaatmenswear.com / admin123');

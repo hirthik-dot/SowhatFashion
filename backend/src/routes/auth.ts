@@ -228,7 +228,7 @@ router.post('/login', async (req: Request, res: Response) => {
       path: '/'
     });
 
-    res.json({ message: 'Login successful', admin: { id: admin._id, email: admin.email } });
+    res.json({ message: 'Login successful', token, admin: { id: admin._id, email: admin.email } });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
@@ -311,7 +311,11 @@ router.get('/me', async (req: Request, res: Response) => {
     }
 
     // 2. Check for Admin authentication
-    const adminToken = req.cookies?.token;
+    let adminToken = req.cookies?.token;
+    if (!adminToken && authHeader && authHeader.startsWith('Bearer ')) {
+      adminToken = authHeader.split(' ')[1];
+    }
+    
     if (adminToken) {
        try {
           const decoded = jwt.verify(adminToken, process.env.JWT_SECRET as string) as { id: string };
