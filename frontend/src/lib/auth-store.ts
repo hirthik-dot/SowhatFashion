@@ -12,28 +12,30 @@ interface AuthState {
   user: User | null;
   isLoggedIn: boolean;
   isAuthModalOpen: boolean;
-  authModalTab: 'login' | 'register';
+  redirectUrl: string | null;
   wishlist: string[];
   setUser: (user: User | null) => void;
   logout: () => void;
-  openAuthModal: (tab?: 'login' | 'register') => void;
+  openAuthModal: (redirectUrl?: string) => void;
   closeAuthModal: () => void;
   toggleWishlist: (productId: string) => void;
   setWishlist: (wishlist: string[]) => void;
+  setRedirectUrl: (url: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoggedIn: false,
   isAuthModalOpen: false,
-  authModalTab: 'login',
+  redirectUrl: null,
   wishlist: [],
 
   setUser: (user) => set({ user, isLoggedIn: !!user }),
   logout: () => set({ user: null, isLoggedIn: false, wishlist: [] }),
-  openAuthModal: (tab = 'login') => set({ isAuthModalOpen: true, authModalTab: tab }),
+  openAuthModal: (redirectUrl?: string) => set({ isAuthModalOpen: true, redirectUrl: redirectUrl || null }),
   closeAuthModal: () => set({ isAuthModalOpen: false }),
   setWishlist: (wishlist) => set({ wishlist }),
+  setRedirectUrl: (url) => set({ redirectUrl: url }),
   toggleWishlist: (productId) => {
     const current = get().wishlist;
     // optimistic update

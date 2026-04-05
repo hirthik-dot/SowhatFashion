@@ -4,17 +4,29 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCart } from '@/hooks/useCart';
+import { useAuthStore } from '@/lib/auth-store';
 import { formatPrice } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, totalAmount, totalItems } = useCart();
+  const { isLoggedIn, openAuthModal } = useAuthStore();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleCheckout = () => {
+    if (isLoggedIn) {
+      router.push('/checkout');
+    } else {
+      openAuthModal('/checkout');
+    }
+  };
 
   if (!mounted) return null; // Prevent hydration mismatch
 
@@ -137,9 +149,9 @@ export default function CartPage() {
                   <span className="font-bold text-2xl">{formatPrice(totalAmount)}</span>
                 </div>
 
-                <Link href="/checkout" className="btn-gold w-full block text-center rounded py-4 shadow hover:shadow-lg">
+                <button onClick={handleCheckout} className="btn-gold w-full block text-center rounded py-4 shadow hover:shadow-lg cursor-pointer">
                   PROCEED TO CHECKOUT
-                </Link>
+                </button>
 
                 <p className="text-xs text-center text-gray-400 mt-4 flex items-center justify-center gap-1">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Secure Checkout

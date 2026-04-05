@@ -2,18 +2,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import { X, ArrowLeft } from 'lucide-react';
-import { signIn } from 'next-auth/react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 export default function AuthModal() {
-  const { isAuthModalOpen, authModalTab, closeAuthModal, setUser, setWishlist, openAuthModal } = useAuthStore();
+  const { isAuthModalOpen, closeAuthModal, setUser, redirectUrl, setRedirectUrl } = useAuthStore();
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(60);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -36,17 +36,12 @@ export default function AuthModal() {
       return;
     }
 
-    if (authModalTab === 'register' && !name) {
-      setError('Name is required');
-      return;
-    }
-
     setLoading(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, purpose: authModalTab })
+        body: JSON.stringify({ email, purpose: 'login' })
       });
       const data = await res.json();
       if (data.success) {
@@ -69,18 +64,16 @@ export default function AuthModal() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otpValue, purpose: authModalTab, name })
+        body: JSON.stringify({ email, otp: otpValue, purpose: 'login' })
       });
       const data = await res.json();
       
       if (data.success) {
-        if (data.needsRegistration) {
-           setError('Account not found. Please register.');
-           openAuthModal('register');
-           setOtpSent(false);
-        } else {
-           setUser(data.user);
-           closeAuthModal();
+        setUser(data.user);
+        closeAuthModal();
+        if (redirectUrl) {
+          router.push(redirectUrl);
+          setRedirectUrl(null);
         }
       } else {
         setError(data.error || 'Invalid OTP');
@@ -136,7 +129,8 @@ export default function AuthModal() {
   };
 
   const handleGoogle = () => {
-    signIn('google', { callbackUrl: window.location.href });
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+    window.location.href = `${apiUrl}/api/auth/google`;
   };
 
   return (
@@ -150,24 +144,6 @@ export default function AuthModal() {
              <X size={20} />
            </button>
         </div>
-
-        {/* Tabs */}
-        {!otpSent && (
-          <div className="flex border-b border-gray-200">
-            <button 
-              className={`flex-1 h-[46px] text-sm font-semibold transition-colors ${authModalTab === 'login' ? 'bg-[#C9A84C] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
-              onClick={() => openAuthModal('login')}
-            >
-              LOGIN
-            </button>
-            <button 
-              className={`flex-1 h-[46px] text-sm font-semibold transition-colors ${authModalTab === 'register' ? 'bg-[#C9A84C] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
-              onClick={() => openAuthModal('register')}
-            >
-              REGISTER
-            </button>
-          </div>
-        )}
 
         <div className="p-6 overflow-y-auto">
           {error && <div className="text-red-500 text-sm mb-4 text-center">{error}</div>}
@@ -191,15 +167,6 @@ export default function AuthModal() {
               </div>
 
               <form onSubmit={handleSendOtp} className="space-y-4">
-                {authModalTab === 'register' && (
-                  <input
-                    type="text"
-                    placeholder="Your full name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full h-[48px] px-4 border border-gray-200 rounded-lg focus:outline-none focus:border-[#C9A84C] focus:ring-1 focus:ring-[#C9A84C] transition-colors bg-white"
-                  />
-                )}
                 <input
                   type="email"
                   placeholder="Enter your email address"
@@ -213,7 +180,7 @@ export default function AuthModal() {
                   disabled={loading}
                   className="w-full h-[50px] bg-[#C9A84C] hover:bg-[#B59640] text-black font-bold uppercase rounded-lg tracking-wider transition-colors disabled:opacity-50"
                 >
-                  {loading ? 'WAIT...' : authModalTab === 'login' ? 'PROCEED' : 'SEND OTP'}
+                  {loading ? 'WAIT...' : 'PROCEED'}
                 </button>
               </form>
             </div>

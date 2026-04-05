@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useCartStore } from '@/lib/cart-store';
+import { useAuthStore } from '@/lib/auth-store';
 import { formatPrice, calculateDiscount } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -14,6 +15,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const [touchEnd, setTouchEnd] = useState(0);
   const [descOpen, setDescOpen] = useState(false);
   const addItem = useCartStore((s) => s.addItem);
+  const { user, openAuthModal } = useAuthStore();
   const router = useRouter();
   const [currentUrl, setCurrentUrl] = useState('');
 
@@ -56,7 +58,11 @@ export default function ProductDetailClient({ product }: { product: any }) {
 
   const handleBuyNow = () => {
     handleAddToCart();
-    router.push('/checkout');
+    if (!user) {
+      openAuthModal('/checkout');
+    } else {
+      router.push('/checkout');
+    }
   };
 
   const inStockSizes = product.sizes; // Assuming all listed are in stock for now unless we track per-size inventory

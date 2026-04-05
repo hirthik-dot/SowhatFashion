@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import passport from 'passport';
 import bcrypt from 'bcryptjs';
 import { Resend } from 'resend';
 import Admin from '../models/Admin';
@@ -109,7 +110,8 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     if (purpose === 'login') {
       user = await User.findOne({ email });
       if (!user) {
-        return res.json({ success: true, needsRegistration: true });
+        // Auto-create user if they don't exist
+        user = await User.create({ email, isEmailVerified: true });
       }
     } else if (purpose === 'register') {
       user = await User.findOne({ email });
@@ -144,6 +146,23 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: 'Server error' });
   }
 });
+
+// GET /api/auth/google (Init OAuth)
+router.get('/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+// GET /api/auth/google/callback
+router.get('/google/callback', 
+  passport.authenticate('google', { failureRedirect: process.env.CLIENT_URL + '/login?error=google_failed', session: false }),
+  (req: Request, res: Response) => {
+    const user = req.user as any;
+    // Generate JWT token
+    const token = jwt.sign({ id: user._id, email: user.email, name: user.name }, process.env.JWT_SECRET || '', { expiresIn: '7d' });
+    // Redirect to frontend with token
+    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
+  }
+);
 
 // POST /api/auth/google (USER using NextAuth)
 router.post('/google', async (req: Request, res: Response) => {
