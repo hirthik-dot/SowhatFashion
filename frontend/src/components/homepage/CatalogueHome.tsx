@@ -250,7 +250,7 @@ const ProductCardMax = ({ product }: any) => {
   const handleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     if (!isLoggedIn) {
-       openAuthModal('login'); return;
+       openAuthModal(); return;
     }
     toggleWishlist(product._id);
     try {
@@ -460,7 +460,7 @@ function CatalogueHomeContent({ products: initialProducts, offers, settings }: a
             </div>
 
             <div className="flex items-center gap-5 md:gap-7 flex-shrink-0">
-               <button onClick={() => openAuthModal('login')} className="hidden md:block bg-[var(--gold)] text-black uppercase font-semibold px-6 h-[44px] text-[13px] tracking-wide hover:opacity-90 transition-opacity rounded-sm">
+               <button onClick={() => openAuthModal()} className="hidden md:block bg-[var(--gold)] text-black uppercase font-semibold px-6 h-[44px] text-[13px] tracking-wide hover:opacity-90 transition-opacity rounded-sm">
                  Sign In
                </button>
                

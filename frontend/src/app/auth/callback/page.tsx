@@ -3,6 +3,7 @@
 import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
+import { normalizeAuthUser } from '@/lib/auth-user';
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -25,25 +26,27 @@ function AuthCallbackContent() {
       document.cookie = `user_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
       // Also save to localStorage
       localStorage.setItem('token', token);
-      
+
       const fetchUser = async () => {
         try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/me`, {
+            credentials: 'include',
             headers: {
-              'Authorization': `Bearer ${token}` // Optional if API relies on the cookie or header
-            }
+              Authorization: `Bearer ${token}`,
+            },
           });
           const data = await res.json();
           if (data.success && data.user) {
-            useAuthStore.getState().setUser(data.user);
+            const normalized = normalizeAuthUser(data.user);
+            if (normalized) useAuthStore.getState().setUser(normalized);
           }
         } catch (err) {
           console.error('Failed to fetch user:', err);
         } finally {
-          const destination = redirectUrl || '/';
+          const destination =
+            redirectUrl && redirectUrl.startsWith('/') ? redirectUrl : '/';
           setRedirectUrl(null);
-          // Redirect without full reload, since state is updated
-          router.push(destination);
+          router.replace(destination);
         }
       };
 

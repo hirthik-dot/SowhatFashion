@@ -242,7 +242,7 @@ export default function CheckoutPage() {
                     <span className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-xs font-sans">1</span> Contact Information
                   </h2>
                   {!isLoggedIn && (
-                    <button type="button" onClick={() => openAuthModal('login')} className="text-sm text-[var(--gold)] font-bold hover:underline">
+                    <button type="button" onClick={() => openAuthModal()} className="text-sm text-[var(--gold)] font-bold hover:underline">
                       Login to checkout fast
                     </button>
                   )}

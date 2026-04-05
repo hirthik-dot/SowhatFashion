@@ -52,7 +52,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
     e.stopPropagation();
     
     if (!isLoggedIn) {
-       openAuthModal('login');
+       openAuthModal();
        return;
     }
     

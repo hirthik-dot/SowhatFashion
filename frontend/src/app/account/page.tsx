@@ -3,12 +3,22 @@ import { Suspense, useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProductCard from '@/components/shared/ProductCard';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
+import { normalizeAuthUser, userInitials } from '@/lib/auth-user';
+
+type AccountTab = 'profile' | 'orders' | 'wishlist' | 'addresses';
+
+function parseTabParam(raw: string | null): AccountTab {
+  if (raw === 'orders' || raw === 'wishlist' || raw === 'addresses' || raw === 'profile') return raw;
+  return 'profile';
+}
 
 function AccountContent() {
   const { user, isLoggedIn, openAuthModal, logout } = useAuthStore();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'orders');
+  const [activeTab, setActiveTab] = useState<AccountTab>(() => parseTabParam(searchParams.get('tab')));
   
   const [orders, setOrders] = useState<any[]>([]);
   const [wishlistProducts, setWishlistProducts] = useState<any[]>([]);
@@ -24,6 +34,12 @@ function AccountContent() {
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+  useEffect(() => {
+    setActiveTab(parseTabParam(searchParams.get('tab')));
+  }, [searchParams]);
 
   useEffect(() => {
     if (user) {
@@ -48,11 +64,17 @@ function AccountContent() {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(profileData)
+        body: JSON.stringify({
+          name: profileData.name,
+          phone: profileData.phone,
+          dob: profileData.dob,
+          gender: profileData.gender,
+        })
       });
       const data = await res.json();
       if (data.success) {
-        useAuthStore.getState().setUser(data.user);
+        const normalized = normalizeAuthUser(data.user);
+        if (normalized) useAuthStore.getState().setUser(normalized);
         setToastMsg('Profile saved successfully!');
         setTimeout(() => setToastMsg(''), 3000);
       } else {
@@ -68,9 +90,19 @@ function AccountContent() {
   };
 
   // Switch tab in URL
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = (tab: AccountTab) => {
     setActiveTab(tab);
     router.replace(`/account?tab=${tab}`, { scroll: false });
+  };
+
+  const handleAccountLogout = async () => {
+    try {
+      await fetch(`${apiUrl}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    } catch {
+      /* ignore */
+    }
+    logout();
+    router.push('/');
   };
 
   useEffect(() => {
@@ -79,27 +111,31 @@ function AccountContent() {
       setTimeout(() => openAuthModal(), 100);
       return;
     }
-    
-    // Fetch data based on active tab
+
     const fetchData = async () => {
+      if (activeTab === 'profile' || activeTab === 'addresses') {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
         const token = localStorage.getItem('token');
-        const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const headers: HeadersInit = {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
 
         if (activeTab === 'orders') {
-           const res = await fetch(`${url}/api/orders/my-orders`, { headers });
-           const data = await res.json();
-           if (data.success) {
-             setOrders(data.orders || []);
-           }
+          const res = await fetch(`${apiUrl}/api/orders/my-orders`, { headers, credentials: 'include' });
+          const data = await res.json();
+          if (data.success) {
+            setOrders(data.orders || []);
+          }
         } else if (activeTab === 'wishlist') {
-           const res = await fetch(`${url}/api/users/wishlist`);
-           const data = await res.json();
-           if (data.success) {
-             setWishlistProducts(data.wishlist || []);
-           }
+          const res = await fetch(`${apiUrl}/api/users/wishlist`, { headers, credentials: 'include' });
+          const data = await res.json();
+          if (data.success) {
+            setWishlistProducts(data.wishlist || []);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -108,15 +144,26 @@ function AccountContent() {
       }
     };
     fetchData();
-  }, [activeTab, isLoggedIn, user, router, openAuthModal]);
+  }, [activeTab, isLoggedIn, router, openAuthModal, apiUrl]);
 
   if (!isLoggedIn || !user) {
-    return <div className="min-h-screen py-20 text-center">Redirecting...</div>;
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen pt-24 pb-20 text-center text-[var(--text-secondary)] bg-[var(--bg)]">
+          Redirecting…
+        </div>
+        <Footer />
+      </>
+    );
   }
 
-  // Address logic inline for simplicity since it's just frontend state
+  const displayName = user.name?.trim() || user.email.split('@')[0];
+
   return (
-    <div className="min-h-screen pt-20 pb-24 max-w-7xl mx-auto px-4 md:px-6">
+    <>
+      <Navbar />
+      <div className="min-h-screen pt-20 pb-24 max-w-7xl mx-auto px-4 md:px-6 bg-[var(--bg)]">
       <h1 className="text-3xl font-bold mb-8 font-['Playfair_Display']">My Account</h1>
 
       <div className="flex flex-col md:flex-row gap-8">
@@ -133,12 +180,12 @@ function AccountContent() {
            <button onClick={() => handleTabChange('addresses')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'addresses' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
              📍 Addresses
            </button>
-           <button onClick={() => { logout(); router.push('/'); }} className="text-left px-4 py-3 rounded-lg font-medium text-red-600 hover:bg-red-50 transition-colors mt-4">
+           <button type="button" onClick={handleAccountLogout} className="text-left px-4 py-3 rounded-lg font-medium text-red-700 hover:bg-red-50 transition-colors mt-4 border border-red-200">
              Logout
            </button>
         </div>
 
-        <div className="flex-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm min-h-[500px]">
+        <div className="flex-1 bg-[#FDFBF7] p-6 rounded-xl border border-[#E8DFD0] shadow-sm min-h-[500px]">
           {loading ? (
              <div className="flex justify-center items-center py-20 text-gray-500">Loading...</div>
           ) : (
@@ -152,11 +199,11 @@ function AccountContent() {
                     </div>
                   )}
                   <div className="flex items-center gap-6 mb-8">
-                    <div className="w-20 h-20 rounded-full bg-[#C9A84C] text-black text-3xl font-bold flex items-center justify-center shadow-md">
-                      {user.avatar ? <img src={user.avatar} className="w-full h-full rounded-full object-cover" alt="Avatar" /> : user.name.charAt(0).toUpperCase()}
+                    <div className="w-20 h-20 rounded-full bg-[#C9A84C] text-black text-lg font-bold flex items-center justify-center shadow-md overflow-hidden">
+                      {user.avatar ? <img src={user.avatar} className="w-full h-full rounded-full object-cover" alt="Avatar" /> : userInitials(user)}
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold">{user.name}</h3>
+                      <h3 className="text-xl font-bold">{displayName}</h3>
                       <p className="text-gray-500">{user.email}</p>
                     </div>
                   </div>
@@ -202,14 +249,17 @@ function AccountContent() {
                     <p className="text-gray-500">No orders yet. Start shopping!</p>
                   ) : (
                     <div className="space-y-4">
-                      {orders.map((o) => (
-                        <div key={o._id} className="border border-gray-200 rounded-lg overflow-hidden transition-all duration-300 shadow-sm hover:shadow-md">
+                      {orders.map((o) => {
+                        const oid = String(o._id);
+                        const idTail = oid.length >= 8 ? oid.slice(-8).toUpperCase() : oid.toUpperCase();
+                        return (
+                          <div key={oid} className="border border-[#E8DFD0] rounded-lg overflow-hidden transition-all duration-300 shadow-sm hover:shadow-md bg-white">
                           <div 
                             className="p-5 flex justify-between items-center bg-white cursor-pointer"
-                            onClick={() => setExpandedOrderId(expandedOrderId === o._id ? null : o._id)}
+                            onClick={() => setExpandedOrderId(expandedOrderId === oid ? null : oid)}
                           >
                             <div>
-                              <p className="font-bold font-['Playfair_Display'] text-lg">Order #{o.orderId || o._id.substring(o._id.length-8).toUpperCase()}</p>
+                              <p className="font-bold font-['Playfair_Display'] text-lg">Order #{o.orderId || idTail}</p>
                               <p className="text-sm text-gray-500 mt-1">{new Date(o.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                             </div>
                             <div className="text-right flex flex-col items-end gap-2">
@@ -224,7 +274,7 @@ function AccountContent() {
                           </div>
                           
                           {/* Expanded Details */}
-                          {expandedOrderId === o._id && (
+                          {expandedOrderId === oid && (
                             <div className="p-5 border-t border-gray-100 bg-gray-50">
                               <h4 className="text-sm font-bold text-gray-700 uppercase tracking-widest mb-4">Items in Order</h4>
                               <div className="space-y-3">
@@ -250,14 +300,15 @@ function AccountContent() {
                                 ))}
                               </div>
                               <div className="mt-5 flex justify-end">
-                                <button className="text-sm font-bold text-[#C9A84C] hover:text-[#B59640] uppercase tracking-wider bg-white px-4 py-2 border border-[#C9A84C] rounded-md transition-colors" onClick={() => router.push(`/orders/${o._id}`)}>
-                                  View Full Invoice
+                                <button type="button" className="text-sm font-bold text-[#C9A84C] hover:text-[#B59640] uppercase tracking-wider bg-white px-4 py-2 border border-[#C9A84C] rounded-md transition-colors" onClick={() => router.push(`/order/${oid}`)}>
+                                  View order details
                                 </button>
                               </div>
                             </div>
                           )}
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -306,7 +357,22 @@ function AccountContent() {
           )}
         </div>
       </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-6 mt-10 pb-8">
+        <div className="rounded-xl border border-[#E8DFD0] bg-[#FDFBF7] p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <p className="text-sm text-[var(--text-secondary)]">Signed in as <span className="font-semibold text-black">{user.email}</span></p>
+          <button
+            type="button"
+            onClick={handleAccountLogout}
+            className="shrink-0 bg-transparent border-2 border-[#C9A84C] text-black font-bold uppercase tracking-wider py-3 px-8 rounded-lg hover:bg-[#C9A84C] transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
     </div>
+    <Footer />
+    </>
   );
 }
 

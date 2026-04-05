@@ -37,7 +37,8 @@ const otpRateLimits = new Map<string, number>();
 // POST /api/auth/send-otp (USER)
 router.post('/send-otp', async (req: Request, res: Response) => {
   try {
-    const { email, purpose } = req.body;
+    const { email: rawEmail, purpose } = req.body;
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
 
     if (!email || !purpose) {
       return res.status(400).json({ success: false, error: 'Email and purpose are required' });
@@ -81,8 +82,10 @@ router.post('/send-otp', async (req: Request, res: Response) => {
 // POST /api/auth/verify-otp (USER)
 router.post('/verify-otp', async (req: Request, res: Response) => {
   try {
-    console.log('Backend /api/auth/verify-otp Received req.body:', req.body);
-    const { email, otp, purpose, name } = req.body;
+    const { email: rawEmail, purpose, name } = req.body;
+    const otpRaw = req.body.otp ?? req.body.code;
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+    const otp = otpRaw != null ? String(otpRaw).trim() : '';
 
     if (!email || !otp || !purpose) {
       return res.status(400).json({ success: false, error: 'Email, OTP, and purpose required' });
@@ -111,8 +114,8 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     if (purpose === 'login') {
       user = await User.findOne({ email });
       if (!user) {
-        // Auto-create user if they don't exist
-        user = await User.create({ email, isEmailVerified: true });
+        const defaultName = email.split('@')[0] || 'Customer';
+        user = await User.create({ email, name: defaultName, isEmailVerified: true });
       }
     } else if (purpose === 'register') {
       user = await User.findOne({ email });
@@ -158,8 +161,12 @@ router.get('/google/callback',
   passport.authenticate('google', { failureRedirect: `${process.env.CLIENT_URL}/?error=google_failed`, session: false }),
   (req: Request, res: Response) => {
     const user = req.user as any;
-    // Generate JWT token
-    const token = jwt.sign({ id: user._id, email: user.email, name: user.name }, process.env.JWT_SECRET || '', { expiresIn: '7d' });
+    const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
+    const token = jwt.sign(
+      { id: user._id, email: user.email, name: user.name },
+      secret,
+      { expiresIn: '7d' }
+    );
     // Redirect to frontend with token
     res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
   }
