@@ -49,7 +49,7 @@ export default function OrdersClient({ theme }: { theme: string }) {
     setError('');
     
     try {
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + '/api/orders/lookup' || 'http://localhost:5000/api/orders/lookup', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/orders/lookup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contact: contact.trim() })
