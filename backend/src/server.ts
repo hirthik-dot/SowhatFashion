@@ -22,19 +22,24 @@ import catalogueRoutes from './routes/catalogue';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// CORS — dynamic origin check (must be FIRST middleware)
 const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map(s => s.trim())
-  : ['http://localhost:3000', 'https://sowaatmenswear.vercel.app'];
+  ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+  : ['http://localhost:3000'];
 
-const corsOptions = {
-  origin: allowedOrigins,
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-};
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+}));
+app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -70,6 +75,12 @@ app.use('/api/catalogue', catalogueRoutes);
 
 // Error handler
 app.use(errorHandler);
+
+// Global catch-all error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Global error:', err.stack);
+  res.status(500).json({ error: err.message });
+});
 
 // Connect to DB and start server
 const startServer = async () => {
