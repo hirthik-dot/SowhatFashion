@@ -55,10 +55,10 @@ const RangeSliderFilter = ({ filter, minPrice, maxPrice, onChange }: any) => {
                <div className="absolute h-full bg-[#C9A84C] rounded-full" style={{ left: `${minPos}%`, right: `${100 - maxPos}%` }} />
                <input type="range" min={config.min} max={config.max} step={config.step} value={val.min} 
                       onChange={(e) => setVal({...val, min: Math.min(Number(e.target.value), val.max - config.step)})}
-                      className="absolute w-full top-1/2 -translate-y-1/2 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px] max-md:[&::-webkit-slider-thumb]:w-[24px] max-md:[&::-webkit-slider-thumb]:h-[24px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#C9A84C] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:cursor-pointer z-10" />
+                      className="absolute w-full top-1/2 -translate-y-1/2 appearance-none bg-transparent pointer-events-none touch-manipulation [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px] max-md:[&::-webkit-slider-thumb]:w-[24px] max-md:[&::-webkit-slider-thumb]:h-[24px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#C9A84C] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-[18px] [&::-moz-range-thumb]:h-[18px] max-md:[&::-moz-range-thumb]:w-[24px] max-md:[&::-moz-range-thumb]:h-[24px] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[#C9A84C] [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer z-10" />
                <input type="range" min={config.min} max={config.max} step={config.step} value={val.max} 
                       onChange={(e) => setVal({...val, max: Math.max(Number(e.target.value), val.min + config.step)})}
-                      className="absolute w-full top-1/2 -translate-y-1/2 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px] max-md:[&::-webkit-slider-thumb]:w-[24px] max-md:[&::-webkit-slider-thumb]:h-[24px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#C9A84C] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:cursor-pointer z-20" />
+                      className="absolute w-full top-1/2 -translate-y-1/2 appearance-none bg-transparent pointer-events-none touch-manipulation [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px] max-md:[&::-webkit-slider-thumb]:w-[24px] max-md:[&::-webkit-slider-thumb]:h-[24px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#C9A84C] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-[18px] [&::-moz-range-thumb]:h-[18px] max-md:[&::-moz-range-thumb]:w-[24px] max-md:[&::-moz-range-thumb]:h-[24px] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[#C9A84C] [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer z-20" />
             </div>
          </div>
          <div className="flex justify-between items-center mb-3 px-1 text-xs text-[var(--text-secondary)] font-medium">
@@ -69,7 +69,7 @@ const RangeSliderFilter = ({ filter, minPrice, maxPrice, onChange }: any) => {
             <input type="number" value={val.min} readOnly className="w-[60px] h-8 max-md:h-10 border border-[var(--border)] text-xs text-center rounded-sm bg-gray-50 focus:outline-none" />
             <span className="text-[var(--border)]">-</span>
             <input type="number" value={val.max} readOnly className="w-[60px] h-8 max-md:h-10 border border-[var(--border)] text-xs text-center rounded-sm bg-gray-50 focus:outline-none" />
-            <button onClick={handleApply} className="w-8 h-8 max-md:w-10 max-md:h-10 flex items-center justify-center bg-gray-50 hover:bg-[var(--gold)] hover:text-white hover:border-[var(--gold)] transition-colors border border-[var(--border)] rounded-sm ml-auto text-black cursor-pointer">
+            <button type="button" onClick={handleApply} className="w-8 h-8 max-md:w-10 max-md:h-10 flex items-center justify-center bg-gray-50 hover:bg-[var(--gold)] hover:text-white hover:border-[var(--gold)] transition-colors border border-[var(--border)] rounded-sm ml-auto text-black cursor-pointer touch-manipulation shrink-0">
                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </button>
          </div>
@@ -92,7 +92,13 @@ const CheckboxListFilter = ({ filter, activeValues, productCounts, onChange }: a
         <h4 className="text-sm font-medium text-[var(--text-primary)] mb-4">{filter.label}</h4>
         <div className="space-y-3">
            {visibleOptions.map((opt: any) => (
-              <label key={opt.value} className="flex flex-row items-center gap-3 cursor-pointer group min-h-[44px] md:min-h-[24px]" onClick={(e) => { e.preventDefault(); toggle(opt.value); }}>
+              <button
+                 key={opt.value}
+                 type="button"
+                 aria-pressed={activeValues.includes(opt.value)}
+                 className="flex flex-row items-center gap-3 cursor-pointer group min-h-[44px] md:min-h-[24px] w-full text-left p-0 m-0 bg-transparent border-0 font-[inherit] text-[inherit] appearance-none touch-manipulation"
+                 onClick={() => toggle(opt.value)}
+              >
                  <div className={cn(
                     "w-[22px] h-[22px] md:w-[16px] md:h-[16px] shrink-0 border rounded-[2px] flex items-center justify-center mt-0.5 transition-colors",
                     activeValues.includes(opt.value) ? "bg-[var(--gold)] border-[var(--gold)]" : "bg-white border-gray-300 group-hover:border-[var(--gold)]"
@@ -102,7 +108,7 @@ const CheckboxListFilter = ({ filter, activeValues, productCounts, onChange }: a
                  <div className="text-sm text-[var(--text-secondary)] leading-tight flex-1 max-md:text-base">
                     {opt.label} <span className="text-xs text-gray-400">({productCounts?.[opt.value] || 0})</span>
                  </div>
-              </label>
+              </button>
            ))}
            {options.length > 4 && (
               <button 
@@ -682,7 +688,7 @@ function CatalogueHomeContent({
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto px-5 py-2">
+            <div className="flex-1 overflow-y-auto px-5 py-2 overscroll-contain touch-pan-y">
                {sidebarConfig?.filters?.filter((f: any) => f.isVisible).sort((a: any, b: any) => a.order - b.order).map((filter: any) => {
                    if (filter.type === 'range_slider') {
                       return <RangeSliderFilter 
@@ -718,11 +724,13 @@ function CatalogueHomeContent({
             
             <div className="shrink-0 p-4 bg-white border-t border-[var(--border)] shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
               <button 
+                type="button"
                 onClick={() => {
-                   router.push(`${pathname}?${mobileDraftParams.toString()}`);
+                   const q = mobileDraftParams.toString();
+                   router.push(q ? `${pathname}?${q}` : pathname);
                    setMobileFilterOpen(false);
                 }} 
-                className="w-full bg-[var(--gold)] h-[54px] font-bold uppercase tracking-widest text-sm rounded-sm text-black hover:opacity-90 active:scale-95 transition-all"
+                className="w-full bg-[var(--gold)] h-[54px] font-bold uppercase tracking-widest text-sm rounded-sm text-black hover:opacity-90 active:scale-95 transition-all touch-manipulation"
               >
                 APPLY FILTERS
               </button>
