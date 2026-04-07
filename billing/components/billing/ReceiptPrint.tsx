@@ -1,7 +1,7 @@
 "use client";
 
 import React, { forwardRef } from "react";
-import { formatCurrency, formatPhone, receiptRow } from "./print-utils";
+import { formatPhone } from "./print-utils";
 
 export type ReceiptPrintBill = {
   billNumber?: string;
@@ -32,9 +32,6 @@ export type ReceiptPrintBill = {
   changeReturned?: number;
 };
 
-const MAJOR_DIVIDER = "================================";
-const MINOR_DIVIDER = "--------------------------------";
-
 const formatBillDate = (d: Date) =>
   d.toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -44,148 +41,117 @@ const formatBillDate = (d: Date) =>
 
 const formatBillTime = (d: Date) =>
   d.toLocaleTimeString("en-US", {
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   });
 
-export const ReceiptPrint = forwardRef<HTMLDivElement, { bill: ReceiptPrintBill }>(function ReceiptPrint(
-  { bill },
+const money = (value: number) =>
+  Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+export const ReceiptPrint = forwardRef<
+  HTMLDivElement,
+  { bill: ReceiptPrintBill; logoSrc?: string }
+>(function ReceiptPrint(
+  { bill, logoSrc = "/1775556627469.png" },
   ref
 ) {
   const createdAt = new Date(bill.createdAt || Date.now());
-  const totalDiscount = Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0);
-  const gstAmount = Number(bill.gstAmount || 0);
-  const cgst = Number(bill.cgst ?? gstAmount / 2);
-  const sgst = Number(bill.sgst ?? gstAmount / 2);
-
-  const paymentMethod = String(bill.paymentMethod || "").toLowerCase();
-  const paymentMethodLabel = String(bill.paymentMethod || "N/A").toUpperCase();
-  const paymentBreakdown = bill.paymentBreakdown || [];
-  const cashBreakdown = paymentBreakdown.find(
-    (entry) => String(entry.method || "").toLowerCase() === "cash"
-  );
-  const hasCashComponent = paymentMethod === "cash" || Number(cashBreakdown?.amount || 0) > 0;
-
-  const cashReceived = hasCashComponent
-    ? paymentMethod === "cash"
-      ? Number(bill.cashReceived || 0)
-      : Number(cashBreakdown?.amount || 0)
-    : 0;
-  const safeChange = Math.max(0, Number(bill.changeReturned || 0));
-
-  const effectiveSalesman =
-    !bill.salesman || !bill.salesmanName ? "Counter Sale" : String(bill.salesmanName).trim() || "Counter Sale";
-  const customerName = bill.customer?.name?.trim() || "Walk-in Customer";
+  const items = bill.items || [];
+  const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
+  const received = Number(bill.cashReceived ?? bill.totalAmount ?? 0);
+  const balance = Math.max(0, Number(bill.changeReturned ?? 0));
   const phone = formatPhone(bill.customer?.phone || "");
 
   return (
     <div id="thermal-receipt" ref={ref} className="thermal-receipt">
-      <div className="receipt-divider-major">{MAJOR_DIVIDER}</div>
-
-      <div className="receipt-store-name">SOWAAT MENS WEAR</div>
-      <div className="receipt-store-subtitle">Premium Menswear Store</div>
-
-      <div className="receipt-divider-major">{MAJOR_DIVIDER}</div>
-
-      <div className="receipt-row-text">
-        {receiptRow(`Bill: ${bill.billNumber || "N/A"}`, formatBillDate(createdAt))}
+      <div className="brand-logo-wrap">
+        <img src={logoSrc} alt="Sowaat logo" className="brand-logo" />
       </div>
-      <div className="receipt-row-text">{receiptRow("Time:", formatBillTime(createdAt))}</div>
-      <div className="receipt-row-text">{receiptRow("Salesman :", effectiveSalesman)}</div>
-      <div className="receipt-row-text">{receiptRow("Payment  :", paymentMethodLabel)}</div>
-      <div className="receipt-row-text">{receiptRow("Customer :", customerName)}</div>
-      <div className="receipt-row-text">{receiptRow("Phone    :", phone)}</div>
 
-      <div className="receipt-divider-major">{MAJOR_DIVIDER}</div>
-      <div className="receipt-section-header">ITEMS</div>
-      <div className="receipt-divider-minor">{MINOR_DIVIDER}</div>
+      <div className="brand-name">SOWAAT</div>
+      <div className="brand-subname">MENS WEAR</div>
 
-      {(bill.items || []).map((item, index) => {
-        const quantity = Number(item.quantity || 0);
-        const lineTotal = Number(item.lineTotal || 0);
+      <div className="line" />
+      <div className="center">sowaat Mens wear</div>
+      <div className="center">Railway road (near Indian Bank) sirkali</div>
+      <div className="center">Ph.No.: 9360838193</div>
+      <div className="center">Email: sowaatmenswear@gmail.com</div>
+      <div className="line" />
+
+      <div className="title">Tax Invoice</div>
+      <div className="row-between">
+        <span>{`Invoice No.: ${bill.billNumber || "N/A"}`}</span>
+        <span>{`Date: ${formatBillDate(createdAt)}`}</span>
+      </div>
+      <div className="row-right">{`Time: ${formatBillTime(createdAt)}`}</div>
+
+      <div className="line" />
+      <div className="center">Cash Sale</div>
+      <div className="center">{`Ph. No.: ${phone}`}</div>
+      <div className="line" />
+
+      <div className="table-head">
+        <div className="col-num">#</div>
+        <div className="col-item">Item Name<br />Qty</div>
+        <div className="col-price">Price</div>
+        <div className="col-amt">Amount</div>
+      </div>
+
+      {items.map((item, index) => {
+        const quantity = Number(item.quantity || 0) || 1;
+        const amount = Number(item.lineTotal || 0);
+        const unitPrice = quantity > 0 ? amount / quantity : amount;
         return (
-          <div key={`${item.barcode || "item"}-${index}`}>
-            <div className="receipt-item-name">
-              {`${item.name || "Item"} (${item.size || "-"})`}
+          <div key={`${item.barcode || "item"}-${index}`} className="item-row">
+            <div className="col-num">{index + 1}</div>
+            <div className="col-item">
+              <div className="item-name">{item.name || "Item"}</div>
+              <div className="item-qty">{`${quantity}Nos`}</div>
             </div>
-            <div className="receipt-item-detail">
-              <span>{`Qty: ${quantity}  MRP:${formatCurrency(lineTotal / Math.max(1, quantity))}`}</span>
-              <span>{formatCurrency(lineTotal)}</span>
-            </div>
-            {index !== (bill.items || []).length - 1 && (
-              <div className="receipt-divider-minor">{MINOR_DIVIDER}</div>
-            )}
+            <div className="col-price">{money(unitPrice)}</div>
+            <div className="col-amt">{money(amount)}</div>
           </div>
         );
       })}
 
-      <div className="receipt-divider-minor">{MINOR_DIVIDER}</div>
+      <div className="line" />
+      <div className="row-between">
+        <span>{`Qty: ${totalQty}`}</span>
+        <span>{money(subtotal)}</span>
+      </div>
 
-      <div className="receipt-row">
-        <span>Subtotal         :</span>
-        <span>{formatCurrency(Number(bill.subtotal || 0))}</span>
+      <div className="amount-row">
+        <span>Total</span>
+        <span>:</span>
+        <span>{money(subtotal)}</span>
       </div>
-      {totalDiscount > 0 && (
-        <div className="receipt-row">
-          <span>Total Discount   :</span>
-          <span>{`-${formatCurrency(totalDiscount)}`}</span>
-        </div>
-      )}
-      <div className="receipt-divider-minor">{MINOR_DIVIDER}</div>
-      <div className="receipt-row">
-        <span>Taxable Amt      :</span>
-        <span>{formatCurrency(Number(bill.taxableAmount || 0))}</span>
+      <div className="amount-row">
+        <span>Received</span>
+        <span>:</span>
+        <span>{money(received)}</span>
       </div>
-      <div className="receipt-row">
-        <span>CGST @ 2.5%      :</span>
-        <span>{formatCurrency(cgst)}</span>
+      <div className="amount-row">
+        <span>Balance</span>
+        <span>:</span>
+        <span>{money(balance)}</span>
       </div>
-      <div className="receipt-row">
-        <span>SGST @ 2.5%      :</span>
-        <span>{formatCurrency(sgst)}</span>
-      </div>
-      <div className="receipt-row">
-        <span>Round Off        :</span>
-        <span>{formatCurrency(Number(bill.roundOff || 0))}</span>
-      </div>
-      <div className="receipt-divider-major">{MAJOR_DIVIDER}</div>
-      <div className="receipt-total-row">
-        <span>** TOTAL         :</span>
-        <span>{`${formatCurrency(Number(bill.totalAmount || 0))} **`}</span>
-      </div>
-      <div className="receipt-divider-major">{MAJOR_DIVIDER}</div>
 
-      {paymentMethod === "partial" &&
-        paymentBreakdown.map((entry, index) => (
-          <div key={`${entry.method || "partial"}-${index}`} className="receipt-row">
-            <span>{`${String(entry.method || "OTHER").toUpperCase()} Payment :`}</span>
-            <span>{formatCurrency(Number(entry.amount || 0))}</span>
-          </div>
-        ))}
-
-      {hasCashComponent && (
-        <>
-          <div className="receipt-row">
-            <span>Cash Received    :</span>
-            <span>{formatCurrency(cashReceived)}</span>
-          </div>
-          <div className="receipt-row">
-            <span>Change           :</span>
-            <span>{formatCurrency(safeChange <= 0 ? 0 : safeChange)}</span>
-          </div>
-        </>
-      )}
-
-      <div className="receipt-divider-major">{MAJOR_DIVIDER}</div>
-      <div className="receipt-footer-text">Thank you for shopping with us!</div>
-      <div className="receipt-footer-text">Please visit us again :)</div>
-      <div className="receipt-divider-minor">{MINOR_DIVIDER}</div>
-      <div className="receipt-terms">
-        Non-returnable without original bill.
-        <br />
-        Subject to store policy.
+      <div className="line" />
+      <div className="points-row">
+        <span>Available Points</span>
+        <span>:</span>
+        <span>0.00</span>
       </div>
-      <div className="receipt-divider-major">{MAJOR_DIVIDER}</div>
+      <div className="line" />
+
+      <div className="terms-title">Terms &amp; Conditions</div>
+      <div className="center">No replacement without label</div>
+      <div className="center">Thank you for doing business with us.</div>
     </div>
   );
 });

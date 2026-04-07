@@ -7,10 +7,12 @@ import { ReceiptPrint, type ReceiptPrintBill } from "./ReceiptPrint";
 export default function ReceiptPrintModal({
   open,
   bill,
+  logoSrc,
   onClose,
 }: {
   open: boolean;
   bill: any;
+  logoSrc?: string;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -32,213 +34,146 @@ export default function ReceiptPrintModal({
               .receipt-scroll::-webkit-scrollbar-thumb { background: #888; border-radius: 8px; }
 
               #thermal-receipt {
-                padding: 16px;
+                width: 80mm;
+                margin: 0 auto;
+                padding: 2mm 3mm;
                 font-family: 'Courier New', Courier, monospace;
                 font-size: 12px;
-                font-weight: 600;
+                font-weight: 500;
                 color: #000000;
                 background: #ffffff;
-                line-height: 1.4;
+                line-height: 1.2;
               }
 
-              .receipt-store-name {
-                font-size: 15px;
-                font-weight: 900;
+              .brand-logo-wrap {
                 text-align: center;
-                letter-spacing: 1px;
+                margin-bottom: 2px;
               }
-
-              .receipt-store-subtitle {
-                font-size: 11px;
-                font-weight: 600;
+              .brand-logo {
+                width: 60px;
+                height: auto;
+                display: inline-block;
+              }
+              .brand-name {
                 text-align: center;
-                font-style: italic;
-              }
-
-              .receipt-divider-major {
-                font-size: 12px;
-                font-weight: 700;
-                color: #000;
-                display: block;
-                letter-spacing: 0;
-                white-space: pre;
-              }
-
-              .receipt-divider-minor {
-                font-size: 12px;
-                font-weight: 600;
-                color: #000;
-                white-space: pre;
-              }
-
-              .receipt-section-header {
-                font-size: 12px;
+                font-size: 24px;
                 font-weight: 800;
-                text-align: center;
                 letter-spacing: 2px;
+                margin-top: 1px;
               }
-
-              .receipt-item-name {
+              .brand-subname {
+                text-align: center;
                 font-size: 12px;
+                letter-spacing: 3px;
+                margin-bottom: 4px;
+              }
+              .center {
+                text-align: center;
+                margin: 1px 0;
+              }
+              .title {
+                text-align: center;
                 font-weight: 700;
-                color: #000;
+                font-size: 19px;
+                margin: 4px 0 2px;
               }
-
-              .receipt-item-detail {
-                font-size: 11px;
-                font-weight: 600;
+              .line {
+                border-top: 1px dashed #000;
+                margin: 4px 0;
+              }
+              .row-between {
                 display: flex;
                 justify-content: space-between;
+                align-items: flex-start;
+                gap: 8px;
               }
-
-              .receipt-row-text {
-                font-size: 11px;
-                font-weight: 600;
-                white-space: pre;
-              }
-
-              .receipt-row {
-                display: flex;
-                justify-content: space-between;
-                font-size: 11px;
-                font-weight: 600;
-              }
-              .receipt-row > span:last-child,
-              .receipt-item-detail > span:last-child {
+              .row-right {
                 text-align: right;
               }
-
-              .receipt-total-row {
+              .table-head,
+              .item-row {
                 display: flex;
+                align-items: flex-start;
+                margin: 1px 0;
+              }
+              .table-head {
+                font-weight: 700;
+              }
+              .col-num {
+                width: 6%;
+              }
+              .col-item {
+                width: 49%;
+              }
+              .col-price {
+                width: 20%;
+                text-align: right;
+              }
+              .col-amt {
+                width: 25%;
+                text-align: right;
+              }
+              .item-name,
+              .item-qty {
+                word-break: break-word;
+              }
+              .amount-row,
+              .points-row {
+                display: flex;
+                justify-content: flex-end;
+                gap: 6px;
+              }
+              .amount-row > span:first-child {
+                min-width: 55px;
+                text-align: left;
+              }
+              .amount-row > span:nth-child(2),
+              .points-row > span:nth-child(2) {
+                width: 8px;
+                text-align: center;
+              }
+              .amount-row > span:last-child,
+              .points-row > span:last-child {
+                min-width: 84px;
+                text-align: right;
+              }
+              .points-row {
                 justify-content: space-between;
-                font-size: 13px;
-                font-weight: 900;
-                letter-spacing: 0.5px;
               }
-
-              .receipt-footer-text {
+              .terms-title {
                 text-align: center;
-                font-size: 11px;
-                font-weight: 600;
-                font-style: italic;
-              }
-
-              .receipt-terms {
-                text-align: center;
-                font-size: 10px;
-                font-weight: 500;
-                line-height: 1.3;
+                font-weight: 700;
+                margin: 4px 0 2px;
               }
 
               @media print {
-                * {
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
                 body * { visibility: hidden; }
                 #thermal-receipt,
                 #thermal-receipt * { visibility: visible; }
-                
+
+                @page {
+                  size: 80mm auto;
+                  margin: 0;
+                }
+
                 #thermal-receipt {
                   position: fixed;
                   top: 0;
                   left: 0;
                   margin: 0;
-                  padding: 3mm 1mm 3mm 0mm;
-                  width: 74mm;
+                  width: 80mm;
+                  padding: 2mm 3mm;
                   font-family: 'Courier New', Courier, monospace;
-                  font-size: 12px;
-                  font-weight: 600;
-                  color: #000000;
+                  font-size: 11px;
+                  line-height: 1.2;
+                  color: #000;
                   background: #ffffff;
-                  line-height: 1.4;
-                }
-                
-                .receipt-store-name {
-                  font-size: 15px;
-                  font-weight: 900;
-                  text-align: center;
-                  letter-spacing: 1px;
-                }
-                
-                .receipt-store-subtitle {
-                  font-size: 11px;
-                  font-weight: 600;
-                  text-align: center;
-                  font-style: italic;
-                }
-                
-                .receipt-divider-major {
-                  font-size: 12px;
-                  font-weight: 700;
-                  color: #000;
-                  display: block;
-                  letter-spacing: 0;
-                }
-                
-                .receipt-divider-minor {
-                  font-size: 12px;
-                  font-weight: 600;
-                  color: #000;
-                }
-                
-                .receipt-section-header {
-                  font-size: 12px;
-                  font-weight: 800;
-                  text-align: center;
-                  letter-spacing: 2px;
-                }
-                
-                .receipt-item-name {
-                  font-size: 12px;
-                  font-weight: 700;
-                  color: #000;
-                }
-                
-                .receipt-item-detail {
-                  font-size: 11px;
-                  font-weight: 600;
-                  display: flex;
-                  justify-content: space-between;
-                }
-                
-                .receipt-row {
-                  display: flex;
-                  justify-content: space-between;
-                  font-size: 11px;
-                  font-weight: 600;
-                }
-                .receipt-row > span:last-child,
-                .receipt-item-detail > span:last-child {
-                  text-align: right;
-                }
-                
-                .receipt-total-row {
-                  display: flex;
-                  justify-content: space-between;
-                  font-size: 13px;
-                  font-weight: 900;
-                  letter-spacing: 0.5px;
-                }
-                
-                .receipt-footer-text {
-                  text-align: center;
-                  font-size: 11px;
-                  font-weight: 600;
-                  font-style: italic;
-                }
-                
-                .receipt-terms {
-                  text-align: center;
-                  font-size: 10px;
-                  font-weight: 500;
-                  line-height: 1.3;
                 }
               }
             `}</style>
 
             <div className="px-4 pt-4 pb-2 text-center text-sm font-semibold text-[#111827]">Receipt Preview</div>
-            <ReceiptPrint ref={ref} bill={bill as ReceiptPrintBill} />
+            <ReceiptPrint ref={ref} bill={bill as ReceiptPrintBill} logoSrc={logoSrc} />
             <div className="sticky bottom-0 bg-white border-t border-[#ccc] p-3 flex gap-2">
               <button
                 className="h-11 flex-1 rounded bg-[#C9A84C] text-black font-bold"

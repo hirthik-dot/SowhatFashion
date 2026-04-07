@@ -13,32 +13,24 @@ interface BarcodePrintSheetProps {
 const BarcodePrintSheet = forwardRef<HTMLDivElement, BarcodePrintSheetProps>(
   ({ barcodes, productName, size, price }, ref) => {
     return (
-      <div
-        id="barcode-label-sheet"
-        ref={ref}
-        className="label-grid label-grid-screen"
-      >
+      <div id="barcode-label-sheet" ref={ref} className="label-grid label-grid-screen">
         {barcodes.map((code, index) => (
-          <div
-            key={code}
-            className={`barcode-label barcode-label-screen ${
-              (index + 1) % 3 === 0 ? "last-in-row" : ""
-            }`}
-          >
-            <div className="label-name">{productName}</div>
-            <div className="label-size">Size: {size}</div>
+          <div key={`${code}-${index}`} className="barcode-label barcode-label-screen">
             <div className="label-barcode">
               <Barcode
                 value={code}
                 format="CODE128"
-                width={1}
-                height={24}
+                width={1.2}
+                height={28}
                 displayValue={false}
                 margin={0}
               />
             </div>
             <div className="label-barcode-number">{code}</div>
+            <div className="label-name">{productName}</div>
+            <div className="label-size">Size: {size}</div>
             <div className="label-price">₹{price}</div>
+            <div className="label-shop-name">SOWAAT</div>
           </div>
         ))}
       </div>

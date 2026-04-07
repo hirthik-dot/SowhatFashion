@@ -7,26 +7,20 @@ import BillingShell from "@/components/layout/BillingShell";
 import { billingApi } from "@/lib/api";
 import BarcodePrintSheet from "@/components/stock/BarcodePrintSheet";
 
-const getPageStyle = (totalLabels: number): string => {
-  const LABELS_PER_ROW = 3;
-  const ROW_HEIGHT_MM = 36; // height of each label row in mm
-  const totalRows = Math.ceil(totalLabels / LABELS_PER_ROW);
-  const totalHeightMm = totalRows * ROW_HEIGHT_MM + 4; // +4mm buffer
+const getPageStyle = (): string => `
+  @page {
+    size: 10.7cm auto;
+    margin: 0;
+  }
 
-  return `
-    @page {
-      size: 105mm ${totalHeightMm}mm;
-      margin: 0;
-      padding: 0;
+  @media print {
+    html,
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
     }
-    @media print {
-      body {
-        margin: 0;
-        padding: 0;
-      }
-    }
-  `;
-};
+  }
+`;
 
 export default function BarcodePage() {
   const params = useSearchParams();
@@ -36,7 +30,7 @@ export default function BarcodePage() {
 
   const print = useReactToPrint({
     contentRef: gridRef,
-    pageStyle: getPageStyle(entry?.barcodes?.length || 0),
+    pageStyle: getPageStyle(),
   });
 
   useEffect(() => {
@@ -65,56 +59,54 @@ export default function BarcodePage() {
             top: 0;
             left: 0;
             margin: 0;
-            padding: 0;
-            width: 105mm;
+            margin-left: -0.25cm;
+            margin-top: 1.4cm;
+            padding: 0.3cm;
+            width: 10.7cm;
+            box-sizing: border-box;
             background: white;
           }
 
           .label-grid {
             display: grid;
-            grid-template-columns: repeat(3, 35mm);
-            grid-auto-rows: auto;
+            grid-template-columns: repeat(3, 3.4cm);
+            grid-auto-rows: 2.5cm;
+            column-gap: 0;
+            row-gap: 0.3cm;
             margin: 0;
             padding: 0;
-            width: 105mm;
+            width: auto;
             align-content: start;
-            gap: 0;
           }
 
           .barcode-label {
-            width: 35mm;
+            width: 100%;
+            height: 2.4cm;
             box-sizing: border-box;
-            padding-top: 2mm;
-            padding-left: 1mm;
-            padding-right: 1mm;
-            padding-bottom: 5mm;
+            padding: 0.08cm 0.1cm;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start;
             justify-content: flex-start;
             page-break-inside: avoid;
             break-inside: avoid;
-            border-bottom: 1.5px dashed #000;
-            border-right: 1px dotted #aaa;
+            overflow: hidden;
+            position: relative;
           }
 
-          .barcode-label:nth-child(3n) {
-            border-right: none;
-          }
-
-          .barcode-label:nth-last-child(-n+3) {
-            border-bottom: none;
+          .barcode-label-empty {
+            visibility: hidden;
           }
 
           .label-name {
             font-family: "Courier New", monospace;
-            font-size: 7px;
+            font-size: 7pt;
             font-weight: 800;
             color: #000;
-            text-align: center;
-            margin-bottom: 0.5mm;
+            text-align: left;
+            margin-bottom: 0.01cm;
             text-transform: uppercase;
-            max-width: 33mm;
+            width: 100%;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
@@ -122,35 +114,62 @@ export default function BarcodePage() {
 
           .label-size {
             font-family: "Courier New", monospace;
-            font-size: 7px;
+            font-size: 6pt;
             font-weight: 600;
             color: #000;
-            margin-bottom: 0.5mm;
+            margin-bottom: 0.01cm;
+            text-align: left;
+          }
+
+          .label-barcode {
+            width: 100%;
+            height: 1.05cm;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            overflow: hidden;
           }
 
           .label-barcode svg,
           .label-barcode canvas {
-            max-width: 33mm !important;
-            width: 33mm !important;
-            height: 40px !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
           }
 
           .label-barcode-number {
             font-family: "Courier New", monospace;
-            font-size: 6px;
+            font-size: 5pt;
             font-weight: 600;
             color: #000;
-            letter-spacing: 0.5px;
-            margin-top: 0.5mm;
-            text-align: center;
+            letter-spacing: 0.01cm;
+            margin-top: 0.02cm;
+            text-align: left;
+            line-height: 1;
+            width: 100%;
           }
 
           .label-price {
             font-family: "Courier New", monospace;
-            font-size: 11px;
+            font-size: 6pt;
             font-weight: 900;
             color: #000;
-            margin-top: 1mm;
+            margin-top: 0.01cm;
+            line-height: 1;
+            text-align: left;
+            width: 100%;
+          }
+
+          .label-shop-name {
+            position: absolute;
+            right: 0.08cm;
+            bottom: 0.06cm;
+            font-family: "Courier New", monospace;
+            font-size: 5pt;
+            font-weight: 700;
+            color: #000;
+            text-align: right;
           }
         }
 
