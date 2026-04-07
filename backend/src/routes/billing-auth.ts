@@ -10,6 +10,7 @@ import {
 } from '../middleware/billingAuthMiddleware';
 
 const router = express.Router();
+const isProduction = process.env.NODE_ENV === 'production';
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -47,8 +48,9 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     );
     res.cookie('billing_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -69,8 +71,9 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
 router.post('/logout', async (_req: Request, res: Response) => {
   res.clearCookie('billing_token', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    path: '/',
   });
   return res.json({ message: 'Logged out' });
 });
