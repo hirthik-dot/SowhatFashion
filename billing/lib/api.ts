@@ -1,8 +1,9 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-const API = API_BASE;
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 async function request(path: string, init?: RequestInit) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  if (!API) throw new Error("NEXT_PUBLIC_API_URL is not set");
+
+  const response = await fetch(`${API}${path}`, {
     ...init,
     credentials: "include",
     headers: {
@@ -19,6 +20,7 @@ async function request(path: string, init?: RequestInit) {
 }
 
 export const searchProducts = async (q: string) => {
+  if (!API) throw new Error("NEXT_PUBLIC_API_URL is not set");
   const res = await fetch(`${API}/api/billing/bills/search?q=${encodeURIComponent(q)}`, {
     credentials: "include",
   });
