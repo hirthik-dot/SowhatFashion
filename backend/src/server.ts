@@ -36,6 +36,10 @@ import { billingAuthMiddleware } from './middleware/billingAuthMiddleware';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Behind Render/reverse proxies, trust X-Forwarded-* so IP-based middleware
+// (like rate limiting) uses the real client IP instead of the proxy IP.
+app.set('trust proxy', 1);
+
 // CORS — dynamic origin check (must be FIRST middleware)
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
