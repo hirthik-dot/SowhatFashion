@@ -13,19 +13,28 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitLogin = async () => {
+    if (loading) return;
     setLoading(true);
     setError("");
     try {
       const data = await billingApi.login(email, password);
-      setUser(data.admin);
+      const loggedInUser = data?.admin || data?.user || null;
+      if (!loggedInUser) {
+        throw new Error("Login response is missing user details");
+      }
+      setUser(loggedInUser);
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submitLogin();
   };
 
   return (
@@ -47,8 +56,9 @@ export default function LoginPage() {
         </div>
 
         <button
-          type="submit"
+          type="button"
           disabled={loading}
+          onClick={() => void submitLogin()}
           className="w-full h-12 rounded-lg font-bold text-black bg-[var(--gold)] hover:bg-[var(--gold-hover)] disabled:opacity-60"
         >
           {loading ? "Signing in..." : "SIGN IN"}
