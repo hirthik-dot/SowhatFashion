@@ -22,6 +22,16 @@ import usersRoutes from './routes/users';
 import catalogueRoutes from './routes/catalogue';
 import categoryRoutes from './routes/categories';
 import adminRoutes from './routes/admin';
+import billingAuthRoutes from './routes/billing-auth';
+import billingSuppliersRoutes from './routes/billing-suppliers';
+import billingCategoriesRoutes from './routes/billing-categories';
+import billingStockRoutes from './routes/billing-stock';
+import billingBillsRoutes from './routes/billing-bills';
+import billingReturnsRoutes from './routes/billing-returns';
+import billingReportsRoutes from './routes/billing-reports';
+import billingAdminRoutes from './routes/billing-admin';
+import billingInventoryRoutes from './routes/billing-inventory';
+import { billingAuthMiddleware } from './middleware/billingAuthMiddleware';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -87,6 +97,15 @@ app.use('/api/users', usersRoutes);
 app.use('/api/catalogue', catalogueRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/billing/auth', billingAuthRoutes);
+app.use('/api/billing/suppliers', billingAuthMiddleware, billingSuppliersRoutes);
+app.use('/api/billing/categories', billingAuthMiddleware, billingCategoriesRoutes);
+app.use('/api/billing/stock', billingAuthMiddleware, billingStockRoutes);
+app.use('/api/billing/bills', billingAuthMiddleware, billingBillsRoutes);
+app.use('/api/billing/returns', billingAuthMiddleware, billingReturnsRoutes);
+app.use('/api/billing/reports', billingAuthMiddleware, billingReportsRoutes);
+app.use('/api/billing/admin', billingAuthMiddleware, billingAdminRoutes);
+app.use('/api/billing/inventory', billingAuthMiddleware, billingInventoryRoutes);
 
 // Error handler
 app.use(errorHandler);

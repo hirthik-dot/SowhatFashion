@@ -40,6 +40,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const slugify_1 = __importDefault(require("slugify"));
 const ProductSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
+    billingName: { type: String, trim: true, default: '' },
     slug: { type: String, unique: true },
     category: {
         type: String,
@@ -49,15 +50,29 @@ const ProductSchema = new mongoose_1.Schema({
     images: [{ type: String }],
     price: { type: Number, required: true, min: 0 },
     discountPrice: { type: Number, default: 0, min: 0 },
-    sizes: [{ type: String, enum: ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'] }],
+    sizes: [{ type: String, trim: true }],
     stock: { type: Number, required: true, default: 0, min: 0 },
     tags: [{ type: String }],
     isFeatured: { type: Boolean, default: false },
     isNewArrival: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
+    barcode: { type: String, unique: true, sparse: true, trim: true },
+    sku: { type: String, trim: true, default: '' },
+    incomingPrice: { type: Number, min: 0, default: 0 },
+    supplier: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Supplier' },
+    billingCategory: { type: mongoose_1.Schema.Types.ObjectId, ref: 'BillingCategory' },
+    billingSubCategory: { type: mongoose_1.Schema.Types.ObjectId, ref: 'BillingCategory' },
+    sizeStock: [
+        {
+            size: { type: String, required: true, trim: true },
+            stock: { type: Number, required: true, min: 0, default: 0 },
+        },
+    ],
+    totalStock: { type: Number, min: 0, default: 0 },
+    isBillingProduct: { type: Boolean, default: false, index: true },
 }, { timestamps: true });
 ProductSchema.pre('save', function (next) {
-    if (this.isModified('name') || !this.slug) {
+    if (!this.slug || (this.isModified('name') && !this.isModified('slug'))) {
         this.slug = (0, slugify_1.default)(this.name, { lower: true, strict: true });
     }
     next();

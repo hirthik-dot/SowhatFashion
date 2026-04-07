@@ -25,6 +25,16 @@ const users_1 = __importDefault(require("./routes/users"));
 const catalogue_1 = __importDefault(require("./routes/catalogue"));
 const categories_1 = __importDefault(require("./routes/categories"));
 const admin_1 = __importDefault(require("./routes/admin"));
+const billing_auth_1 = __importDefault(require("./routes/billing-auth"));
+const billing_suppliers_1 = __importDefault(require("./routes/billing-suppliers"));
+const billing_categories_1 = __importDefault(require("./routes/billing-categories"));
+const billing_stock_1 = __importDefault(require("./routes/billing-stock"));
+const billing_bills_1 = __importDefault(require("./routes/billing-bills"));
+const billing_returns_1 = __importDefault(require("./routes/billing-returns"));
+const billing_reports_1 = __importDefault(require("./routes/billing-reports"));
+const billing_admin_1 = __importDefault(require("./routes/billing-admin"));
+const billing_inventory_1 = __importDefault(require("./routes/billing-inventory"));
+const billingAuthMiddleware_1 = require("./middleware/billingAuthMiddleware");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // CORS — dynamic origin check (must be FIRST middleware)
@@ -84,6 +94,15 @@ app.use('/api/users', users_1.default);
 app.use('/api/catalogue', catalogue_1.default);
 app.use('/api/categories', categories_1.default);
 app.use('/api/admin', admin_1.default);
+app.use('/api/billing/auth', billing_auth_1.default);
+app.use('/api/billing/suppliers', billingAuthMiddleware_1.billingAuthMiddleware, billing_suppliers_1.default);
+app.use('/api/billing/categories', billingAuthMiddleware_1.billingAuthMiddleware, billing_categories_1.default);
+app.use('/api/billing/stock', billingAuthMiddleware_1.billingAuthMiddleware, billing_stock_1.default);
+app.use('/api/billing/bills', billingAuthMiddleware_1.billingAuthMiddleware, billing_bills_1.default);
+app.use('/api/billing/returns', billingAuthMiddleware_1.billingAuthMiddleware, billing_returns_1.default);
+app.use('/api/billing/reports', billingAuthMiddleware_1.billingAuthMiddleware, billing_reports_1.default);
+app.use('/api/billing/admin', billingAuthMiddleware_1.billingAuthMiddleware, billing_admin_1.default);
+app.use('/api/billing/inventory', billingAuthMiddleware_1.billingAuthMiddleware, billing_inventory_1.default);
 // Error handler
 app.use(errorHandler_1.default);
 // Global catch-all error handler

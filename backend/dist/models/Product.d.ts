@@ -1,6 +1,7 @@
 import mongoose, { Document } from 'mongoose';
 export interface IProduct extends Document {
     name: string;
+    billingName?: string;
     slug: string;
     category: string;
     subCategory: string;
@@ -13,6 +14,18 @@ export interface IProduct extends Document {
     isFeatured: boolean;
     isNewArrival: boolean;
     isActive: boolean;
+    barcode?: string;
+    sku?: string;
+    incomingPrice?: number;
+    supplier?: mongoose.Types.ObjectId;
+    billingCategory?: mongoose.Types.ObjectId;
+    billingSubCategory?: mongoose.Types.ObjectId;
+    sizeStock?: {
+        size: string;
+        stock: number;
+    }[];
+    totalStock?: number;
+    isBillingProduct?: boolean;
     createdAt: Date;
 }
 declare const _default: mongoose.Model<IProduct, {}, {}, {}, mongoose.Document<unknown, {}, IProduct, {}, {}> & IProduct & Required<{

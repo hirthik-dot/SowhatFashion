@@ -7,6 +7,11 @@ import Settings from './models/Settings';
 import Product from './models/Product';
 import Offer from './models/Offer';
 import NewArrival from './models/NewArrival';
+import BillingAdmin from './models/BillingAdmin';
+import Salesman from './models/Salesman';
+import Supplier from './models/Supplier';
+import BillingCategory from './models/BillingCategory';
+import Bill from './models/Bill';
 
 const seedData = async () => {
   try {
@@ -19,6 +24,11 @@ const seedData = async () => {
     await Product.deleteMany({});
     await Offer.deleteMany({});
     await NewArrival.deleteMany({});
+    await BillingAdmin.deleteMany({});
+    await Salesman.deleteMany({});
+    await Supplier.deleteMany({});
+    await BillingCategory.deleteMany({});
+    await Bill.deleteMany({});
     console.log('Cleared existing data');
 
     // 1. Create admin user
@@ -257,8 +267,80 @@ const seedData = async () => {
     ]);
     console.log('✅ New arrivals created');
 
+    const billingSuperAdmin = await BillingAdmin.create({
+      name: 'Billing Super Admin',
+      email: 'billing@sowaatmenswear.com',
+      password: 'billing123',
+      role: 'superadmin',
+      permissions: {
+        canBill: true,
+        canReturn: true,
+        canManageStock: true,
+        canViewReports: true,
+        canManageAdmins: true,
+        canEditBills: true,
+        canDiscount: true,
+        maxDiscountPercent: 25,
+      },
+    });
+
+    await Salesman.create([
+      { name: 'Murugan', phone: '9000000001' },
+      { name: 'Karthik', phone: '9000000002' },
+      { name: 'Selvam', phone: '9000000003' },
+    ]);
+
+    const suppliers = await Supplier.create([
+      { name: 'Supplier A', phone: '9000000011' },
+      { name: 'Supplier B', phone: '9000000012' },
+    ]);
+
+    const mainCategories = await BillingCategory.create([
+      { name: 'T-Shirts', supplier: suppliers[0]._id, order: 1 },
+      { name: 'Shirts', supplier: suppliers[0]._id, order: 2 },
+      { name: 'Pants', supplier: suppliers[1]._id, order: 3 },
+    ]);
+
+    await BillingCategory.create([
+      { name: 'T-Shirt Polo', parentCategory: mainCategories[0]._id, supplier: suppliers[0]._id, order: 1 },
+      { name: 'T-Shirt Round Neck', parentCategory: mainCategories[0]._id, supplier: suppliers[0]._id, order: 2 },
+      { name: 'Casual Shirt', parentCategory: mainCategories[1]._id, supplier: suppliers[0]._id, order: 1 },
+      { name: 'Formal Shirt', parentCategory: mainCategories[1]._id, supplier: suppliers[0]._id, order: 2 },
+      { name: 'Cargo Pants', parentCategory: mainCategories[2]._id, supplier: suppliers[1]._id, order: 1 },
+      { name: 'Regular Pants', parentCategory: mainCategories[2]._id, supplier: suppliers[1]._id, order: 2 },
+    ]);
+
+    await Bill.create([
+      {
+        customer: { name: 'Walk-in Customer', phone: '' },
+        items: [{ name: 'Blue T-Shirt', quantity: 1, mrp: 399, sellingPrice: 399, lineTotal: 399 }],
+        subtotal: 399,
+        taxableAmount: 399,
+        gstAmount: 19.95,
+        totalAmount: 419,
+        roundOff: 0.05,
+        paymentMethod: 'cash',
+        status: 'held',
+        createdBy: billingSuperAdmin._id,
+      },
+      {
+        customer: { name: 'Ravi Kumar', phone: '9876543210' },
+        items: [{ name: 'Slim Shirt', quantity: 2, mrp: 599, sellingPrice: 599, lineTotal: 1198 }],
+        subtotal: 1198,
+        taxableAmount: 1198,
+        gstAmount: 59.9,
+        totalAmount: 1258,
+        roundOff: 0.1,
+        paymentMethod: 'gpay',
+        status: 'held',
+        createdBy: billingSuperAdmin._id,
+      },
+    ]);
+    console.log('✅ Billing seed data created');
+
     console.log('\n🎉 Seed completed successfully!');
     console.log('Admin login: admin@sowaatmenswear.com / admin123');
+    console.log('Billing login: billing@sowaatmenswear.com / billing123');
     process.exit(0);
   } catch (error) {
     console.error('Seed failed:', error);

@@ -11,6 +11,11 @@ const Settings_1 = __importDefault(require("./models/Settings"));
 const Product_1 = __importDefault(require("./models/Product"));
 const Offer_1 = __importDefault(require("./models/Offer"));
 const NewArrival_1 = __importDefault(require("./models/NewArrival"));
+const BillingAdmin_1 = __importDefault(require("./models/BillingAdmin"));
+const Salesman_1 = __importDefault(require("./models/Salesman"));
+const Supplier_1 = __importDefault(require("./models/Supplier"));
+const BillingCategory_1 = __importDefault(require("./models/BillingCategory"));
+const Bill_1 = __importDefault(require("./models/Bill"));
 const seedData = async () => {
     try {
         await mongoose_1.default.connect(process.env.MONGODB_URI);
@@ -21,6 +26,11 @@ const seedData = async () => {
         await Product_1.default.deleteMany({});
         await Offer_1.default.deleteMany({});
         await NewArrival_1.default.deleteMany({});
+        await BillingAdmin_1.default.deleteMany({});
+        await Salesman_1.default.deleteMany({});
+        await Supplier_1.default.deleteMany({});
+        await BillingCategory_1.default.deleteMany({});
+        await Bill_1.default.deleteMany({});
         console.log('Cleared existing data');
         // 1. Create admin user
         const admin = await Admin_1.default.create({
@@ -251,8 +261,74 @@ const seedData = async () => {
             { product: products[1]._id, weekLabel: 'This Week', order: 1 },
         ]);
         console.log('✅ New arrivals created');
+        const billingSuperAdmin = await BillingAdmin_1.default.create({
+            name: 'Billing Super Admin',
+            email: 'billing@sowaatmenswear.com',
+            password: 'billing123',
+            role: 'superadmin',
+            permissions: {
+                canBill: true,
+                canReturn: true,
+                canManageStock: true,
+                canViewReports: true,
+                canManageAdmins: true,
+                canEditBills: true,
+                canDiscount: true,
+                maxDiscountPercent: 25,
+            },
+        });
+        await Salesman_1.default.create([
+            { name: 'Murugan', phone: '9000000001' },
+            { name: 'Karthik', phone: '9000000002' },
+            { name: 'Selvam', phone: '9000000003' },
+        ]);
+        const suppliers = await Supplier_1.default.create([
+            { name: 'Supplier A', phone: '9000000011' },
+            { name: 'Supplier B', phone: '9000000012' },
+        ]);
+        const mainCategories = await BillingCategory_1.default.create([
+            { name: 'T-Shirts', supplier: suppliers[0]._id, order: 1 },
+            { name: 'Shirts', supplier: suppliers[0]._id, order: 2 },
+            { name: 'Pants', supplier: suppliers[1]._id, order: 3 },
+        ]);
+        await BillingCategory_1.default.create([
+            { name: 'T-Shirt Polo', parentCategory: mainCategories[0]._id, supplier: suppliers[0]._id, order: 1 },
+            { name: 'T-Shirt Round Neck', parentCategory: mainCategories[0]._id, supplier: suppliers[0]._id, order: 2 },
+            { name: 'Casual Shirt', parentCategory: mainCategories[1]._id, supplier: suppliers[0]._id, order: 1 },
+            { name: 'Formal Shirt', parentCategory: mainCategories[1]._id, supplier: suppliers[0]._id, order: 2 },
+            { name: 'Cargo Pants', parentCategory: mainCategories[2]._id, supplier: suppliers[1]._id, order: 1 },
+            { name: 'Regular Pants', parentCategory: mainCategories[2]._id, supplier: suppliers[1]._id, order: 2 },
+        ]);
+        await Bill_1.default.create([
+            {
+                customer: { name: 'Walk-in Customer', phone: '' },
+                items: [{ name: 'Blue T-Shirt', quantity: 1, mrp: 399, sellingPrice: 399, lineTotal: 399 }],
+                subtotal: 399,
+                taxableAmount: 399,
+                gstAmount: 19.95,
+                totalAmount: 419,
+                roundOff: 0.05,
+                paymentMethod: 'cash',
+                status: 'held',
+                createdBy: billingSuperAdmin._id,
+            },
+            {
+                customer: { name: 'Ravi Kumar', phone: '9876543210' },
+                items: [{ name: 'Slim Shirt', quantity: 2, mrp: 599, sellingPrice: 599, lineTotal: 1198 }],
+                subtotal: 1198,
+                taxableAmount: 1198,
+                gstAmount: 59.9,
+                totalAmount: 1258,
+                roundOff: 0.1,
+                paymentMethod: 'gpay',
+                status: 'held',
+                createdBy: billingSuperAdmin._id,
+            },
+        ]);
+        console.log('✅ Billing seed data created');
         console.log('\n🎉 Seed completed successfully!');
         console.log('Admin login: admin@sowaatmenswear.com / admin123');
+        console.log('Billing login: billing@sowaatmenswear.com / billing123');
         process.exit(0);
     }
     catch (error) {
