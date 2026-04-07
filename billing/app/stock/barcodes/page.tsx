@@ -7,6 +7,8 @@ import BillingShell from "@/components/layout/BillingShell";
 import { billingApi } from "@/lib/api";
 import BarcodePrintSheet from "@/components/stock/BarcodePrintSheet";
 
+const LABELS_PER_PAGE = 15;
+
 const getPageStyle = (): string => `
   @page {
     size: 10.7cm auto;
@@ -26,11 +28,22 @@ export default function BarcodePage() {
   const params = useSearchParams();
   const entryId = params.get("entryId");
   const [entry, setEntry] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  const barcodes: string[] = entry?.barcodes || [];
+  const totalPages = Math.max(1, Math.ceil(barcodes.length / LABELS_PER_PAGE));
+  const pageToShow = Math.min(currentPage, totalPages);
+  const allPagesPrinted = barcodes.length > 0 && currentPage > totalPages;
+  const pageStart = (pageToShow - 1) * LABELS_PER_PAGE;
+  const pageBarcodes = barcodes.slice(pageStart, pageStart + LABELS_PER_PAGE);
 
   const print = useReactToPrint({
     contentRef: gridRef,
     pageStyle: getPageStyle(),
+    onAfterPrint: () => {
+      setCurrentPage((prev) => prev + 1);
+    },
   });
 
   useEffect(() => {
@@ -40,8 +53,10 @@ export default function BarcodePage() {
       .then(setEntry)
       .catch(() => setEntry(null));
   }, [entryId]);
-
-  const barcodes: string[] = entry?.barcodes || [];
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [entryId, barcodes.length]);
 
   return (
     <BillingShell title="Barcode Print">
@@ -204,17 +219,22 @@ export default function BarcodePage() {
           <button
             className="h-11 px-4 rounded bg-[var(--gold)] text-black"
             onClick={() => print()}
+            disabled={barcodes.length === 0 || allPagesPrinted}
           >
-            🖨 PRINT ALL BARCODES
+            {allPagesPrinted
+              ? `✅ ALL ${totalPages} PAGES PRINTED`
+              : pageToShow < totalPages
+              ? `🖨 PRINT PAGE ${pageToShow} OF ${totalPages}`
+              : `🖨 PRINT FINAL PAGE ${totalPages} OF ${totalPages}`}
           </button>
         </div>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
           {entry?.subCategory?.name || ""} · Size {entry?.size || "-"} ·{" "}
-          {barcodes.length} labels
+          {barcodes.length} labels · Showing page {pageToShow} of {totalPages}
         </p>
         <BarcodePrintSheet
           ref={gridRef}
-          barcodes={barcodes}
+          barcodes={pageBarcodes}
           productName={entry?.subCategory?.name || "Product"}
           size={entry?.size || "-"}
           price={entry?.sellingPrice || 0}

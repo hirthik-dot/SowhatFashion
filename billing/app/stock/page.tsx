@@ -20,9 +20,9 @@ export default function StockPage() {
     subCategory: "",
     productName: "",
     size: "",
-    quantity: 1,
-    incomingPrice: 0,
-    sellingPrice: 0,
+    quantity: "",
+    incomingPrice: "",
+    sellingPrice: "",
     gstPercent: 5,
     notes: "",
   });
@@ -101,7 +101,13 @@ export default function StockPage() {
     event.preventDefault();
     setLoading(true);
     try {
-      const entry = await billingApi.stockEntry(form);
+      const normalizedForm = {
+        ...form,
+        quantity: Number(form.quantity),
+        incomingPrice: Number(form.incomingPrice),
+        sellingPrice: Number(form.sellingPrice),
+      };
+      const entry = await billingApi.stockEntry(normalizedForm);
       router.push(`/stock/barcodes?entryId=${entry._id}`);
     } finally {
       setLoading(false);
@@ -171,11 +177,37 @@ export default function StockPage() {
           ))}
         </select>
         <label className="block text-sm text-[var(--text-secondary)]">Quantity</label>
-        <input className="pos-input w-full" type="number" min={1} value={form.quantity} onChange={(e) => setForm((prev) => ({ ...prev, quantity: Number(e.target.value || 1) }))} placeholder="Quantity" required />
+        <input
+          className="pos-input w-full"
+          type="number"
+          min={1}
+          value={form.quantity}
+          onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
+          placeholder="Quantity"
+          required
+        />
         <label className="block text-sm text-[var(--text-secondary)]">Incoming Price (Cost Price)</label>
-        <input className="pos-input w-full" type="number" min={0} inputMode="decimal" value={form.incomingPrice} onChange={(e) => setForm((prev) => ({ ...prev, incomingPrice: Number(e.target.value || 0) }))} placeholder="Incoming Price" required />
+        <input
+          className="pos-input w-full"
+          type="number"
+          min={0}
+          inputMode="decimal"
+          value={form.incomingPrice}
+          onChange={(e) => setForm((prev) => ({ ...prev, incomingPrice: e.target.value }))}
+          placeholder="Incoming Price"
+          required
+        />
         <label className="block text-sm text-[var(--text-secondary)]">Selling Price (MRP)</label>
-        <input className="pos-input w-full" type="number" min={0} inputMode="decimal" value={form.sellingPrice} onChange={(e) => setForm((prev) => ({ ...prev, sellingPrice: Number(e.target.value || 0) }))} placeholder="Selling Price" required />
+        <input
+          className="pos-input w-full"
+          type="number"
+          min={0}
+          inputMode="decimal"
+          value={form.sellingPrice}
+          onChange={(e) => setForm((prev) => ({ ...prev, sellingPrice: e.target.value }))}
+          placeholder="Selling Price"
+          required
+        />
         <label className="block text-sm text-[var(--text-secondary)]">GST %</label>
         <input className="pos-input w-full" type="number" min={0} inputMode="decimal" value={form.gstPercent} onChange={(e) => setForm((prev) => ({ ...prev, gstPercent: Number(e.target.value || 5) }))} placeholder="GST %" />
         <label className="block text-sm text-[var(--text-secondary)]">Notes</label>
