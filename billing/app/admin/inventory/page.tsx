@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useReactToPrint } from "react-to-print";
 import BillingShell from "@/components/layout/BillingShell";
+import BarcodePrintSheet from "@/components/stock/BarcodePrintSheet";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
+
+const LABELS_PER_PAGE = 15;
 
 export default function AdminInventoryPage() {
   const { isSuperAdmin } = useRole();
@@ -17,6 +21,41 @@ export default function AdminInventoryPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [productItems, setProductItems] = useState<any[]>([]);
+  const [reprintItem, setReprintItem] = useState<any>(null);
+  const [selectedBatchBarcodes, setSelectedBatchBarcodes] = useState<string[]>([]);
+  const [batchReprint, setBatchReprint] = useState<any>(null);
+  const [batchCurrentPage, setBatchCurrentPage] = useState(1);
+  const reprintRef = useRef<HTMLDivElement>(null);
+  const batchReprintRef = useRef<HTMLDivElement>(null);
+
+  const printReprintLabel = useReactToPrint({
+    contentRef: reprintRef,
+    pageStyle: `
+      @page { size: 10.7cm auto; margin: 0; }
+      @media print {
+        html, body { margin: 0 !important; padding: 0 !important; }
+      }
+    `,
+  });
+
+  const batchTotalPages = Math.max(1, Math.ceil((batchReprint?.barcodes?.length || 0) / LABELS_PER_PAGE));
+  const batchPageToShow = Math.min(batchCurrentPage, batchTotalPages);
+  const batchAllPagesPrinted = (batchReprint?.barcodes?.length || 0) > 0 && batchCurrentPage > batchTotalPages;
+  const batchPageStart = (batchPageToShow - 1) * LABELS_PER_PAGE;
+  const batchPageBarcodes = (batchReprint?.barcodes || []).slice(batchPageStart, batchPageStart + LABELS_PER_PAGE);
+
+  const printBatchReprint = useReactToPrint({
+    contentRef: batchReprintRef,
+    pageStyle: `
+      @page { size: 10.7cm auto; margin: 0; }
+      @media print {
+        html, body { margin: 0 !important; padding: 0 !important; }
+      }
+    `,
+    onAfterPrint: () => {
+      setBatchCurrentPage((prev) => prev + 1);
+    },
+  });
 
   const load = async () => {
     const query = new URLSearchParams();
@@ -58,6 +97,9 @@ export default function AdminInventoryPage() {
     setSelectedProduct(row);
     setSelectedSize("");
     setProductItems([]);
+    setSelectedBatchBarcodes([]);
+    setBatchReprint(null);
+    setBatchCurrentPage(1);
   };
 
   const loadSizeItems = async (size: string) => {
@@ -65,6 +107,24 @@ export default function AdminInventoryPage() {
     setSelectedSize(size);
     const items = await billingApi.stockInventoryItems(selectedProduct._id, size);
     setProductItems(items || []);
+    setSelectedBatchBarcodes([]);
+  };
+
+  const toggleBatchBarcode = (barcode: string) => {
+    setSelectedBatchBarcodes((prev) =>
+      prev.includes(barcode) ? prev.filter((b) => b !== barcode) : [...prev, barcode]
+    );
+  };
+
+  const openBatchReprint = () => {
+    if (!selectedBatchBarcodes.length) return;
+    setBatchReprint({
+      barcodes: selectedBatchBarcodes,
+      size: selectedSize || "-",
+      mrp: Number(selectedProduct?.mrp || 0),
+      name: selectedProduct?.name || "Product",
+    });
+    setBatchCurrentPage(1);
   };
 
   return (
@@ -153,7 +213,7 @@ export default function AdminInventoryPage() {
               <h3 className="font-semibold">
                 Product Detail: {selectedProduct.name} · Total {selectedProduct.totalStock || 0}
               </h3>
-              <button onClick={() => { setSelectedProduct(null); setSelectedSize(""); setProductItems([]); }}>Close</button>
+              <button onClick={() => { setSelectedProduct(null); setSelectedSize(""); setProductItems([]); setSelectedBatchBarcodes([]); }}>Close</button>
             </div>
             <div className="pos-card p-3 mb-3">
               <p className="text-sm text-[var(--text-secondary)] mb-2">Size breakdown</p>
@@ -169,12 +229,33 @@ export default function AdminInventoryPage() {
                 ))}
               </div>
             </div>
+            {productItems.length > 0 ? (
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Selected for batch print: {selectedBatchBarcodes.length}
+                </p>
+                <button
+                  className="h-9 px-3 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50"
+                  onClick={openBatchReprint}
+                  disabled={selectedBatchBarcodes.length === 0}
+                >
+                  Print Selected Batch
+                </button>
+              </div>
+            ) : null}
             <div className="overflow-auto max-h-[60vh]">
-              <table className="w-full min-w-[700px] text-sm">
-                <thead><tr className="text-left text-[var(--text-secondary)]"><th>Barcode</th><th>Size</th><th>MRP</th><th>Status</th></tr></thead>
+              <table className="w-full min-w-[860px] text-sm">
+                <thead><tr className="text-left text-[var(--text-secondary)]"><th>Select</th><th>Barcode</th><th>Size</th><th>MRP</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody>
                   {productItems.map((item) => (
                     <tr key={item._id} className="border-t border-[var(--border)]">
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedBatchBarcodes.includes(item.barcode)}
+                          onChange={() => toggleBatchBarcode(item.barcode)}
+                        />
+                      </td>
                       <td>{item.barcode}</td>
                       <td>{item.size || "-"}</td>
                       <td>₹{Number(item.mrp || 0).toFixed(2)}</td>
@@ -187,10 +268,157 @@ export default function AdminInventoryPage() {
                           ? "⚫ DAMAGED"
                           : "🟢 AVAILABLE"}
                       </td>
+                      <td>
+                        <button
+                          className="h-8 px-3 rounded border border-[var(--border)] hover:border-[var(--gold)]"
+                          onClick={() =>
+                            setReprintItem({
+                              barcode: item.barcode,
+                              size: item.size || selectedSize || "-",
+                              mrp: Number(item.mrp || selectedProduct?.mrp || 0),
+                              name: selectedProduct?.name || "Product",
+                            })
+                          }
+                        >
+                          Reprint Barcode
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {reprintItem ? (
+        <div className="fixed inset-0 bg-black/50 z-[60] grid place-items-center p-4">
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              #barcode-label-sheet,
+              #barcode-label-sheet * { visibility: visible; }
+              #barcode-label-sheet {
+                position: fixed;
+                top: 0;
+                left: 0;
+                margin: 0;
+                padding: 0.3cm;
+                width: 10.7cm;
+                box-sizing: border-box;
+                background: white;
+              }
+              .label-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 3.4cm);
+                grid-auto-rows: 2.5cm;
+                row-gap: 0.3cm;
+              }
+            }
+            .barcode-label-screen {
+              border: 1px solid #2E3347;
+              border-radius: 4px;
+              padding: 8px;
+              background: #1A1D27;
+            }
+            .label-grid-screen {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 8px;
+              max-width: 720px;
+            }
+          `}</style>
+          <div className="pos-card p-4 w-full max-w-3xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold">Reprint Barcode</h3>
+              <button onClick={() => setReprintItem(null)}>Close</button>
+            </div>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">
+              {reprintItem.name} · Size {reprintItem.size} · ₹{Number(reprintItem.mrp || 0).toFixed(2)}
+            </p>
+            <div className="mb-4">
+              <BarcodePrintSheet
+                ref={reprintRef}
+                barcodes={[reprintItem.barcode]}
+                productName={reprintItem.name}
+                size={reprintItem.size}
+                price={reprintItem.mrp}
+              />
+            </div>
+            <div className="flex justify-end">
+              <button className="h-10 px-4 rounded bg-[var(--gold)] text-black font-semibold" onClick={() => printReprintLabel()}>
+                Print Label
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {batchReprint ? (
+        <div className="fixed inset-0 bg-black/50 z-[70] grid place-items-center p-4">
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              #barcode-label-sheet,
+              #barcode-label-sheet * { visibility: visible; }
+              #barcode-label-sheet {
+                position: fixed;
+                top: 0;
+                left: 0;
+                margin: 0;
+                padding: 0.3cm;
+                width: 10.7cm;
+                box-sizing: border-box;
+                background: white;
+              }
+              .label-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 3.4cm);
+                grid-auto-rows: 2.5cm;
+                row-gap: 0.3cm;
+              }
+            }
+            .barcode-label-screen {
+              border: 1px solid #2E3347;
+              border-radius: 4px;
+              padding: 8px;
+              background: #1A1D27;
+            }
+            .label-grid-screen {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 8px;
+              max-width: 720px;
+            }
+          `}</style>
+          <div className="pos-card p-4 w-full max-w-3xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold">Batch Reprint Barcodes</h3>
+              <button onClick={() => setBatchReprint(null)}>Close</button>
+            </div>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">
+              {batchReprint.name} · Size {batchReprint.size} · {batchReprint.barcodes.length} labels · Showing page {batchPageToShow} of {batchTotalPages}
+            </p>
+            <div className="mb-4">
+              <BarcodePrintSheet
+                ref={batchReprintRef}
+                barcodes={batchPageBarcodes}
+                productName={batchReprint.name}
+                size={batchReprint.size}
+                price={batchReprint.mrp}
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                className="h-10 px-4 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50"
+                onClick={() => printBatchReprint()}
+                disabled={batchReprint.barcodes.length === 0 || batchAllPagesPrinted}
+              >
+                {batchAllPagesPrinted
+                  ? `ALL ${batchTotalPages} PAGES PRINTED`
+                  : batchPageToShow < batchTotalPages
+                  ? `PRINT PAGE ${batchPageToShow} OF ${batchTotalPages}`
+                  : `PRINT FINAL PAGE ${batchTotalPages} OF ${batchTotalPages}`}
+              </button>
             </div>
           </div>
         </div>
