@@ -8,6 +8,7 @@ type SearchProduct = {
   name: string;
   barcode?: string;
   size?: string;
+  barcodes?: string[];
   price?: number;
   discountPrice?: number;
   stock?: number;
@@ -270,17 +271,42 @@ export default function BarcodeScanner(props: {
                       aria-selected={isSelected}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="truncate">
                             {p.name} {p.size ? <span className="text-[var(--text-secondary)]">({p.size})</span> : null}
                           </div>
-                          <div className="text-xs text-[var(--text-secondary)] truncate">
+                          <div className="text-xs text-[var(--text-secondary)] truncate mt-0.5 whitespace-nowrap">
                             {p.category ? p.category : null}
                             {p.subCategory ? (p.category ? ` · ${p.subCategory}` : p.subCategory) : null}
-                            {p.barcode ? (p.category || p.subCategory ? ` · Barcode: ${p.barcode}` : `Barcode: ${p.barcode}`) : null}
                           </div>
                         </div>
-                        <div className="shrink-0 text-right text-sm">
+
+                        <div className="shrink-0 text-right">
+                          {p.barcodes && p.barcodes.length > 1 ? (
+                            <select 
+                              title="Select Barcode"
+                              className="bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] rounded px-1 py-0.5 outline-none focus:border-[var(--gold)] cursor-pointer text-xs"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                runSelect({ ...p, barcode: e.target.value });
+                              }}
+                              defaultValue=""
+                            >
+                              <option value="" disabled>Barcodes ({p.barcodes.length})</option>
+                              {p.barcodes.map((b) => (
+                                <option key={b} value={b}>{b}</option>
+                              ))}
+                            </select>
+                          ) : p.barcode ? (
+                            <div className="text-[var(--text-secondary)] text-xs whitespace-nowrap">
+                              Barcode: {p.barcode}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="shrink-0 text-right text-sm min-w-[70px]">
                           <div className="text-[var(--text-secondary)]">Stock: {Number(p.stock || 0)}</div>
                           <div className="font-semibold">{formatMoney(price)}</div>
                         </div>

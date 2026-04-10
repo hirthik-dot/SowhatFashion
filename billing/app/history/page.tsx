@@ -279,10 +279,24 @@ export default function HistoryPage() {
                   </p>
                   <p className="text-sm text-[var(--text-secondary)]">Barcode: {item.barcode || "-"}</p>
                   <p className="text-sm">
-                    MRP ₹{item.mrp} · Qty {item.quantity} · Line ₹{item.lineTotal}
+                    MRP ₹{item.mrp} · Qty {item.quantity}
+                    {Number(item.itemDiscountAmount || 0) > 0 ? ` · Disc ₹${item.itemDiscountAmount}` : ""}
+                    · Line Total ₹{item.lineTotal}
                   </p>
                 </div>
               ))}
+            </div>
+            <div className="mt-4 p-3 bg-[var(--surface)] border border-[var(--border)] rounded flex flex-col items-end gap-1 text-sm">
+              <div>Total MRP: ₹{viewBill.subtotal}</div>
+              {Number(viewBill.totalItemDiscount || 0) > 0 && (
+                <div className="text-red-400">Item Discs: -₹{viewBill.totalItemDiscount}</div>
+              )}
+              {Number(viewBill.billDiscountAmount || 0) > 0 && (
+                <div className="text-red-400">Bill Disc: -₹{viewBill.billDiscountAmount}</div>
+              )}
+              <div className="font-bold text-lg pt-2 mt-1 border-t border-[var(--border)] min-w-[200px] text-right">
+                Net Total: ₹{viewBill.totalAmount}
+              </div>
             </div>
           </div>
         </div>

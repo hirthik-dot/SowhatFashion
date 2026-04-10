@@ -126,9 +126,28 @@ export const ReceiptPrint = forwardRef<
       </div>
 
       <div className="amount-row">
-        <span>Total</span>
+        <span>Total MRP</span>
         <span>:</span>
         <span>{money(subtotal)}</span>
+      </div>
+      {Number(bill.totalItemDiscount || 0) > 0 && (
+        <div className="amount-row">
+          <span>Item Disc</span>
+          <span>:</span>
+          <span>-{money(Number(bill.totalItemDiscount))}</span>
+        </div>
+      )}
+      {Number(bill.billDiscountAmount || 0) > 0 && (
+        <div className="amount-row">
+          <span>Bill Disc</span>
+          <span>:</span>
+          <span>-{money(Number(bill.billDiscountAmount))}</span>
+        </div>
+      )}
+      <div className="amount-row" style={{ fontWeight: 'bold' }}>
+        <span>Net Total</span>
+        <span>:</span>
+        <span>{money(Number(bill.totalAmount || 0))}</span>
       </div>
       <div className="amount-row">
         <span>Received</span>
