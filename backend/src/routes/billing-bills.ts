@@ -183,9 +183,10 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
         stock: { $sum: 1 },
         barcode: { $first: '$barcode' },
         size: { $first: '$size' },
+        createdAt: { $min: '$createdAt' },
       },
     },
-    { $sort: { name: 1, size: 1 } },
+    { $sort: { createdAt: 1 } },
     { $limit: 10 },
   ]);
 

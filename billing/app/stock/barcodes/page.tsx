@@ -138,7 +138,7 @@ export default function BarcodePage() {
 
           .label-barcode {
             width: 100%;
-            height: 1.05cm;
+            height: 1.2cm;
             display: flex;
             align-items: center;
             justify-content: flex-start;
@@ -147,10 +147,15 @@ export default function BarcodePage() {
 
           .label-barcode svg,
           .label-barcode canvas {
-            width: 100% !important;
+            width: auto !important;
             height: 100% !important;
             max-width: 100% !important;
             max-height: 100% !important;
+            display: block;
+          }
+
+          .label-barcode svg {
+            shape-rendering: crispEdges;
           }
 
           .label-barcode-number {

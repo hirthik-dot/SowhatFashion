@@ -140,6 +140,22 @@ export default function ReplacementReceipt({
                 }
 
                 .thermal-receipt { font-weight: 700; color: #000000; }
+                .brand-logo-wrap { text-align: center; margin-bottom: 1mm; }
+                .brand-logo { width: 26mm; height: auto; object-fit: contain; display: block; margin: 0 auto; }
+                .brand-name {
+                  text-align: center;
+                  font-size: 16px;
+                  font-weight: 900;
+                  letter-spacing: 1px;
+                  line-height: 1.1;
+                }
+                .brand-subname {
+                  text-align: center;
+                  font-size: 12px;
+                  font-weight: 900;
+                  letter-spacing: 0.8px;
+                  margin-bottom: 1mm;
+                }
                 .receipt-header { text-align: center; }
                 .receipt-title { font-size: 14px; font-weight: 900; }
                 .receipt-subtitle { font-size: 14px; font-weight: 900; }
@@ -161,6 +177,23 @@ export default function ReplacementReceipt({
                 font-family: 'Courier New', monospace;
                 font-weight: 700;
               }
+              .brand-logo-wrap { text-align: center; margin-bottom: 6px; }
+              .brand-logo { width: 96px; height: auto; object-fit: contain; display: block; margin: 0 auto; }
+              .brand-name {
+                text-align: center;
+                font-size: 22px;
+                font-weight: 900;
+                letter-spacing: 1px;
+                line-height: 1.1;
+              }
+              .brand-subname {
+                text-align: center;
+                font-size: 14px;
+                font-weight: 900;
+                letter-spacing: 0.8px;
+                margin-bottom: 6px;
+              }
+              .center { text-align: center; font-size: 11px; line-height: 1.2; }
               .receipt-header { text-align: center; }
               .receipt-title { font-size: 14px; font-weight: 900; }
               .receipt-subtitle { font-size: 14px; font-weight: 900; }
@@ -177,15 +210,20 @@ export default function ReplacementReceipt({
 
             <div className="p-4">
               <div id="thermal-replacement-receipt" ref={ref} className="thermal-receipt">
-                <div className="receipt-header">
-                  <div className="receipt-title">SOWAAT MENS WEAR</div>
-                  <div className="receipt-subtitle">Premium Menswear Store</div>
+                <div className="brand-logo-wrap">
+                  <img src="/1775556627469.png" alt="Sowaat logo" className="brand-logo" />
                 </div>
+                <div className="brand-name">SOWAAT</div>
+                <div className="brand-subname">MENS WEAR</div>
+                <div className="center">sowaat Mens wear</div>
+                <div className="center">Railway road (near Indian Bank) sirkali</div>
+                <div className="center">Ph.No.: 9360838193</div>
+                <div className="center">Email: sowaatmenswear@gmail.com</div>
 
                 <div className="receipt-divider-double" />
 
                 <div className="receipt-header">
-                  <div className="receipt-title">{isRefund ? "RETURN RECEIPT" : "REPLACEMENT RECEIPT"}</div>
+                  <div className="receipt-title">{isRefund ? "RETURN RECEIPT" : "REPLACEMENT BILL"}</div>
                 </div>
 
                 <div className="receipt-meta">

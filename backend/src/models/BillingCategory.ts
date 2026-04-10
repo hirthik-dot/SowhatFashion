@@ -24,7 +24,8 @@ const BillingCategorySchema = new Schema<IBillingCategory>(
 
 BillingCategorySchema.pre('save', function preSave(next) {
   if (this.isModified('name') || !this.slug) {
-    this.slug = slugify(this.name, { lower: true, strict: true });
+    const baseSlug = slugify(this.name, { lower: true, strict: true });
+    this.slug = `${baseSlug}-${this._id.toString()}`;
   }
   next();
 });

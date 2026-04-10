@@ -13,9 +13,24 @@ async function request(path: string, init?: RequestInit) {
   });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || "Request failed");
+    const text = await response.text().catch(() => "");
+    let data: any = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+    }
+    const message =
+      (data && typeof data === "object" && "message" in data && typeof data.message === "string" && data.message) ||
+      (data && typeof data === "object" && "error" in data && typeof data.error === "string" && data.error) ||
+      `${response.status} ${response.statusText}` ||
+      "Request failed";
+    throw new Error(message);
   }
+
+  if (response.status === 204) return null;
   return response.json();
 }
 
@@ -97,4 +112,5 @@ export const billingApi = {
   stockInventory: (query = "") => request(`/api/billing/stock/inventory${query ? `?${query}` : ""}`),
   stockInventoryItems: (productId: string, size?: string) =>
     request(`/api/billing/stock/inventory/${productId}/items${size ? `?size=${encodeURIComponent(size)}` : ""}`),
+  reportProfit: (page = 1) => request(`/api/billing/reports/profit?page=${page}`),
 };

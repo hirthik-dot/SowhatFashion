@@ -73,12 +73,23 @@ export default function ReturnsPage() {
   };
 
   const scanReplacement = async () => {
-    const item = await billingApi.scanBarcode(replacementBarcode.trim());
-    setReplacementItems((prev) => [
-      ...prev,
-      { product: item._id, barcode: item.barcode, name: item.name, size: item.size, quantity: 1, sellingPrice: item.mrp },
-    ]);
-    setReplacementBarcode("");
+    const barcode = replacementBarcode.trim();
+    if (!barcode) {
+      setError("Enter a replacement barcode");
+      return;
+    }
+
+    setError("");
+    try {
+      const item = await billingApi.scanBarcode(barcode);
+      setReplacementItems((prev) => [
+        ...prev,
+        { product: item._id, barcode: item.barcode, name: item.name, size: item.size, quantity: 1, sellingPrice: item.mrp },
+      ]);
+      setReplacementBarcode("");
+    } catch (err: any) {
+      setError(err?.message || "Unable to scan replacement item");
+    }
   };
 
   const processReturn = async () => {

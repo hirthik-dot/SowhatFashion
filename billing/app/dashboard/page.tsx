@@ -14,15 +14,29 @@ export default function DashboardPage() {
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [name, setName] = useState("Admin");
 
+  const [sevenDaysData, setSevenDaysData] = useState<any[]>([]);
+
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const getLocalYYYYMMDD = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    const now = new Date();
+    const today = getLocalYYYYMMDD(now);
+    const sevenDaysAgoDate = new Date();
+    sevenDaysAgoDate.setDate(now.getDate() - 6);
+    const sevenDaysAgo = getLocalYYYYMMDD(sevenDaysAgoDate);
+
     Promise.all([
       billingApi.reportSummary(today, today),
       billingApi.bills("limit=10"),
       billingApi.lowStock(),
       billingApi.me(),
+      billingApi.reportSummary(sevenDaysAgo, today),
     ])
-      .then(([sum, recent, low, me]) => {
+      .then(([sum, recent, low, me, weekSum]) => {
         setSummary(sum);
         const myBills = (recent.data || []).filter((bill: any) =>
           String(bill.createdBy || "") === String(me.admin?.id || me.admin?._id || "")
@@ -30,6 +44,7 @@ export default function DashboardPage() {
         setBills(isCashier ? myBills : recent.data || []);
         setLowStock(low || []);
         setName(me.admin?.name || "Admin");
+        setSevenDaysData(weekSum.dailyRevenue || []);
       })
       .catch(() => setSummary(null));
   }, []);
@@ -44,7 +59,6 @@ export default function DashboardPage() {
   ];
   const paymentData = Object.entries(summary?.paymentMethodBreakdown || {}).map(([name, value]) => ({ name, value }));
   const categoryData = Object.entries(summary?.categoryBreakdown || {}).map(([name, value]) => ({ name, value }));
-  const revenueBars = bills.map((bill) => ({ day: new Date(bill.createdAt).toLocaleDateString(), value: bill.totalAmount }));
   const cashierRevenue = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
 
   return (
@@ -83,7 +97,7 @@ export default function DashboardPage() {
         <div className="pos-card p-3 xl:col-span-2 h-[280px]">
           <p className="mb-2 font-medium">Revenue - Last 7 Days</p>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={revenueBars}>
+            <BarChart data={sevenDaysData}>
               <XAxis dataKey="day" stroke="#F5F5F5" />
               <YAxis stroke="#F5F5F5" />
               <Tooltip />

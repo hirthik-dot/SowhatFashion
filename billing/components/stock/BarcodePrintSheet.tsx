@@ -20,10 +20,13 @@ const BarcodePrintSheet = forwardRef<HTMLDivElement, BarcodePrintSheetProps>(
               <Barcode
                 value={code}
                 format="CODE128"
-                width={1.2}
-                height={28}
+                renderer="svg"
+                width={0.85}
+                height={44}
                 displayValue={false}
                 margin={0}
+                lineColor="#000000"
+                background="#FFFFFF"
               />
             </div>
             <div className="label-barcode-number">{code}</div>

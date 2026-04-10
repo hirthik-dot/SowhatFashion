@@ -277,6 +277,7 @@ export default function BarcodeScanner(props: {
                           <div className="text-xs text-[var(--text-secondary)] truncate">
                             {p.category ? p.category : null}
                             {p.subCategory ? (p.category ? ` · ${p.subCategory}` : p.subCategory) : null}
+                            {p.barcode ? (p.category || p.subCategory ? ` · Barcode: ${p.barcode}` : `Barcode: ${p.barcode}`) : null}
                           </div>
                         </div>
                         <div className="shrink-0 text-right text-sm">
