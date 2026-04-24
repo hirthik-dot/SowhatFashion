@@ -15,14 +15,16 @@ export default function DashboardPage() {
   const [name, setName] = useState("Admin");
 
   const [sevenDaysData, setSevenDaysData] = useState<any[]>([]);
+  const [todayBillsCount, setTodayBillsCount] = useState(0);
+
+  const getLocalYYYYMMDD = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   useEffect(() => {
-    const getLocalYYYYMMDD = (d: Date) => {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
     const now = new Date();
     const today = getLocalYYYYMMDD(now);
     const sevenDaysAgoDate = new Date();
@@ -31,12 +33,35 @@ export default function DashboardPage() {
 
     Promise.all([
       billingApi.reportSummary(today, today),
-      billingApi.bills("limit=10"),
+      billingApi.bills("page=1&limit=500"),
       billingApi.lowStock(),
       billingApi.me(),
-      billingApi.reportSummary(sevenDaysAgo, today),
     ])
-      .then(([sum, recent, low, me, weekSum]) => {
+      .then(([sum, recent, low, me]) => {
+        const allBills = recent.data || [];
+        const finalizedBills = allBills.filter(
+          (bill: any) => !String(bill.status || "").toLowerCase().includes("return")
+        );
+        const dayMap = new Map<string, number>();
+        for (let i = 6; i >= 0; i -= 1) {
+          const date = new Date();
+          date.setDate(now.getDate() - i);
+          dayMap.set(getLocalYYYYMMDD(date), 0);
+        }
+        finalizedBills.forEach((bill: any) => {
+          const created = new Date(bill.createdAt);
+          const key = getLocalYYYYMMDD(created);
+          if (dayMap.has(key)) {
+            dayMap.set(key, (dayMap.get(key) || 0) + Number(bill.totalAmount || 0));
+          }
+        });
+        const chartRows = Array.from(dayMap.entries()).map(([day, value]) => ({
+          day,
+          label: new Date(day).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+          value,
+        }));
+        const todayCount = finalizedBills.filter((bill: any) => getLocalYYYYMMDD(new Date(bill.createdAt)) === today).length;
+
         setSummary(sum);
         const myBills = (recent.data || []).filter((bill: any) =>
           String(bill.createdBy || "") === String(me.admin?.id || me.admin?._id || "")
@@ -44,7 +69,8 @@ export default function DashboardPage() {
         setBills(isCashier ? myBills : recent.data || []);
         setLowStock(low || []);
         setName(me.admin?.name || "Admin");
-        setSevenDaysData(weekSum.dailyRevenue || []);
+        setSevenDaysData(chartRows);
+        setTodayBillsCount(todayCount);
       })
       .catch(() => setSummary(null));
   }, []);
@@ -53,7 +79,7 @@ export default function DashboardPage() {
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const cards = [
     { label: "Today's Revenue", value: `₹${Math.round(summary?.totalRevenue || 0)}` },
-    { label: "Bills Today", value: summary?.totalBills || 0 },
+    { label: "Bills Today", value: todayBillsCount },
     { label: "Items Sold", value: summary?.totalItems || 0 },
     { label: "Low Stock", value: lowStock.length || 0 },
   ];
@@ -98,7 +124,7 @@ export default function DashboardPage() {
           <p className="mb-2 font-medium">Revenue - Last 7 Days</p>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={sevenDaysData}>
-              <XAxis dataKey="day" stroke="#F5F5F5" />
+              <XAxis dataKey="label" stroke="#F5F5F5" />
               <YAxis stroke="#F5F5F5" />
               <Tooltip />
               <Bar dataKey="value" fill="#C9A84C" />

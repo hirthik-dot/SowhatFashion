@@ -140,6 +140,40 @@ export default function ReceiptPrintModal({
               .points-row {
                 justify-content: space-between;
               }
+              .customer-row {
+                display: flex;
+                justify-content: space-between;
+                margin: 1px 0;
+              }
+              .customer-label {
+                font-weight: 700;
+                white-space: nowrap;
+                margin-right: 4px;
+              }
+              .customer-value {
+                text-align: right;
+                word-break: break-word;
+              }
+              .gst-table {
+                width: 100%;
+                margin: 2px 0;
+              }
+              .gst-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr 1fr;
+                gap: 2px;
+                text-align: right;
+                font-size: 10px;
+              }
+              .gst-row > span:first-child {
+                text-align: left;
+              }
+              .gst-head {
+                font-weight: 700;
+                border-bottom: 1px solid #000;
+                padding-bottom: 2px;
+                margin-bottom: 2px;
+              }
               .terms-title {
                 text-align: center;
                 font-weight: 700;

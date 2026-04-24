@@ -170,7 +170,8 @@ export default function BillingPage() {
       billDiscountValue: activeTab.billDiscountValue,
       cashReceived: activeTab.cashReceived,
     });
-    setReceiptBill(completed);
+    const selectedSalesman = salesmen.find((s) => s._id === activeTab.salesmanId);
+    setReceiptBill({ ...completed, salesmanName: selectedSalesman?.name || "" });
     clearTab(activeTab.id);
     setToast(`Bill completed: ${completed.billNumber}`);
   };

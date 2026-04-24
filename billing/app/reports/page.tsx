@@ -193,6 +193,17 @@ export default function ReportsPage() {
     }, {})
   ).map((row: any) => ({ ...row, avg: row.bills ? row.revenue / row.bills : 0 }));
 
+  const getBatchLabel = (batch: any) => {
+    const rawId = String(batch?._id || "").toUpperCase();
+    const idPart = rawId ? rawId.slice(-4) : "NA";
+    const entryDate = batch?.entryDate ? new Date(batch.entryDate) : null;
+    if (!entryDate || Number.isNaN(entryDate.getTime())) return `BATCH-${idPart}`;
+    const y = entryDate.getFullYear();
+    const m = String(entryDate.getMonth() + 1).padStart(2, "0");
+    const d = String(entryDate.getDate()).padStart(2, "0");
+    return `BATCH-${y}${m}${d}-${idPart}`;
+  };
+
   if (!isAdmin) return null;
 
   return (
@@ -386,6 +397,11 @@ export default function ReportsPage() {
                         <td className="p-3">
                           <p className="font-semibold text-white">{batch.productName || 'Unnamed Asset'}</p>
                           <p className="text-xs text-[var(--text-secondary)] mt-0.5">{batch.supplierName} • {batch.categoryName}</p>
+                          <p className="text-xs text-[var(--text-secondary)] mt-1">
+                            Batch: <span className="text-white">{getBatchLabel(batch)}</span>
+                            {" • "}
+                            Size: <span className="text-white">{batch.size || "-"}</span>
+                          </p>
                         </td>
                         <td className="p-3 text-right font-medium">{batch.quantity}</td>
                         <td className="p-3 text-right text-[var(--warning)]">₹{batch.incomingPrice}</td>

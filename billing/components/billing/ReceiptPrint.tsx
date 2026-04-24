@@ -11,12 +11,13 @@ export type ReceiptPrintBill = {
   salesman?: { name?: string };
   paymentMethod?: string;
   paymentBreakdown?: Array<{ method?: string; amount?: number }>;
-  customer?: { name?: string; phone?: string };
+  customer?: { name?: string; phone?: string; mobile?: string; mobileNumber?: string };
   items?: Array<{
     barcode?: string;
     name?: string;
     size?: string;
     quantity?: number;
+    mrp?: number;
     lineTotal?: number;
   }>;
   subtotal?: number;
@@ -65,7 +66,9 @@ export const ReceiptPrint = forwardRef<
   const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
   const received = Number(bill.cashReceived ?? bill.totalAmount ?? 0);
   const balance = Math.max(0, Number(bill.changeReturned ?? 0));
-  const phone = formatPhone(bill.customer?.phone || "");
+  const customerPhone = formatPhone(
+    bill.customer?.phone || bill.customer?.mobile || bill.customer?.mobileNumber || ""
+  );
 
   return (
     <div id="thermal-receipt" ref={ref} className="thermal-receipt">
@@ -91,8 +94,22 @@ export const ReceiptPrint = forwardRef<
       <div className="row-right">{`Time: ${formatBillTime(createdAt)}`}</div>
 
       <div className="line" />
-      <div className="center">Cash Sale</div>
-      <div className="center">{`Ph. No.: ${phone}`}</div>
+      <div className="customer-row">
+        <span className="customer-label">Customer:</span>
+        <span className="customer-value">{bill.customer?.name || "Walk-in"}</span>
+      </div>
+      <div className="customer-row">
+        <span className="customer-label">Mobile:</span>
+        <span className="customer-value">{customerPhone}</span>
+      </div>
+      <div className="customer-row">
+        <span className="customer-label">Salesman:</span>
+        <span className="customer-value">
+          {bill.salesmanName ||
+            bill.salesman?.name ||
+            "—"}
+        </span>
+      </div>
       <div className="line" />
 
       <div className="table-head">
@@ -105,16 +122,17 @@ export const ReceiptPrint = forwardRef<
       {items.map((item, index) => {
         const quantity = Number(item.quantity || 0) || 1;
         const amount = Number(item.lineTotal || 0);
-        const unitPrice = quantity > 0 ? amount / quantity : amount;
+        const mrpPrice = Number(item.mrp || 0) || (quantity > 0 ? amount / quantity : amount);
         return (
           <div key={`${item.barcode || "item"}-${index}`} className="item-row">
             <div className="col-num">{index + 1}</div>
             <div className="col-item">
               <div className="item-name">{item.name || "Item"}</div>
+              <div className="item-qty">{`Size: ${item.size || "-"}`}</div>
               <div className="item-qty">{`${quantity}Nos`}</div>
             </div>
-            <div className="col-price">{money(unitPrice)}</div>
-            <div className="col-amt">{money(amount)}</div>
+            <div className="col-price">{money(mrpPrice)}</div>
+            <div className="col-amt">{money(mrpPrice * quantity)}</div>
           </div>
         );
       })}
@@ -144,6 +162,25 @@ export const ReceiptPrint = forwardRef<
           <span>-{money(Number(bill.billDiscountAmount))}</span>
         </div>
       )}
+
+      {/* GST Breakdown Table */}
+      <div className="line" />
+      <div className="gst-table">
+        <div className="gst-row gst-head">
+          <span>Taxable Amt</span>
+          <span>CGST(2.5%)</span>
+          <span>SGST(2.5%)</span>
+          <span>Amount</span>
+        </div>
+        <div className="gst-row">
+          <span>{money(Number(bill.taxableAmount || 0))}</span>
+          <span>{money(Number(bill.cgst || 0))}</span>
+          <span>{money(Number(bill.sgst || 0))}</span>
+          <span>{money(Number(bill.totalAmount || 0))}</span>
+        </div>
+      </div>
+      <div className="line" />
+
       <div className="amount-row" style={{ fontWeight: 'bold' }}>
         <span>Net Total</span>
         <span>:</span>

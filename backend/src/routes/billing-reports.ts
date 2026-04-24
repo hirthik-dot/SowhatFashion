@@ -537,6 +537,7 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
       $project: {
         entryDate: 1,
         productName: 1,
+        size: { $ifNull: ['$size', ''] },
         supplierName: { $arrayElemAt: ['$supplierDoc.name', 0] },
         categoryName: { $arrayElemAt: ['$categoryDoc.name', 0] },
         quantity: 1,
