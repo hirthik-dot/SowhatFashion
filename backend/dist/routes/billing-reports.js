@@ -12,14 +12,21 @@ const router = express_1.default.Router();
 router.use(billingRoleMiddleware_1.requireAdmin);
 router.use((0, billingRoleMiddleware_1.requirePermission)('canViewReports'));
 const FINALIZED_STATUSES = ['completed', 'replaced', 'partial_replaced', 'returned', 'partial_return'];
+const parseDateString = (dateStr) => {
+    if (dateStr.length === 10 && dateStr.includes('-')) {
+        const parts = dateStr.split('-');
+        return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    }
+    return new Date(dateStr);
+};
 const getDateFilter = (startDate, endDate) => {
     const query = { status: { $in: FINALIZED_STATUSES } };
     if (startDate || endDate) {
         query.createdAt = {};
         if (startDate)
-            query.createdAt.$gte = new Date(startDate);
+            query.createdAt.$gte = parseDateString(startDate);
         if (endDate) {
-            const end = new Date(endDate);
+            const end = parseDateString(endDate);
             end.setHours(23, 59, 59, 999);
             query.createdAt.$lte = end;
         }
@@ -31,9 +38,9 @@ const getDateRange = (startDate, endDate) => {
         return null;
     const range = {};
     if (startDate)
-        range.$gte = new Date(startDate);
+        range.$gte = parseDateString(startDate);
     if (endDate) {
-        const end = new Date(endDate);
+        const end = parseDateString(endDate);
         end.setHours(23, 59, 59, 999);
         range.$lte = end;
     }
@@ -85,6 +92,20 @@ router.get('/summary', async (req, res) => {
         ...row,
         avgBillValue: row.totalBills ? row.totalRevenue / row.totalBills : 0,
     }));
+    const getLocalDateString = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    const dailyRevenueMap = bills.reduce((acc, bill) => {
+        const dayStr = getLocalDateString(new Date(bill.createdAt));
+        acc[dayStr] = (acc[dayStr] || 0) + Number(bill.totalAmount || 0);
+        return acc;
+    }, {});
+    const dailyRevenue = Object.entries(dailyRevenueMap)
+        .map(([day, value]) => ({ day, value }))
+        .sort((a, b) => a.day.localeCompare(b.day));
     return res.json({
         totalRevenue,
         totalBills,
@@ -98,7 +119,7 @@ router.get('/summary', async (req, res) => {
         paymentMethodBreakdown,
         categoryBreakdown,
         hourlyRevenue: [],
-        dailyRevenue: [],
+        dailyRevenue,
     });
 });
 router.get('/bills', async (req, res) => {
@@ -442,6 +463,194 @@ router.get('/export', async (req, res) => {
     const buffer = await workbook.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=billing-report-${Date.now()}.xlsx`);
+    return res.send(Buffer.from(buffer));
+});
+router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewReports'), async (req, res) => {
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
+    const skip = (page - 1) * limit;
+    const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
+    const pipeline = [
+        { $sort: { entryDate: -1, createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+            $lookup: {
+                from: 'stockitems',
+                localField: '_id',
+                foreignField: 'stockEntry',
+                as: 'items'
+            }
+        },
+        {
+            $lookup: {
+                from: 'suppliers',
+                localField: 'supplier',
+                foreignField: '_id',
+                as: 'supplierDoc'
+            }
+        },
+        {
+            $lookup: {
+                from: 'billingcategories',
+                localField: 'category',
+                foreignField: '_id',
+                as: 'categoryDoc'
+            }
+        },
+        {
+            $project: {
+                entryDate: 1,
+                productName: 1,
+                size: { $ifNull: ['$size', ''] },
+                supplierName: { $arrayElemAt: ['$supplierDoc.name', 0] },
+                categoryName: { $arrayElemAt: ['$categoryDoc.name', 0] },
+                quantity: 1,
+                incomingPrice: 1,
+                sellingPrice: 1,
+                totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
+                totalPotentialRevenue: { $multiply: ['$quantity', '$sellingPrice'] },
+                qtySold: {
+                    $size: {
+                        $filter: {
+                            input: '$items',
+                            as: 'item',
+                            cond: { $eq: ['$$item.status', 'sold'] }
+                        }
+                    }
+                },
+            }
+        },
+        {
+            $addFields: {
+                soldRevenue: { $multiply: ['$qtySold', '$sellingPrice'] },
+                soldCost: { $multiply: ['$qtySold', '$incomingPrice'] }
+            }
+        },
+        {
+            $addFields: {
+                realizedProfit: { $subtract: ['$soldRevenue', '$soldCost'] }
+            }
+        }
+    ];
+    const data = await StockEntry.aggregate(pipeline);
+    const total = await StockEntry.countDocuments();
+    const overallPipeline = [
+        {
+            $lookup: {
+                from: 'stockitems',
+                localField: '_id',
+                foreignField: 'stockEntry',
+                as: 'items'
+            }
+        },
+        {
+            $project: {
+                totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
+                qtyPurchased: '$quantity',
+                qtySold: {
+                    $size: {
+                        $filter: {
+                            input: '$items',
+                            as: 'item',
+                            cond: { $eq: ['$$item.status', 'sold'] }
+                        }
+                    }
+                },
+                sellingPrice: 1,
+                incomingPrice: 1
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                overallPurchased: { $sum: '$qtyPurchased' },
+                overallSold: { $sum: '$qtySold' },
+                overallInvestment: { $sum: '$totalInvestment' },
+                overallSoldRevenue: { $sum: { $multiply: ['$qtySold', '$sellingPrice'] } },
+                overallSoldCost: { $sum: { $multiply: ['$qtySold', '$incomingPrice'] } },
+            }
+        }
+    ];
+    const overallRows = await StockEntry.aggregate(overallPipeline);
+    const overall = overallRows[0] || { overallPurchased: 0, overallSold: 0, overallInvestment: 0, overallSoldRevenue: 0, overallSoldCost: 0 };
+    const overallRealizedProfit = (overall.overallSoldRevenue || 0) - (overall.overallSoldCost || 0);
+    res.json({
+        data,
+        total,
+        page,
+        limit,
+        summary: {
+            overallPurchased: overall.overallPurchased || 0,
+            overallSold: overall.overallSold || 0,
+            totalInvestment: overall.overallInvestment || 0,
+            totalSoldRevenue: overall.overallSoldRevenue || 0,
+            totalRealizedProfit: overallRealizedProfit || 0,
+            profitMargin: overall.overallSoldRevenue ? (overallRealizedProfit / overall.overallSoldRevenue) * 100 : 0
+        }
+    });
+});
+router.get('/profit/export', (0, billingRoleMiddleware_1.requirePermission)('canViewReports'), async (req, res) => {
+    const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
+    const data = await StockEntry.aggregate([
+        { $sort: { entryDate: -1, createdAt: -1 } },
+        { $lookup: { from: 'stockitems', localField: '_id', foreignField: 'stockEntry', as: 'items' } },
+        { $lookup: { from: 'suppliers', localField: 'supplier', foreignField: '_id', as: 'supplierDoc' } },
+        { $lookup: { from: 'billingcategories', localField: 'category', foreignField: '_id', as: 'categoryDoc' } },
+        {
+            $project: {
+                entryDate: 1,
+                productName: 1,
+                supplierName: { $arrayElemAt: ['$supplierDoc.name', 0] },
+                categoryName: { $arrayElemAt: ['$categoryDoc.name', 0] },
+                quantity: 1,
+                incomingPrice: 1,
+                sellingPrice: 1,
+                qtySold: {
+                    $size: {
+                        $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
+                    }
+                }
+            }
+        }
+    ]);
+    const workbook = new exceljs_1.default.Workbook();
+    const sheet = workbook.addWorksheet('Batch Profit Report');
+    sheet.columns = [
+        { header: 'Batch / Entry Date', key: 'entryDate', width: 20 },
+        { header: 'Product Name', key: 'productName', width: 25 },
+        { header: 'Supplier', key: 'supplier', width: 20 },
+        { header: 'Category', key: 'category', width: 15 },
+        { header: 'Qty Purchased', key: 'qtyPurchased', width: 15 },
+        { header: 'Cost Price', key: 'costPrice', width: 15 },
+        { header: 'Total Invested', key: 'invested', width: 15 },
+        { header: 'Selling Price', key: 'sellingPrice', width: 15 },
+        { header: 'Qty Sold', key: 'qtySold', width: 12 },
+        { header: 'Est. Revenue', key: 'revenue', width: 15 },
+        { header: 'Realized Profit', key: 'profit', width: 15 },
+    ];
+    data.forEach((row) => {
+        const invested = row.quantity * row.incomingPrice;
+        const revenue = row.qtySold * row.sellingPrice;
+        const costOfGoodsSold = row.qtySold * row.incomingPrice;
+        const profit = revenue - costOfGoodsSold;
+        sheet.addRow({
+            entryDate: row.entryDate ? new Date(row.entryDate).toLocaleDateString() : '',
+            productName: row.productName || 'Unnamed',
+            supplier: row.supplierName || '-',
+            category: row.categoryName || '-',
+            qtyPurchased: row.quantity || 0,
+            costPrice: row.incomingPrice || 0,
+            invested: invested || 0,
+            sellingPrice: row.sellingPrice || 0,
+            qtySold: row.qtySold || 0,
+            revenue: revenue || 0,
+            profit: profit || 0,
+        });
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=profit-report-${Date.now()}.xlsx`);
     return res.send(Buffer.from(buffer));
 });
 exports.default = router;

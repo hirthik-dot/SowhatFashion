@@ -1,8 +1,30 @@
 import mongoose from 'mongoose';
 
+const globalWithMongoose = global as typeof globalThis & {
+  mongoose?: { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | null };
+};
+
+let cached = globalWithMongoose.mongoose;
+if (!cached) {
+  cached = globalWithMongoose.mongoose = { conn: null, promise: null };
+}
+
 const connectDB = async () => {
+  if (cached?.conn) {
+    return cached.conn;
+  }
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI is not defined');
+  }
+
+  if (!cached?.promise) {
+    cached!.promise = mongoose.connect(process.env.MONGODB_URI as string);
+  }
+
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI as string);
+    const conn = await cached!.promise;
+    cached!.conn = conn;
     console.log(`MongoDB Connected: ${conn.connection.host}`);
 
     // Create indexes
@@ -20,7 +42,9 @@ const connectDB = async () => {
       // Order indexes
       await db.collection('orders').createIndex({ createdAt: -1 });
     }
+    return conn;
   } catch (error) {
+    cached!.promise = null;
     console.error('Database connection error:', error);
     throw error;
   }

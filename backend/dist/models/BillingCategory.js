@@ -48,7 +48,8 @@ const BillingCategorySchema = new mongoose_1.Schema({
 }, { timestamps: true });
 BillingCategorySchema.pre('save', function preSave(next) {
     if (this.isModified('name') || !this.slug) {
-        this.slug = (0, slugify_1.default)(this.name, { lower: true, strict: true });
+        const baseSlug = (0, slugify_1.default)(this.name, { lower: true, strict: true });
+        this.slug = `${baseSlug}-${this._id.toString()}`;
     }
     next();
 });

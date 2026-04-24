@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.startServer = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
@@ -37,16 +38,26 @@ const billing_inventory_1 = __importDefault(require("./routes/billing-inventory"
 const billingAuthMiddleware_1 = require("./middleware/billingAuthMiddleware");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
+const isServerlessRuntime = Boolean(process.env.VERCEL);
+// Behind Render/reverse proxies, trust X-Forwarded-* so IP-based middleware
+// (like rate limiting) uses the real client IP instead of the proxy IP.
+app.set('trust proxy', 1);
 // CORS — dynamic origin check (must be FIRST middleware)
 const allowedOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
     : ['http://localhost:3000'];
-app.use((0, cors_1.default)({
+const allowVercelPreview = process.env.ALLOW_VERCEL_PREVIEW === 'true';
+const corsOptions = {
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin)
             return callback(null, true);
-        if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        const isLocalDevOrigin = origin.startsWith('http://localhost:') ||
+            origin.startsWith('http://127.0.0.1:');
+        const isVercelPreviewOrigin = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
+        if (allowedOrigins.includes(origin) ||
+            isLocalDevOrigin ||
+            (allowVercelPreview && isVercelPreviewOrigin)) {
             callback(null, origin);
         }
         else {
@@ -56,11 +67,22 @@ app.use((0, cors_1.default)({
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
-app.options('*', (0, cors_1.default)());
+};
+app.use((0, cors_1.default)(corsOptions));
+app.options('*', (0, cors_1.default)(corsOptions));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
+// Ensure DB connection is initialized for each serverless invocation.
+app.use(async (_req, _res, next) => {
+    try {
+        await (0, db_1.default)();
+        next();
+    }
+    catch (error) {
+        next(error);
+    }
+});
 const passport_1 = __importDefault(require("./config/passport"));
 app.use(passport_1.default.initialize());
 // Health check endpoints
@@ -110,7 +132,6 @@ app.use((err, req, res, next) => {
     console.error('Global error:', err.stack);
     res.status(500).json({ error: err.message });
 });
-// Connect to DB and start server
 const startServer = async () => {
     try {
         await (0, db_1.default)();
@@ -125,6 +146,9 @@ const startServer = async () => {
         console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
     });
 };
-startServer();
+exports.startServer = startServer;
+if (!isServerlessRuntime) {
+    void (0, exports.startServer)();
+}
 exports.default = app;
 //# sourceMappingURL=server.js.map

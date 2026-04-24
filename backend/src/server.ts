@@ -35,6 +35,7 @@ import { billingAuthMiddleware } from './middleware/billingAuthMiddleware';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const isServerlessRuntime = Boolean(process.env.VERCEL);
 
 // Behind Render/reverse proxies, trust X-Forwarded-* so IP-based middleware
 // (like rate limiting) uses the real client IP instead of the proxy IP.
@@ -44,13 +45,23 @@ app.set('trust proxy', 1);
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
   : ['http://localhost:3000'];
+const allowVercelPreview = process.env.ALLOW_VERCEL_PREVIEW === 'true';
 
 const corsOptions: cors.CorsOptions = {
   origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    const isLocalDevOrigin =
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:');
+    const isVercelPreviewOrigin = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
+
+    if (
+      allowedOrigins.includes(origin) ||
+      isLocalDevOrigin ||
+      (allowVercelPreview && isVercelPreviewOrigin)
+    ) {
       callback(null, origin);
     } else {
       callback(new Error('CORS: origin ' + origin + ' not allowed'));
@@ -66,6 +77,16 @@ app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Ensure DB connection is initialized for each serverless invocation.
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 import passport from './config/passport';
 app.use(passport.initialize());
@@ -122,8 +143,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: err.message });
 });
 
-// Connect to DB and start server
-const startServer = async () => {
+export const startServer = async () => {
   try {
     await connectDB();
     console.log('✅ Database connected');
@@ -138,6 +158,8 @@ const startServer = async () => {
   });
 };
 
-startServer();
+if (!isServerlessRuntime) {
+  void startServer();
+}
 
 export default app;
