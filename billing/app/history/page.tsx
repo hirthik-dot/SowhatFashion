@@ -138,7 +138,7 @@ export default function HistoryPage() {
         <div className="pos-card p-3 flex flex-wrap items-center gap-2">
           <h2 className="font-semibold text-lg mr-auto">BILL HISTORY</h2>
           <input
-            className="pos-input h-10 min-h-0 w-56"
+            className="pos-input h-10 min-h-0 w-full sm:w-56"
             placeholder="Search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -243,7 +243,7 @@ export default function HistoryPage() {
           </table>
           {loading ? <p className="text-sm mt-2 text-[var(--text-secondary)]">Loading...</p> : null}
           {error ? <p className="text-sm mt-2 text-[var(--error)]">{error}</p> : null}
-          <div className="flex justify-end gap-2 mt-3">
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-2 mt-3">
             <button className="h-9 px-3 rounded border border-[var(--border)]" onClick={() => setPage((p) => Math.max(1, p - 1))}>
               Prev
             </button>

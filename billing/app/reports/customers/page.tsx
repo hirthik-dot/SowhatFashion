@@ -137,7 +137,7 @@ export default function CustomerReportsPage() {
               <span className="text-[var(--gold)]">📋 Customers</span>
             </div>
           </div>
-          <button className="h-10 px-3 rounded bg-[var(--gold)] text-black" onClick={exportExcel}>
+          <button className="h-10 px-3 rounded bg-[var(--gold)] text-black w-full sm:w-auto" onClick={exportExcel}>
             ⬇ Export Excel
           </button>
         </div>
@@ -235,7 +235,7 @@ export default function CustomerReportsPage() {
           {loading ? <p className="text-sm mt-2 text-[var(--text-secondary)]">Loading...</p> : null}
           {!loading && !rows.length ? <p className="text-sm mt-2 text-[var(--text-secondary)]">No customers found.</p> : null}
           {error ? <p className="text-sm mt-2 text-[var(--error)]">{error}</p> : null}
-          <div className="flex justify-end gap-2 mt-3">
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-2 mt-3">
             <button className="h-9 px-3 rounded border border-[var(--border)]" onClick={() => setPage((p) => Math.max(1, p - 1))}>
               Prev
             </button>

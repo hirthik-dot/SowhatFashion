@@ -255,7 +255,7 @@ export default function BillingPage() {
               </div>
               <div className="flex justify-between"><span>After Item Disc</span><span>₹{totals.afterItemDiscount.toFixed(2)}</span></div>
               <p className="text-[var(--text-secondary)] mt-2">BILL DISCOUNT</p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   className="h-9 w-9 rounded border border-[var(--border)] disabled:opacity-50"
                   disabled={!can("canDiscount")}
@@ -282,7 +282,7 @@ export default function BillingPage() {
               <div className="flex justify-between"><span>Round Off</span><span>{totals.roundOff.toFixed(2)}</span></div>
               <div className="flex justify-between text-2xl font-bold text-[var(--gold)]"><span>TOTAL</span><span>₹{totals.totalAmount.toFixed(2)}</span></div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button className="h-11 rounded border border-[var(--border)]" onClick={onHold}>HOLD BILL</button>
               <button className="h-11 rounded border border-[var(--border)]" onClick={() => activeTab && clearTab(activeTab.id)}>CLEAR</button>
               <button className="h-11 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50" disabled={!canComplete} onClick={onComplete}>COMPLETE & PRINT</button>

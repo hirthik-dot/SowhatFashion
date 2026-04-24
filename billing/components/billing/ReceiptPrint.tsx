@@ -18,6 +18,7 @@ export type ReceiptPrintBill = {
     size?: string;
     quantity?: number;
     mrp?: number;
+    sellingPrice?: number;
     lineTotal?: number;
   }>;
   subtotal?: number;
@@ -64,7 +65,16 @@ export const ReceiptPrint = forwardRef<
   const items = bill.items || [];
   const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
-  const received = Number(bill.cashReceived ?? bill.totalAmount ?? 0);
+  const totalItemDiscount = Number(bill.totalItemDiscount || 0);
+  const billDiscountAmount = Number(bill.billDiscountAmount || 0);
+  const taxableAmount = Math.max(0, subtotal - totalItemDiscount - billDiscountAmount);
+  const gstPercent = 5;
+  const gstAmount = taxableAmount * (gstPercent / 100);
+  const cgst = gstAmount / 2;
+  const sgst = gstAmount / 2;
+  const billBaseTotal = Number(bill.totalAmount || taxableAmount || 0);
+  const billGrandTotal = billBaseTotal + gstAmount;
+  const received = Number(bill.cashReceived ?? billGrandTotal);
   const balance = Math.max(0, Number(bill.changeReturned ?? 0));
   const customerPhone = formatPhone(
     bill.customer?.phone || bill.customer?.mobile || bill.customer?.mobileNumber || ""
@@ -115,7 +125,7 @@ export const ReceiptPrint = forwardRef<
       <div className="table-head">
         <div className="col-num">#</div>
         <div className="col-item">Item Name<br />Qty</div>
-        <div className="col-price">Price</div>
+        <div className="col-price">MRP/SP</div>
         <div className="col-amt">Amount</div>
       </div>
 
@@ -123,6 +133,7 @@ export const ReceiptPrint = forwardRef<
         const quantity = Number(item.quantity || 0) || 1;
         const amount = Number(item.lineTotal || 0);
         const mrpPrice = Number(item.mrp || 0) || (quantity > 0 ? amount / quantity : amount);
+        const sellingPrice = Number(item.sellingPrice || 0) || (quantity > 0 ? amount / quantity : amount);
         return (
           <div key={`${item.barcode || "item"}-${index}`} className="item-row">
             <div className="col-num">{index + 1}</div>
@@ -131,8 +142,8 @@ export const ReceiptPrint = forwardRef<
               <div className="item-qty">{`Size: ${item.size || "-"}`}</div>
               <div className="item-qty">{`${quantity}Nos`}</div>
             </div>
-            <div className="col-price">{money(mrpPrice)}</div>
-            <div className="col-amt">{money(mrpPrice * quantity)}</div>
+            <div className="col-price">{`${money(mrpPrice)} / ${money(sellingPrice)}`}</div>
+            <div className="col-amt">{money(sellingPrice * quantity)}</div>
           </div>
         );
       })}
@@ -148,18 +159,18 @@ export const ReceiptPrint = forwardRef<
         <span>:</span>
         <span>{money(subtotal)}</span>
       </div>
-      {Number(bill.totalItemDiscount || 0) > 0 && (
+      {totalItemDiscount > 0 && (
         <div className="amount-row">
           <span>Item Disc</span>
           <span>:</span>
-          <span>-{money(Number(bill.totalItemDiscount))}</span>
+          <span>-{money(totalItemDiscount)}</span>
         </div>
       )}
-      {Number(bill.billDiscountAmount || 0) > 0 && (
+      {billDiscountAmount > 0 && (
         <div className="amount-row">
           <span>Bill Disc</span>
           <span>:</span>
-          <span>-{money(Number(bill.billDiscountAmount))}</span>
+          <span>-{money(billDiscountAmount)}</span>
         </div>
       )}
 
@@ -173,10 +184,10 @@ export const ReceiptPrint = forwardRef<
           <span>Amount</span>
         </div>
         <div className="gst-row">
-          <span>{money(Number(bill.taxableAmount || 0))}</span>
-          <span>{money(Number(bill.cgst || 0))}</span>
-          <span>{money(Number(bill.sgst || 0))}</span>
-          <span>{money(Number(bill.totalAmount || 0))}</span>
+          <span>{money(taxableAmount)}</span>
+          <span>{money(cgst)}</span>
+          <span>{money(sgst)}</span>
+          <span>{money(billGrandTotal)}</span>
         </div>
       </div>
       <div className="line" />
@@ -184,7 +195,7 @@ export const ReceiptPrint = forwardRef<
       <div className="amount-row" style={{ fontWeight: 'bold' }}>
         <span>Net Total</span>
         <span>:</span>
-        <span>{money(Number(bill.totalAmount || 0))}</span>
+        <span>{money(billGrandTotal)}</span>
       </div>
       <div className="amount-row">
         <span>Received</span>

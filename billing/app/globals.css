@@ -19,6 +19,7 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: Inter, system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
 }
 
 .pos-card {
@@ -39,4 +40,10 @@ body {
 .pos-input:focus {
   outline: none;
   border-color: var(--gold);
+}
+
+th,
+td {
+  padding: 0.5rem 0.4rem;
+  vertical-align: top;
 }

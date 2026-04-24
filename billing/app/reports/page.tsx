@@ -245,7 +245,7 @@ export default function ReportsPage() {
               <input className="pos-input h-10 min-h-0" type="date" value={from} onChange={(e) => setFrom(e.target.value)} disabled={period !== "custom"} />
               <input className="pos-input h-10 min-h-0" type="date" value={to} onChange={(e) => setTo(e.target.value)} disabled={period !== "custom"} />
               <button className="h-10 px-3 rounded border border-[var(--border)]" onClick={() => loadSales(salesPage)}>Apply</button>
-              <button className="h-10 px-3 rounded bg-[var(--gold)] text-black ml-auto font-semibold shadow-sm hover:opacity-90" onClick={exportSalesExcel}>⬇ Export Sales Excel</button>
+              <button className="h-10 px-3 rounded bg-[var(--gold)] text-black sm:ml-auto font-semibold shadow-sm hover:opacity-90 w-full sm:w-auto" onClick={exportSalesExcel}>⬇ Export Sales Excel</button>
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -307,7 +307,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
-                <div className="flex justify-between mt-3 text-sm">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-2 mt-3 text-sm">
                    <div className="text-[var(--text-secondary)]">Total: {salesTotal} bills</div>
                    <div className="flex gap-2">
                      <button className="px-3 rounded border border-[var(--border)]" onClick={() => setSalesPage((p) => Math.max(1, p - 1))}>Prev</button>
@@ -425,7 +425,7 @@ export default function ReportsPage() {
                 </tbody>
               </table>
 
-              <div className="flex justify-between mt-4 text-sm px-2 border-t border-[var(--border)] pt-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-2 mt-4 text-sm px-2 border-t border-[var(--border)] pt-4">
                  <div className="text-[var(--text-secondary)]">Total: {profitTotal} batches recorded</div>
                  <div className="flex gap-2">
                    <button 

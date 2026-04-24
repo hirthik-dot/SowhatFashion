@@ -84,10 +84,11 @@ const calculateBillTotals = (items: any[], billDiscountType: string, billDiscoun
       ? safeBillDiscountValue
       : 0;
   const taxableAmount = Math.max(0, afterItemDiscount - billDiscountAmount);
-  const gstAmount = taxableAmount * 0.05;
-  const cgst = gstAmount / 2;
-  const sgst = gstAmount / 2;
-  const rawTotal = taxableAmount + gstAmount;
+  // GST is display-only on customer bill; persisted records remain tax-free.
+  const gstAmount = 0;
+  const cgst = 0;
+  const sgst = 0;
+  const rawTotal = taxableAmount;
   const roundOff = Math.round(rawTotal) - rawTotal;
   const totalAmount = Math.round(rawTotal);
   return {

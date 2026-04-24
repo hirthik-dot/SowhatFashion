@@ -61,8 +61,7 @@ const computeTotals = (items: BillItem[], billDiscountType: DiscountType, billDi
       ? Number(billDiscountValue || 0)
       : 0;
   const taxableAmount = Math.max(0, afterItemDiscount - Math.max(0, billDiscountAmount));
-  const gstAmount = taxableAmount * 0.05;
-  const totalAmount = Math.round(taxableAmount + gstAmount);
+  const totalAmount = Math.round(taxableAmount);
   return { totalAmount };
 };
 

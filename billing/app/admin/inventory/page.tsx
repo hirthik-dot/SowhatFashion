@@ -130,7 +130,7 @@ export default function AdminInventoryPage() {
   return (
     <BillingShell title="Admin Inventory">
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Inventory</h2>
           <Link href="/stock" className="h-11 px-4 rounded bg-[var(--gold)] text-black font-semibold inline-flex items-center">
             + New Stock Entry
@@ -152,18 +152,18 @@ export default function AdminInventoryPage() {
         </div>
 
         <div className="pos-card p-3 flex flex-wrap gap-2">
-          <input className="pos-input min-w-[220px] flex-1" placeholder="Search by name/category/supplier" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <select className="pos-input min-w-[180px]" value={supplier} onChange={(e) => setSupplier(e.target.value)}>
+          <input className="pos-input w-full sm:min-w-[220px] flex-1" placeholder="Search by name/category/supplier" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <select className="pos-input w-full sm:min-w-[180px]" value={supplier} onChange={(e) => setSupplier(e.target.value)}>
             <option value="">All Suppliers</option>
             {suppliers.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
           </select>
-          <select className="pos-input min-w-[180px]" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <select className="pos-input w-full sm:min-w-[180px]" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">All Status</option>
             <option value="ok">In Stock</option>
             <option value="low">Low Stock</option>
             <option value="out">Out of Stock</option>
           </select>
-          <button className="h-12 px-4 rounded bg-[var(--gold)] text-black font-semibold" onClick={load}>Apply Filters</button>
+          <button className="h-12 px-4 rounded bg-[var(--gold)] text-black font-semibold w-full sm:w-auto" onClick={load}>Apply Filters</button>
         </div>
 
         <div className="pos-card p-3 overflow-auto">

@@ -22,8 +22,9 @@ export default function SalesmenPage() {
   return (
     <BillingShell title="Salesmen">
       <div className="pos-card p-4 space-y-3">
-        <button className="h-11 px-3 rounded bg-[var(--gold)] text-black" onClick={() => setEditing({})}>+ Add Salesman</button>
-        <table className="w-full text-sm">
+        <button className="h-11 px-3 rounded bg-[var(--gold)] text-black w-full sm:w-auto" onClick={() => setEditing({})}>+ Add Salesman</button>
+        <div className="overflow-auto">
+        <table className="w-full min-w-[620px] text-sm">
           <thead><tr className="text-left text-[var(--text-secondary)]"><th>Name</th><th>Phone</th><th>Active</th><th>Edit</th><th>Toggle</th></tr></thead>
           <tbody>
             {salesmen.map((salesman) => (
@@ -35,6 +36,7 @@ export default function SalesmenPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       {editing ? (
         <div className="fixed inset-0 bg-black/50 grid place-items-center p-4">

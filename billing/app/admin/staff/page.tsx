@@ -64,8 +64,9 @@ export default function StaffPage() {
   return (
     <BillingShell title="Staff">
       <div className="pos-card p-4 space-y-3">
-        <button className="h-11 px-3 rounded bg-[var(--gold)] text-black" onClick={() => { setEditing({}); setForm({ ...form, name: "", email: "", password: "" }); }}>+ Add Staff</button>
-        <table className="w-full text-sm">
+        <button className="h-11 px-3 rounded bg-[var(--gold)] text-black w-full sm:w-auto" onClick={() => { setEditing({}); setForm({ ...form, name: "", email: "", password: "" }); }}>+ Add Staff</button>
+        <div className="overflow-auto">
+        <table className="w-full min-w-[820px] text-sm">
           <thead><tr className="text-left text-[var(--text-secondary)]"><th>Name</th><th>Email</th><th>Role</th><th>Last Login</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {staff.map((member) => (
@@ -79,6 +80,7 @@ export default function StaffPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       {editing ? (
         <div className="fixed inset-0 bg-black/50 grid place-items-center p-4">

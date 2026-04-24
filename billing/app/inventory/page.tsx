@@ -87,12 +87,12 @@ export default function InventoryPage() {
         <div className="pos-card p-3">
           <div className="flex flex-wrap gap-2">
             <input
-              className="pos-input min-w-[220px] flex-1"
+              className="pos-input w-full sm:min-w-[220px] flex-1"
               placeholder="Search by name, barcode, sku, category..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <select className="pos-input min-w-[180px]" value={supplier} onChange={(event) => setSupplier(event.target.value)}>
+            <select className="pos-input w-full sm:min-w-[180px]" value={supplier} onChange={(event) => setSupplier(event.target.value)}>
               <option value="">All Suppliers</option>
               {suppliers.map((item) => (
                 <option key={item._id} value={item._id}>
@@ -100,14 +100,14 @@ export default function InventoryPage() {
                 </option>
               ))}
             </select>
-            <select className="pos-input min-w-[180px]" value={stockFilter} onChange={(event) => setStockFilter(event.target.value)}>
+            <select className="pos-input w-full sm:min-w-[180px]" value={stockFilter} onChange={(event) => setStockFilter(event.target.value)}>
               <option value="">All Stock</option>
               <option value="in">In Stock</option>
               <option value="low">Low Stock</option>
               <option value="out">Out of Stock</option>
             </select>
             <button
-              className="h-12 px-4 rounded bg-[var(--gold)] text-black font-semibold"
+              className="h-12 px-4 rounded bg-[var(--gold)] text-black font-semibold w-full sm:w-auto"
               onClick={() => {
                 setPage(1);
                 load(1);
@@ -154,7 +154,7 @@ export default function InventoryPage() {
               ))}
             </tbody>
           </table>
-          <div className="flex justify-end gap-2 mt-3">
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-2 mt-3">
             <button className="h-9 px-3 rounded border border-[var(--border)]" onClick={() => setPage((value) => Math.max(1, value - 1))}>
               Prev
             </button>

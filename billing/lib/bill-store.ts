@@ -114,8 +114,9 @@ const computeTotals = (tab?: BillTab): BillTotals => {
   }
   billDiscountAmount = Math.min(afterItemDiscount, Math.max(0, billDiscountAmount));
   const taxableAmount = Math.max(0, afterItemDiscount - billDiscountAmount);
-  const gstAmount = taxableAmount * 0.05;
-  const raw = taxableAmount + gstAmount;
+  // Persisted billing totals are kept GST-free; GST is shown only on printed receipt.
+  const gstAmount = 0;
+  const raw = taxableAmount;
   const roundOff = Math.round(raw) - raw;
   const totalAmount = Math.round(raw);
   const cashPortion =

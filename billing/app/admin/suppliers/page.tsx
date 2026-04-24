@@ -23,8 +23,9 @@ export default function SuppliersPage() {
   return (
     <BillingShell title="Suppliers">
       <div className="pos-card p-4 space-y-3">
-        <button className="h-11 px-3 rounded bg-[var(--gold)] text-black" onClick={() => setEditing({})}>+ Add Supplier</button>
-        <table className="w-full text-sm">
+        <button className="h-11 px-3 rounded bg-[var(--gold)] text-black w-full sm:w-auto" onClick={() => setEditing({})}>+ Add Supplier</button>
+        <div className="overflow-auto">
+        <table className="w-full min-w-[700px] text-sm">
           <thead><tr className="text-left text-[var(--text-secondary)]"><th>Name</th><th>Phone</th><th>GST</th><th>Status</th><th>Edit</th><th>Delete</th></tr></thead>
           <tbody>
             {suppliers.map((supplier) => (
@@ -36,6 +37,7 @@ export default function SuppliersPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       {editing !== null ? (
         <div className="fixed inset-0 bg-black/50 grid place-items-center p-4">
