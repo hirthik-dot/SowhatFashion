@@ -519,6 +519,14 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
     },
     {
       $lookup: {
+        from: 'bills',
+        localField: 'items.soldInBill',
+        foreignField: '_id',
+        as: 'soldBills'
+      }
+    },
+    {
+      $lookup: {
         from: 'suppliers',
         localField: 'supplier',
         foreignField: '_id',
@@ -558,7 +566,73 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
     },
     {
       $addFields: {
-        soldRevenue: { $multiply: ['$qtySold', '$sellingPrice'] },
+        soldItems: {
+          $filter: {
+            input: '$items',
+            as: 'item',
+            cond: { $eq: ['$$item.status', 'sold'] }
+          }
+        },
+        billItemRows: {
+          $reduce: {
+            input: '$soldBills',
+            initialValue: [],
+            in: {
+              $concatArrays: [
+                '$$value',
+                {
+                  $map: {
+                    input: { $ifNull: ['$$this.items', []] },
+                    as: 'billItem',
+                    in: {
+                      barcode: '$$billItem.barcode',
+                      netLineTotal: '$$billItem.netLineTotal',
+                      lineTotal: '$$billItem.lineTotal'
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        soldRevenue: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: '$items',
+                  as: 'item',
+                  cond: { $eq: ['$$item.status', 'sold'] }
+                }
+              },
+              as: 'soldItem',
+              in: {
+                $let: {
+                  vars: {
+                    matchedBillItem: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: '$billItemRows',
+                            as: 'billItem',
+                            cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  },
+                  in: {
+                    $ifNull: [
+                      '$$matchedBillItem.netLineTotal',
+                      { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         soldCost: { $multiply: ['$qtySold', '$incomingPrice'] }
       }
     },
@@ -582,6 +656,14 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
       }
     },
     {
+      $lookup: {
+        from: 'bills',
+        localField: 'items.soldInBill',
+        foreignField: '_id',
+        as: 'soldBills'
+      }
+    },
+    {
       $project: {
         totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
         qtyPurchased: '$quantity',
@@ -594,6 +676,72 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
              }
           }
         },
+        soldRevenue: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: '$items',
+                  as: 'item',
+                  cond: { $eq: ['$$item.status', 'sold'] }
+                }
+              },
+              as: 'soldItem',
+              in: {
+                $let: {
+                  vars: {
+                    billRows: {
+                      $reduce: {
+                        input: '$soldBills',
+                        initialValue: [],
+                        in: {
+                          $concatArrays: [
+                            '$$value',
+                            {
+                              $map: {
+                                input: { $ifNull: ['$$this.items', []] },
+                                as: 'billItem',
+                                in: {
+                                  barcode: '$$billItem.barcode',
+                                  netLineTotal: '$$billItem.netLineTotal',
+                                  lineTotal: '$$billItem.lineTotal'
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  in: {
+                    $let: {
+                      vars: {
+                        matchedBillItem: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: '$$billRows',
+                                as: 'billItem',
+                                cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                              }
+                            },
+                            0
+                          ]
+                        }
+                      },
+                      in: {
+                        $ifNull: [
+                          '$$matchedBillItem.netLineTotal',
+                          { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         sellingPrice: 1,
         incomingPrice: 1
       }
@@ -604,7 +752,7 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
         overallPurchased: { $sum: '$qtyPurchased' },
         overallSold: { $sum: '$qtySold' },
         overallInvestment: { $sum: '$totalInvestment' },
-        overallSoldRevenue: { $sum: { $multiply: ['$qtySold', '$sellingPrice'] } },
+        overallSoldRevenue: { $sum: '$soldRevenue' },
         overallSoldCost: { $sum: { $multiply: ['$qtySold', '$incomingPrice'] } },
       }
     }
@@ -635,6 +783,7 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
   const data = await StockEntry.aggregate([
     { $sort: { entryDate: -1, createdAt: -1 } },
     { $lookup: { from: 'stockitems', localField: '_id', foreignField: 'stockEntry', as: 'items' } },
+    { $lookup: { from: 'bills', localField: 'items.soldInBill', foreignField: '_id', as: 'soldBills' } },
     { $lookup: { from: 'suppliers', localField: 'supplier', foreignField: '_id', as: 'supplierDoc' } },
     { $lookup: { from: 'billingcategories', localField: 'category', foreignField: '_id', as: 'categoryDoc' } },
     {
@@ -649,6 +798,68 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
         qtySold: {
           $size: {
             $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
+          }
+        },
+        soldRevenue: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
+              },
+              as: 'soldItem',
+              in: {
+                $let: {
+                  vars: {
+                    billRows: {
+                      $reduce: {
+                        input: '$soldBills',
+                        initialValue: [],
+                        in: {
+                          $concatArrays: [
+                            '$$value',
+                            {
+                              $map: {
+                                input: { $ifNull: ['$$this.items', []] },
+                                as: 'billItem',
+                                in: {
+                                  barcode: '$$billItem.barcode',
+                                  netLineTotal: '$$billItem.netLineTotal',
+                                  lineTotal: '$$billItem.lineTotal'
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  in: {
+                    $let: {
+                      vars: {
+                        matchedBillItem: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: '$$billRows',
+                                as: 'billItem',
+                                cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                              }
+                            },
+                            0
+                          ]
+                        }
+                      },
+                      in: {
+                        $ifNull: [
+                          '$$matchedBillItem.netLineTotal',
+                          { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -674,7 +885,7 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
 
   data.forEach((row: any) => {
     const invested = row.quantity * row.incomingPrice;
-    const revenue = row.qtySold * row.sellingPrice;
+    const revenue = Number(row.soldRevenue || 0);
     const costOfGoodsSold = row.qtySold * row.incomingPrice;
     const profit = revenue - costOfGoodsSold;
     

@@ -6,13 +6,23 @@ import BillingShell from "@/components/layout/BillingShell";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 
+const SIZE_PRESETS: Record<string, string[]> = {
+  alpha: ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "Free Size"],
+  cm70to100: ["70", "75", "80", "85", "90", "95", "100", "Free Size"],
+  even6to14: ["6", "8", "10", "12", "14", "Free Size"],
+  pants: ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "Free Size"],
+  footwear: ["6", "7", "8", "9", "10", "11", "12", "13", "14", "Free Size"],
+};
+
 export default function StockPage() {
   const router = useRouter();
   const { isAdmin } = useRole();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
-  const [sizeOptions, setSizeOptions] = useState<string[]>(["S", "M", "L", "XL", "XXL", "Free Size"]);
+  const [sizeOptions, setSizeOptions] = useState<string[]>(SIZE_PRESETS.alpha);
+  const [sizePreset, setSizePreset] = useState<keyof typeof SIZE_PRESETS>("alpha");
+  const [customSize, setCustomSize] = useState("");
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     supplier: "",
@@ -31,11 +41,11 @@ export default function StockPage() {
     const name = String(categoryName || "").toLowerCase();
 
     if (name.includes("pant") || name.includes("trouser") || name.includes("jean") || name.includes("short")) {
-      return ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "Free Size"];
+      return SIZE_PRESETS.pants;
     }
 
     if (name.includes("brief") || name.includes("underwear") || name.includes("innerwear")) {
-      return ["75", "80", "85", "90", "95", "100", "Free Size"];
+      return SIZE_PRESETS.cm70to100;
     }
 
     if (
@@ -44,10 +54,10 @@ export default function StockPage() {
       name.includes("footwear") ||
       name.includes("shoe")
     ) {
-      return ["6", "7", "8", "9", "10", "11", "12", "13", "14", "Free Size"];
+      return SIZE_PRESETS.footwear;
     }
 
-    return ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "6XL", "Free Size"];
+    return SIZE_PRESETS.alpha;
   };
 
   useEffect(() => {
@@ -93,7 +103,11 @@ export default function StockPage() {
     const selectedCategory = categories.find((c) => String(c._id) === String(form.category));
     const categoryName = selectedCategory?.name || "";
     const options = getSizeOptions(categoryName);
+    const presetKey = (Object.entries(SIZE_PRESETS).find(([, values]) => values.join("|") === options.join("|"))?.[0] ||
+      "alpha") as keyof typeof SIZE_PRESETS;
+    setSizePreset(presetKey);
     setSizeOptions(options);
+    setCustomSize("");
     setForm((prev) => ({ ...prev, size: "" }));
   }, [form.category, form.subCategory, categories]);
 
@@ -165,6 +179,23 @@ export default function StockPage() {
         <label className="block text-sm text-[var(--text-secondary)]">Size</label>
         <select
           className="pos-input w-full"
+          value={sizePreset}
+          onChange={(e) => {
+            const nextPreset = e.target.value as keyof typeof SIZE_PRESETS;
+            setSizePreset(nextPreset);
+            setSizeOptions(SIZE_PRESETS[nextPreset] || SIZE_PRESETS.alpha);
+            setCustomSize("");
+            setForm((prev) => ({ ...prev, size: "" }));
+          }}
+        >
+          <option value="alpha">Alpha sizes (S to 6XL)</option>
+          <option value="cm70to100">Numeric sizes (70 to 100)</option>
+          <option value="even6to14">Even sizes (6 to 14)</option>
+          <option value="pants">Waist sizes (28 to 50)</option>
+          <option value="footwear">Footwear sizes (6 to 14)</option>
+        </select>
+        <select
+          className="pos-input w-full"
           value={form.size}
           onChange={(e) => setForm((prev) => ({ ...prev, size: e.target.value }))}
           required
@@ -176,6 +207,16 @@ export default function StockPage() {
             </option>
           ))}
         </select>
+        <input
+          className="pos-input w-full"
+          value={customSize}
+          onChange={(e) => {
+            const value = e.target.value;
+            setCustomSize(value);
+            setForm((prev) => ({ ...prev, size: value.trim() }));
+          }}
+          placeholder="Or type custom size (e.g. 58, XXL Tall)"
+        />
         <label className="block text-sm text-[var(--text-secondary)]">Quantity</label>
         <input
           className="pos-input w-full"

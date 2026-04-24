@@ -11,10 +11,12 @@ const ItemSchema = new Schema(
     itemDiscountType: { type: String, enum: ['percent', 'amount', 'none'], default: 'none' },
     itemDiscountValue: { type: Number, default: 0 },
     itemDiscountAmount: { type: Number, default: 0 },
+    billDiscountShare: { type: Number, default: 0 },
     sellingPrice: { type: Number, default: 0 },
     quantity: { type: Number, default: 1, min: 1 },
     gstPercent: { type: Number, default: 5 },
     lineTotal: { type: Number, default: 0 },
+    netLineTotal: { type: Number, default: 0 },
   },
   { _id: false }
 );
