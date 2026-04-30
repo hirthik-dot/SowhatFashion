@@ -108,6 +108,8 @@ export const billingApi = {
   reportCustomerProfile: (phone: string) => request(`/api/billing/reports/customers/${encodeURIComponent(phone)}`),
   inventorySummary: () => request("/api/billing/inventory/summary"),
   inventoryProducts: (query = "") => request(`/api/billing/inventory/products${query ? `?${query}` : ""}`),
+  updateInventoryProduct: (id: string, payload: any) =>
+    request(`/api/billing/inventory/products/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   inventoryEntries: (query = "") => request(`/api/billing/inventory/entries${query ? `?${query}` : ""}`),
   stockInventory: (query = "") => request(`/api/billing/stock/inventory${query ? `?${query}` : ""}`),
   stockInventoryItems: (productId: string, size?: string) =>

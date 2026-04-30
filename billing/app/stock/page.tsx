@@ -33,7 +33,6 @@ export default function StockPage() {
     quantity: "",
     incomingPrice: "",
     sellingPrice: "",
-    gstPercent: 5,
     notes: "",
   });
 
@@ -249,8 +248,6 @@ export default function StockPage() {
           placeholder="Selling Price"
           required
         />
-        <label className="block text-sm text-[var(--text-secondary)]">GST %</label>
-        <input className="pos-input w-full" type="number" min={0} inputMode="decimal" value={form.gstPercent} onChange={(e) => setForm((prev) => ({ ...prev, gstPercent: Number(e.target.value || 5) }))} placeholder="GST %" />
         <label className="block text-sm text-[var(--text-secondary)]">Notes</label>
         <textarea className="pos-input w-full min-h-24 py-2" value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Notes" />
         <button className="h-12 px-4 rounded bg-[var(--gold)] text-black font-semibold" type="submit" disabled={loading}>{loading ? "Saving..." : "SAVE & GENERATE BARCODES"}</button>

@@ -115,7 +115,7 @@ export default function BarcodePage() {
 
           .label-name {
             font-family: "Courier New", monospace;
-            font-size: 7pt;
+            font-size: 5pt;
             font-weight: 800;
             color: #000;
             text-align: left;
@@ -134,6 +134,20 @@ export default function BarcodePage() {
             color: #000;
             margin-bottom: 0.01cm;
             text-align: left;
+          }
+
+          .label-notes {
+            font-family: "Courier New", monospace;
+            font-size: 5pt;
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 0.01cm;
+            text-align: left;
+            text-transform: uppercase;
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
           }
 
           .label-barcode {
@@ -209,14 +223,6 @@ export default function BarcodePage() {
           gap: 8px;
           row-gap: 16px;
         }
-
-        .label-grid-screen::after {
-          content: "- - - - - - - - - - cut here - - - - - - - - - -";
-          color: #6B6B6B;
-          font-size: 10px;
-          text-align: center;
-          grid-column: 1 / -1;
-        }
       `}</style>
       <div className="pos-card p-4">
         <div className="flex items-center justify-between mb-3">
@@ -234,15 +240,16 @@ export default function BarcodePage() {
           </button>
         </div>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
-          {entry?.subCategory?.name || ""} · Size {entry?.size || "-"} ·{" "}
+          {[entry?.subCategory?.name, entry?.productName].filter(Boolean).join(" - ")} · Size {entry?.size || "-"} ·{" "}
           {barcodes.length} labels · Showing page {pageToShow} of {totalPages}
         </p>
         <BarcodePrintSheet
           ref={gridRef}
           barcodes={pageBarcodes}
-          productName={entry?.subCategory?.name || "Product"}
+          productName={[entry?.subCategory?.name, entry?.productName].filter(Boolean).join(" - ") || "Product"}
           size={entry?.size || "-"}
           price={entry?.sellingPrice || 0}
+          notes={entry?.notes || ""}
         />
       </div>
     </BillingShell>

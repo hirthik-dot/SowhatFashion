@@ -72,8 +72,9 @@ export const ReceiptPrint = forwardRef<
   const gstAmount = taxableAmount * (gstPercent / 100);
   const cgst = gstAmount / 2;
   const sgst = gstAmount / 2;
-  const billBaseTotal = Number(bill.totalAmount || taxableAmount || 0);
-  const billGrandTotal = billBaseTotal + gstAmount;
+  const rawGrandTotal = taxableAmount + gstAmount;
+  const billGrandTotal = Math.round(rawGrandTotal);
+  const receiptRoundOff = billGrandTotal - rawGrandTotal;
   const received = Number(bill.cashReceived ?? billGrandTotal);
   const balance = Math.max(0, Number(bill.changeReturned ?? 0));
   const customerPhone = formatPhone(
@@ -191,6 +192,14 @@ export const ReceiptPrint = forwardRef<
         </div>
       </div>
       <div className="line" />
+
+      {receiptRoundOff !== 0 && (
+        <div className="amount-row">
+          <span>Round Off</span>
+          <span>:</span>
+          <span>{receiptRoundOff > 0 ? "+" : ""}{money(receiptRoundOff)}</span>
+        </div>
+      )}
 
       <div className="amount-row" style={{ fontWeight: 'bold' }}>
         <span>Net Total</span>

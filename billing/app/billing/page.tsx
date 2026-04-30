@@ -278,7 +278,8 @@ export default function BillingPage() {
                 <p className="text-xs text-[var(--text-secondary)]">Max allowed discount: {maxDiscount}%</p>
               ) : null}
               <div className="flex justify-between"><span>Taxable</span><span>₹{totals.taxableAmount.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>GST 5%</span><span>₹{totals.gstAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>CGST 2.5%</span><span>₹{(totals.taxableAmount * 0.025).toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>SGST 2.5%</span><span>₹{(totals.taxableAmount * 0.025).toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Round Off</span><span>{totals.roundOff.toFixed(2)}</span></div>
               <div className="flex justify-between text-2xl font-bold text-[var(--gold)]"><span>TOTAL</span><span>₹{totals.totalAmount.toFixed(2)}</span></div>
             </div>

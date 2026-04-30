@@ -21,6 +21,8 @@ export default function AdminInventoryPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [productItems, setProductItems] = useState<any[]>([]);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [savingProduct, setSavingProduct] = useState(false);
   const [reprintItem, setReprintItem] = useState<any>(null);
   const [selectedBatchBarcodes, setSelectedBatchBarcodes] = useState<string[]>([]);
   const [batchReprint, setBatchReprint] = useState<any>(null);
@@ -127,6 +129,28 @@ export default function AdminInventoryPage() {
     setBatchCurrentPage(1);
   };
 
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setSavingProduct(true);
+    try {
+      await billingApi.updateInventoryProduct(editingProduct._id, {
+        name: editingProduct.name,
+        price: editingProduct.mrp,
+        incomingPrice: editingProduct.incomingPrice,
+        category: editingProduct.category,
+        subCategory: editingProduct.subCategory,
+        supplier: editingProduct.supplier?._id || editingProduct.supplier,
+      });
+      setEditingProduct(null);
+      await load();
+    } catch (err: any) {
+      alert(err.message || "Failed to update product");
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
   return (
     <BillingShell title="Admin Inventory">
       <div className="space-y-3">
@@ -196,9 +220,13 @@ export default function AdminInventoryPage() {
                     <td className="whitespace-nowrap">{sizes || "-"}</td>
                     <td>{row.totalStock || 0}</td>
                     <td>{row.sold || 0}</td>
-                    <td>₹{Number(row.mrp || 0).toFixed(2)}</td>
-                    <td>{statusData.icon} {statusData.label}</td>
-                    <td><button className="underline" onClick={() => openProduct(row)}>View</button></td>
+                    <td>₹{Number(row.mrp || row.price || 0).toFixed(2)}</td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button className="underline" onClick={() => openProduct(row)}>View</button>
+                        <button className="underline text-[var(--gold)]" onClick={() => setEditingProduct({...row, mrp: row.mrp || row.price})}>Edit</button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -420,6 +448,96 @@ export default function AdminInventoryPage() {
                   : `PRINT FINAL PAGE ${batchTotalPages} OF ${batchTotalPages}`}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editingProduct ? (
+        <div className="fixed inset-0 bg-black/50 z-[80] grid place-items-center p-4">
+          <div className="pos-card p-4 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg">Edit Product</h3>
+              <button onClick={() => setEditingProduct(null)}>Close</button>
+            </div>
+            <form onSubmit={handleEditSave} className="space-y-3">
+              <div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">Name</label>
+                <input
+                  required
+                  className="pos-input w-full"
+                  value={editingProduct.name || ""}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">Category</label>
+                <input
+                  required
+                  className="pos-input w-full"
+                  value={editingProduct.category || ""}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">Subcategory</label>
+                <input
+                  className="pos-input w-full"
+                  value={editingProduct.subCategory || ""}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, subCategory: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-[var(--text-secondary)] mb-1">MRP (Selling Price)</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="pos-input w-full"
+                    value={editingProduct.mrp || 0}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, mrp: Number(e.target.value) })}
+                  />
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">Updates all available items</p>
+                </div>
+                {isSuperAdmin && (
+                  <div>
+                    <label className="block text-sm text-[var(--text-secondary)] mb-1">Incoming Price</label>
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="pos-input w-full"
+                      value={editingProduct.incomingPrice || 0}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, incomingPrice: Number(e.target.value) })}
+                    />
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">Supplier</label>
+                <select
+                  className="pos-input w-full"
+                  value={editingProduct.supplier?._id || editingProduct.supplier || ""}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, supplier: e.target.value })}
+                >
+                  <option value="">Select Supplier</option>
+                  {suppliers.map(s => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end pt-3">
+                <button
+                  type="submit"
+                  disabled={savingProduct}
+                  className="h-11 px-4 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50"
+                >
+                  {savingProduct ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}

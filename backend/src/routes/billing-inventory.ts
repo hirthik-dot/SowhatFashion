@@ -115,4 +115,50 @@ router.get('/entries', async (req, res: Response) => {
   return res.json({ data, total, page, limit });
 });
 
+router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
+  try {
+    const productId = req.params.id;
+    const updates = req.body;
+
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    if (updates.name !== undefined) {
+      product.name = String(updates.name).trim();
+      product.billingName = String(updates.name).trim(); // Keep billingName in sync so it reflects in the UI
+    }
+    if (updates.billingName !== undefined) product.billingName = String(updates.billingName).trim();
+    if (updates.price !== undefined) {
+      product.price = Number(updates.price);
+      // Update MRP for all available stock items
+      await StockItem.updateMany(
+        { product: product._id, status: 'available' },
+        { $set: { sellingPrice: product.price } }
+      );
+    }
+    if (updates.incomingPrice !== undefined) product.incomingPrice = Number(updates.incomingPrice);
+    if (updates.category !== undefined) product.category = String(updates.category).trim();
+    if (updates.subCategory !== undefined) product.subCategory = String(updates.subCategory).trim();
+    if (updates.supplier !== undefined) {
+      if (!updates.supplier) {
+        product.supplier = undefined;
+      } else if (updates.supplier.match(/^[0-9a-fA-F]{24}$/)) {
+        product.supplier = updates.supplier;
+      } else {
+        // If it's an invalid ObjectId (like a raw string name), we ignore it or require them to re-select
+        // Let's just unset it if it's totally invalid so the save doesn't crash
+        product.supplier = undefined;
+      }
+    }
+
+    await product.save();
+
+    res.json(product);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
 export default router;
