@@ -85,6 +85,8 @@ export const billingApi = {
   deleteCategory: (id: string) => request(`/api/billing/categories/${id}`, { method: "DELETE" }),
   stockEntry: (payload: any) =>
     request("/api/billing/stock/entry", { method: "POST", body: JSON.stringify(payload) }),
+  stockEntryBulk: (payload: any) =>
+    request("/api/billing/stock/entry/bulk", { method: "POST", body: JSON.stringify(payload) }),
   stockEntryById: (id: string) => request(`/api/billing/stock/entries/${id}`),
   lowStock: () => request("/api/billing/stock/low-stock"),
   salesmen: () => request("/api/billing/admin/salesmen"),
@@ -114,5 +116,5 @@ export const billingApi = {
   stockInventory: (query = "") => request(`/api/billing/stock/inventory${query ? `?${query}` : ""}`),
   stockInventoryItems: (productId: string, size?: string) =>
     request(`/api/billing/stock/inventory/${productId}/items${size ? `?size=${encodeURIComponent(size)}` : ""}`),
-  reportProfit: (page = 1) => request(`/api/billing/reports/profit?page=${page}`),
+  reportProfit: (page = 1, sort = 'entryDate') => request(`/api/billing/reports/profit?page=${page}&sort=${sort}`),
 };

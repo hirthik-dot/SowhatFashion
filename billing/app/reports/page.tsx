@@ -29,6 +29,7 @@ export default function ReportsPage() {
   const [profitSummary, setProfitSummary] = useState<any>(null);
   const [profitPage, setProfitPage] = useState(1);
   const [profitTotal, setProfitTotal] = useState(0);
+  const [profitSort, setProfitSort] = useState<'recentSales' | 'entryDate'>('recentSales');
 
   const loadSales = async (currentPage = 1) => {
     const now = new Date();
@@ -64,9 +65,9 @@ export default function ReportsPage() {
     }
   };
 
-  const loadProfit = async (currentPage = 1) => {
+  const loadProfit = async (currentPage = 1, sort: string = profitSort) => {
     try {
-      const res = await billingApi.reportProfit(currentPage);
+      const res = await billingApi.reportProfit(currentPage, sort);
       setProfitData(res.data || []);
       setProfitSummary(res.summary || null);
       setProfitTotal(res.total || 0);
@@ -84,9 +85,9 @@ export default function ReportsPage() {
     if (activeTab === "sales") {
       loadSales(salesPage);
     } else {
-      loadProfit(profitPage);
+      loadProfit(profitPage, profitSort);
     }
-  }, [activeTab, period, from, to, salesPage, profitPage]);
+  }, [activeTab, period, from, to, salesPage, profitPage, profitSort]);
 
   const exportSalesExcel = () => {
     const workbook = XLSX.utils.book_new();
@@ -342,10 +343,26 @@ export default function ReportsPage() {
                 <h3 className="font-bold text-lg text-white">Stock Batch & Profit Margin</h3>
                 <p className="text-sm text-[var(--text-secondary)]">Understand your inventory investment, sales tracking, and exact realized profit</p>
               </div>
-              <button className="h-11 px-6 rounded bg-[var(--success)] text-white ml-auto font-bold shadow-sm hover:opacity-90 flex items-center gap-2" onClick={exportProfitExcel}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Export Profit Excel
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                <div className="flex rounded border border-[var(--border)] overflow-hidden text-sm">
+                  <button
+                    onClick={() => { setProfitSort('recentSales'); setProfitPage(1); }}
+                    className={`px-4 py-2 font-semibold transition-colors ${profitSort === 'recentSales' ? 'bg-[var(--gold)] text-black' : 'text-[var(--text-secondary)] hover:text-white'}`}
+                  >
+                    🕒 Recent Sales
+                  </button>
+                  <button
+                    onClick={() => { setProfitSort('entryDate'); setProfitPage(1); }}
+                    className={`px-4 py-2 font-semibold transition-colors ${profitSort === 'entryDate' ? 'bg-[var(--gold)] text-black' : 'text-[var(--text-secondary)] hover:text-white'}`}
+                  >
+                    📅 Entry Date
+                  </button>
+                </div>
+                <button className="h-11 px-6 rounded bg-[var(--success)] text-white font-bold shadow-sm hover:opacity-90 flex items-center gap-2" onClick={exportProfitExcel}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Export Profit Excel
+                </button>
+              </div>
             </div>
 
             {/* Profit Metrics */}
@@ -383,6 +400,7 @@ export default function ReportsPage() {
                     <th className="p-3 font-semibold text-right border-r border-[var(--border)]">Invested</th>
                     <th className="p-3 font-semibold text-right text-blue-400 bg-blue-900/10">Qty Sold</th>
                     <th className="p-3 font-semibold text-right text-blue-400 bg-blue-900/10">Sell Price</th>
+                    <th className="p-3 font-semibold text-right text-red-400 bg-blue-900/10">Discount</th>
                     <th className="p-3 font-semibold text-right text-blue-400 bg-blue-900/10">Est. Revenue</th>
                     <th className="p-3 font-semibold text-right text-[var(--success)] bg-green-900/10 rounded-tr-lg">Realized Profit</th>
                   </tr>
@@ -393,7 +411,12 @@ export default function ReportsPage() {
                      const isLoss = batch.realizedProfit < 0;
                      return (
                       <tr key={batch._id} className="hover:bg-[var(--surface-2)] transition-colors group">
-                        <td className="p-3 text-[var(--text-secondary)]">{new Date(batch.entryDate).toLocaleDateString()}</td>
+                        <td className="p-3 text-[var(--text-secondary)]">
+                          {new Date(batch.entryDate).toLocaleDateString()}
+                          {batch.lastSoldDate && (
+                            <p className="text-[10px] text-green-400 mt-0.5">Last sold: {new Date(batch.lastSoldDate).toLocaleDateString()}</p>
+                          )}
+                        </td>
                         <td className="p-3">
                           <p className="font-semibold text-white">{batch.productName || 'Unnamed Asset'}</p>
                           <p className="text-xs text-[var(--text-secondary)] mt-0.5">{batch.supplierName} • {batch.categoryName}</p>
@@ -409,6 +432,7 @@ export default function ReportsPage() {
                         
                         <td className="p-3 text-right text-white font-medium bg-blue-900/5">{batch.qtySold} <span className="text-[10px] text-gray-500">/ {batch.quantity}</span></td>
                         <td className="p-3 text-right text-blue-300 bg-blue-900/5">₹{batch.sellingPrice}</td>
+                        <td className="p-3 text-right text-red-300 bg-blue-900/5">₹{(batch.soldDiscount || 0).toLocaleString()}</td>
                         <td className="p-3 text-right text-blue-400 font-semibold bg-blue-900/5">₹{(batch.soldRevenue || 0).toLocaleString()}</td>
                         
                         <td className={`p-3 text-right font-bold bg-green-900/5 ${isProfitable ? 'text-[var(--success)]' : isLoss ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
@@ -419,7 +443,7 @@ export default function ReportsPage() {
                   })}
                   {profitData.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-[var(--text-secondary)]">No batch data available for cost & profit calculation.</td>
+                      <td colSpan={10} className="p-8 text-center text-[var(--text-secondary)]">No batch data available for cost & profit calculation.</td>
                     </tr>
                   )}
                 </tbody>

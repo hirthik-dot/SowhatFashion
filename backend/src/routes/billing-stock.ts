@@ -173,6 +173,143 @@ router.post('/entry', requirePermission('canManageStock'), async (req: BillingAu
   }
 });
 
+// Bulk stock entry: create one batch per size
+router.post('/entry/bulk', requirePermission('canManageStock'), async (req: BillingAuthRequest, res: Response) => {
+  try {
+    const { supplier, category, subCategory, productName, incomingPrice, sellingPrice, gstPercent, notes, sizeEntries } =
+      req.body || {};
+
+    if (!Array.isArray(sizeEntries) || sizeEntries.length === 0) {
+      return res.status(400).json({ message: 'At least one size entry is required' });
+    }
+
+    const supplierDoc = await Supplier.findById(supplier);
+    const categoryDoc = await BillingCategory.findById(category);
+    const subCategoryDoc = await BillingCategory.findById(subCategory);
+    if (!supplierDoc || !categoryDoc || !subCategoryDoc) {
+      return res.status(400).json({ message: 'Supplier/category/subcategory not found' });
+    }
+
+    const cleanProductName = String(productName || '').trim();
+    if (!cleanProductName) {
+      return res.status(400).json({ message: 'Product name is required' });
+    }
+
+    const incoming = Number(incomingPrice ?? 0);
+    const selling = Number(sellingPrice ?? 0);
+
+    // Validate all size entries up front
+    const validatedEntries = sizeEntries.map((entry: any, index: number) => {
+      const cleanSize = String(entry.size || '').trim();
+      if (!cleanSize) throw new Error(`Size is required for entry #${index + 1}`);
+      const qty = Number(entry.quantity || 0);
+      if (!Number.isFinite(qty) || qty < 1) throw new Error(`Quantity must be at least 1 for size ${cleanSize}`);
+      return { size: cleanSize, quantity: qty };
+    });
+
+    // Find or create master product (shared across all sizes)
+    const existingMaster = await Product.findOne({
+      billingSubCategory: subCategoryDoc._id,
+      supplier: supplierDoc._id,
+      isBillingProduct: true,
+      billingName: { $regex: `^${cleanProductName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+    });
+
+    const masterProduct =
+      existingMaster ||
+      (await Product.create({
+        name: cleanProductName,
+        billingName: cleanProductName,
+        slug: `${slugify(cleanProductName, { lower: true, strict: true })}-${Date.now()}`,
+        category: categoryDoc.name,
+        subCategory: subCategoryDoc.name,
+        billingCategory: categoryDoc._id,
+        billingSubCategory: subCategoryDoc._id,
+        supplier: supplierDoc._id,
+        price: selling,
+        incomingPrice: incoming,
+        images: [],
+        sizes: [],
+        sizeStock: [],
+        totalStock: 0,
+        stock: 0,
+        isActive: false,
+        isBillingProduct: true,
+      }));
+
+    const createdEntries: any[] = [];
+
+    // Create a separate batch for each size
+    for (const { size: cleanSize, quantity: qty } of validatedEntries) {
+      const stockEntry = await StockEntry.create({
+        supplier,
+        category,
+        subCategory,
+        productName: cleanProductName,
+        quantity: qty,
+        incomingPrice: incoming,
+        sellingPrice: selling,
+        size: cleanSize,
+        gstPercent: gstPercent ?? 5,
+        notes,
+        barcodes: [],
+        stockItemIds: [],
+        productId: masterProduct._id,
+        productIds: [masterProduct._id],
+        enteredBy: req.billingAdminId,
+        entryDate: new Date(),
+      });
+
+      const barcodes = await generateBarcodes(qty);
+
+      const stockItems = await StockItem.insertMany(
+        barcodes.map((barcode) => ({
+          barcode,
+          product: masterProduct._id,
+          size: cleanSize,
+          incomingPrice: incoming,
+          sellingPrice: selling,
+          stockEntry: stockEntry._id,
+          supplier: supplierDoc._id,
+          status: 'available',
+        })),
+        { ordered: true }
+      );
+
+      // Update master product size aggregates
+      const sizeStock = Array.isArray((masterProduct as any).sizeStock) ? (masterProduct as any).sizeStock : [];
+      const existingSize = sizeStock.find((s: any) => String(s.size) === cleanSize);
+      if (existingSize) existingSize.stock = Number(existingSize.stock || 0) + qty;
+      else sizeStock.push({ size: cleanSize, stock: qty });
+
+      const sizes = Array.isArray((masterProduct as any).sizes) ? (masterProduct as any).sizes : [];
+      if (!sizes.includes(cleanSize)) sizes.push(cleanSize);
+
+      (masterProduct as any).sizeStock = sizeStock;
+
+      stockEntry.barcodes = barcodes;
+      (stockEntry as any).stockItemIds = stockItems.map((s) => s._id);
+      await stockEntry.save();
+
+      createdEntries.push(stockEntry);
+    }
+
+    // Final master product aggregate update
+    const sizeStock = (masterProduct as any).sizeStock || [];
+    (masterProduct as any).totalStock = sizeStock.reduce((sum: number, s: any) => sum + Number(s.stock || 0), 0);
+    masterProduct.stock = (masterProduct as any).totalStock;
+    masterProduct.isActive = (masterProduct as any).totalStock > 0;
+    masterProduct.price = selling;
+    masterProduct.incomingPrice = incoming;
+    await masterProduct.save();
+
+    await triggerRevalidate(['/', '/products']);
+    return res.status(201).json({ entries: createdEntries });
+  } catch (error: any) {
+    return res.status(500).json({ message: error.message || 'Bulk stock entry failed' });
+  }
+});
+
 router.get('/entries', requirePermission('canManageStock'), async (req, res: Response) => {
   const page = Number(req.query.page || 1);
   const limit = Number(req.query.limit || 20);
@@ -195,7 +332,9 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
   const search = String(req.query.search || '').trim();
 
   const query: any = { isBillingProduct: true };
-  if (supplier) query.supplier = supplier;
+  if (supplier && supplier.match(/^[0-9a-fA-F]{24}$/)) {
+    query.supplier = supplier;
+  }
   if (search) {
     query.$or = [{ name: { $regex: search, $options: 'i' } }, { billingName: { $regex: search, $options: 'i' } }];
   }
@@ -204,7 +343,7 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
     .populate('billingCategory', 'name')
     .populate('billingSubCategory', 'name')
     .populate('supplier', 'name')
-    .select('name billingName sizeStock totalStock price incomingPrice isActive billingCategory billingSubCategory supplier')
+    .select('name billingName sizeStock totalStock price incomingPrice isActive billingCategory billingSubCategory supplier notes')
     .lean();
 
   // Sold = total StockItems sold (for this product). We compute per product for correctness.
@@ -227,6 +366,7 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
     sold: soldByProduct.get(String(p._id)) || 0,
     mrp: Number(p.price || 0),
     status: p.isActive ? 'active' : 'inactive',
+    notes: p.notes || '',
     incomingPrice: isSuperAdmin ? Number(p.incomingPrice || 0) : undefined,
     expectedProfit: isSuperAdmin
       ? Number((Number(p.price || 0) - Number(p.incomingPrice || 0)) * Number(p.totalStock ?? p.stock ?? 0))

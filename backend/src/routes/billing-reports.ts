@@ -499,16 +499,16 @@ router.get('/export', async (req, res: Response) => {
 });
 
 router.get('/profit', requirePermission('canViewReports'), async (req, res: Response) => {
+  try {
   const page = Math.max(1, Number(req.query.page || 1));
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
   const skip = (page - 1) * limit;
+  const sortMode = String(req.query.sort || 'entryDate');
 
   const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
 
-  const pipeline: any[] = [
-    { $sort: { entryDate: -1, createdAt: -1 } },
-    { $skip: skip },
-    { $limit: limit },
+  // Common lookup stages
+  const lookupStages: any[] = [
     {
       $lookup: {
         from: 'stockitems',
@@ -541,29 +541,36 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
         as: 'categoryDoc'
       }
     },
-    {
-      $project: {
-        entryDate: 1,
-        productName: 1,
-        size: { $ifNull: ['$size', ''] },
-        supplierName: { $arrayElemAt: ['$supplierDoc.name', 0] },
-        categoryName: { $arrayElemAt: ['$categoryDoc.name', 0] },
-        quantity: 1,
-        incomingPrice: 1,
-        sellingPrice: 1,
-        totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
-        totalPotentialRevenue: { $multiply: ['$quantity', '$sellingPrice'] },
-        qtySold: {
-          $size: {
-            $filter: {
-              input: '$items',
-              as: 'item',
-              cond: { $eq: ['$$item.status', 'sold'] }
-            }
+  ];
+
+  const projectStage = {
+    $project: {
+      entryDate: 1,
+      productName: 1,
+      size: { $ifNull: ['$size', ''] },
+      supplierName: { $arrayElemAt: ['$supplierDoc.name', 0] },
+      categoryName: { $arrayElemAt: ['$categoryDoc.name', 0] },
+      quantity: 1,
+      incomingPrice: 1,
+      sellingPrice: 1,
+      totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
+      totalPotentialRevenue: { $multiply: ['$quantity', '$sellingPrice'] },
+      items: 1,
+      soldBills: 1,
+      lastSoldDate: { $max: '$soldBills.createdAt' },
+      qtySold: {
+        $size: {
+          $filter: {
+            input: '$items',
+            as: 'item',
+            cond: { $eq: ['$$item.status', 'sold'] }
           }
-        },
-      }
-    },
+        }
+      },
+    }
+  };
+
+  const computeStages: any[] = [
     {
       $addFields: {
         soldItems: {
@@ -587,24 +594,24 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
                     in: {
                       barcode: '$$billItem.barcode',
                       netLineTotal: '$$billItem.netLineTotal',
-                      lineTotal: '$$billItem.lineTotal'
+                      lineTotal: '$$billItem.lineTotal',
+                      itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                      billDiscountShare: '$$billItem.billDiscountShare'
                     }
                   }
                 }
               ]
             }
           }
-        },
+        }
+      }
+    },
+    {
+      $addFields: {
         soldRevenue: {
           $sum: {
             $map: {
-              input: {
-                $filter: {
-                  input: '$items',
-                  as: 'item',
-                  cond: { $eq: ['$$item.status', 'sold'] }
-                }
-              },
+              input: '$soldItems',
               as: 'soldItem',
               in: {
                 $let: {
@@ -633,6 +640,38 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
             }
           }
         },
+        soldDiscount: {
+          $sum: {
+            $map: {
+              input: '$soldItems',
+              as: 'soldItem',
+              in: {
+                $let: {
+                  vars: {
+                    matchedBillItem: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: '$billItemRows',
+                            as: 'billItem',
+                            cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  },
+                  in: {
+                    $add: [
+                      { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                      { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         soldCost: { $multiply: ['$qtySold', '$incomingPrice'] }
       }
     },
@@ -642,6 +681,30 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
       }
     }
   ];
+
+  let pipeline: any[];
+
+  if (sortMode === 'recentSales') {
+    // For recent sales sort: lookup first, then sort by lastSoldDate, then paginate
+    pipeline = [
+      ...lookupStages,
+      projectStage,
+      { $sort: { lastSoldDate: -1, entryDate: -1, createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      ...computeStages,
+    ];
+  } else {
+    // Default: sort by entry date first (efficient — paginate before lookups)
+    pipeline = [
+      { $sort: { entryDate: -1, createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      ...lookupStages,
+      projectStage,
+      ...computeStages,
+    ];
+  }
 
   const data = await StockEntry.aggregate(pipeline);
   const total = await StockEntry.countDocuments();
@@ -704,7 +767,9 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
                                 in: {
                                   barcode: '$$billItem.barcode',
                                   netLineTotal: '$$billItem.netLineTotal',
-                                  lineTotal: '$$billItem.lineTotal'
+                                  lineTotal: '$$billItem.lineTotal',
+                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                  billDiscountShare: '$$billItem.billDiscountShare'
                                 }
                               }
                             }
@@ -742,6 +807,72 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
             }
           }
         },
+        soldDiscount: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: '$items',
+                  as: 'item',
+                  cond: { $eq: ['$$item.status', 'sold'] }
+                }
+              },
+              as: 'soldItem',
+              in: {
+                $let: {
+                  vars: {
+                    billRows: {
+                      $reduce: {
+                        input: '$soldBills',
+                        initialValue: [],
+                        in: {
+                          $concatArrays: [
+                            '$$value',
+                            {
+                              $map: {
+                                input: { $ifNull: ['$$this.items', []] },
+                                as: 'billItem',
+                                in: {
+                                  barcode: '$$billItem.barcode',
+                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                  billDiscountShare: '$$billItem.billDiscountShare'
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  in: {
+                    $let: {
+                      vars: {
+                        matchedBillItem: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: '$$billRows',
+                                as: 'billItem',
+                                cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                              }
+                            },
+                            0
+                          ]
+                        }
+                      },
+                      in: {
+                        $add: [
+                          { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                          { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         sellingPrice: 1,
         incomingPrice: 1
       }
@@ -754,12 +885,13 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
         overallInvestment: { $sum: '$totalInvestment' },
         overallSoldRevenue: { $sum: '$soldRevenue' },
         overallSoldCost: { $sum: { $multiply: ['$qtySold', '$incomingPrice'] } },
+        overallSoldDiscount: { $sum: '$soldDiscount' },
       }
     }
   ];
   
   const overallRows = await StockEntry.aggregate(overallPipeline);
-  const overall = overallRows[0] || { overallPurchased: 0, overallSold: 0, overallInvestment: 0, overallSoldRevenue: 0, overallSoldCost: 0 };
+  const overall = overallRows[0] || { overallPurchased: 0, overallSold: 0, overallInvestment: 0, overallSoldRevenue: 0, overallSoldCost: 0, overallSoldDiscount: 0 };
   const overallRealizedProfit = (overall.overallSoldRevenue || 0) - (overall.overallSoldCost || 0);
 
   res.json({
@@ -772,10 +904,15 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
       overallSold: overall.overallSold || 0,
       totalInvestment: overall.overallInvestment || 0,
       totalSoldRevenue: overall.overallSoldRevenue || 0,
+      totalSoldDiscount: overall.overallSoldDiscount || 0,
       totalRealizedProfit: overallRealizedProfit || 0,
       profitMargin: overall.overallSoldRevenue ? (overallRealizedProfit / overall.overallSoldRevenue) * 100 : 0
     }
   });
+  } catch (err: any) {
+    console.error('❌ /profit error:', err?.message || err);
+    res.status(500).json({ message: 'Failed to load profit data', error: err?.message });
+  }
 });
 
 router.get('/profit/export', requirePermission('canViewReports'), async (req, res: Response) => {
@@ -795,6 +932,8 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
         quantity: 1,
         incomingPrice: 1,
         sellingPrice: 1,
+        items: 1,
+        soldBills: 1,
         qtySold: {
           $size: {
             $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
@@ -824,7 +963,9 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
                                 in: {
                                   barcode: '$$billItem.barcode',
                                   netLineTotal: '$$billItem.netLineTotal',
-                                  lineTotal: '$$billItem.lineTotal'
+                                  lineTotal: '$$billItem.lineTotal',
+                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                  billDiscountShare: '$$billItem.billDiscountShare'
                                 }
                               }
                             }
@@ -861,6 +1002,68 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
               }
             }
           }
+        },
+        soldDiscount: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
+              },
+              as: 'soldItem',
+              in: {
+                $let: {
+                  vars: {
+                    billRows: {
+                      $reduce: {
+                        input: '$soldBills',
+                        initialValue: [],
+                        in: {
+                          $concatArrays: [
+                            '$$value',
+                            {
+                              $map: {
+                                input: { $ifNull: ['$$this.items', []] },
+                                as: 'billItem',
+                                in: {
+                                  barcode: '$$billItem.barcode',
+                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                  billDiscountShare: '$$billItem.billDiscountShare'
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  in: {
+                    $let: {
+                      vars: {
+                        matchedBillItem: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: '$$billRows',
+                                as: 'billItem',
+                                cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                              }
+                            },
+                            0
+                          ]
+                        }
+                      },
+                      in: {
+                        $add: [
+                          { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                          { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -879,6 +1082,7 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
     { header: 'Total Invested', key: 'invested', width: 15 },
     { header: 'Selling Price', key: 'sellingPrice', width: 15 },
     { header: 'Qty Sold', key: 'qtySold', width: 12 },
+    { header: 'Discount', key: 'discount', width: 15 },
     { header: 'Est. Revenue', key: 'revenue', width: 15 },
     { header: 'Realized Profit', key: 'profit', width: 15 },
   ];
@@ -886,6 +1090,7 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
   data.forEach((row: any) => {
     const invested = row.quantity * row.incomingPrice;
     const revenue = Number(row.soldRevenue || 0);
+    const discount = Number(row.soldDiscount || 0);
     const costOfGoodsSold = row.qtySold * row.incomingPrice;
     const profit = revenue - costOfGoodsSold;
     
@@ -896,11 +1101,12 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
       category: row.categoryName || '-',
       qtyPurchased: row.quantity || 0,
       costPrice: row.incomingPrice || 0,
-      invested: invested || 0,
+      invested,
       sellingPrice: row.sellingPrice || 0,
       qtySold: row.qtySold || 0,
-      revenue: revenue || 0,
-      profit: profit || 0,
+      discount,
+      revenue,
+      profit,
     });
   });
 

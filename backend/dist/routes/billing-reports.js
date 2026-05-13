@@ -466,39 +466,48 @@ router.get('/export', async (req, res) => {
     return res.send(Buffer.from(buffer));
 });
 router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewReports'), async (req, res) => {
-    const page = Math.max(1, Number(req.query.page || 1));
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
-    const skip = (page - 1) * limit;
-    const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
-    const pipeline = [
-        { $sort: { entryDate: -1, createdAt: -1 } },
-        { $skip: skip },
-        { $limit: limit },
-        {
-            $lookup: {
-                from: 'stockitems',
-                localField: '_id',
-                foreignField: 'stockEntry',
-                as: 'items'
-            }
-        },
-        {
-            $lookup: {
-                from: 'suppliers',
-                localField: 'supplier',
-                foreignField: '_id',
-                as: 'supplierDoc'
-            }
-        },
-        {
-            $lookup: {
-                from: 'billingcategories',
-                localField: 'category',
-                foreignField: '_id',
-                as: 'categoryDoc'
-            }
-        },
-        {
+    try {
+        const page = Math.max(1, Number(req.query.page || 1));
+        const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
+        const skip = (page - 1) * limit;
+        const sortMode = String(req.query.sort || 'entryDate');
+        const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
+        // Common lookup stages
+        const lookupStages = [
+            {
+                $lookup: {
+                    from: 'stockitems',
+                    localField: '_id',
+                    foreignField: 'stockEntry',
+                    as: 'items'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'bills',
+                    localField: 'items.soldInBill',
+                    foreignField: '_id',
+                    as: 'soldBills'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'suppliers',
+                    localField: 'supplier',
+                    foreignField: '_id',
+                    as: 'supplierDoc'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'billingcategories',
+                    localField: 'category',
+                    foreignField: '_id',
+                    as: 'categoryDoc'
+                }
+            },
+        ];
+        const projectStage = {
             $project: {
                 entryDate: 1,
                 productName: 1,
@@ -510,6 +519,9 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
                 sellingPrice: 1,
                 totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
                 totalPotentialRevenue: { $multiply: ['$quantity', '$sellingPrice'] },
+                items: 1,
+                soldBills: 1,
+                lastSoldDate: { $max: '$soldBills.createdAt' },
                 qtySold: {
                     $size: {
                         $filter: {
@@ -520,81 +532,353 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
                     }
                 },
             }
-        },
-        {
-            $addFields: {
-                soldRevenue: { $multiply: ['$qtySold', '$sellingPrice'] },
-                soldCost: { $multiply: ['$qtySold', '$incomingPrice'] }
-            }
-        },
-        {
-            $addFields: {
-                realizedProfit: { $subtract: ['$soldRevenue', '$soldCost'] }
-            }
-        }
-    ];
-    const data = await StockEntry.aggregate(pipeline);
-    const total = await StockEntry.countDocuments();
-    const overallPipeline = [
-        {
-            $lookup: {
-                from: 'stockitems',
-                localField: '_id',
-                foreignField: 'stockEntry',
-                as: 'items'
-            }
-        },
-        {
-            $project: {
-                totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
-                qtyPurchased: '$quantity',
-                qtySold: {
-                    $size: {
+        };
+        const computeStages = [
+            {
+                $addFields: {
+                    soldItems: {
                         $filter: {
                             input: '$items',
                             as: 'item',
                             cond: { $eq: ['$$item.status', 'sold'] }
                         }
+                    },
+                    billItemRows: {
+                        $reduce: {
+                            input: '$soldBills',
+                            initialValue: [],
+                            in: {
+                                $concatArrays: [
+                                    '$$value',
+                                    {
+                                        $map: {
+                                            input: { $ifNull: ['$$this.items', []] },
+                                            as: 'billItem',
+                                            in: {
+                                                barcode: '$$billItem.barcode',
+                                                netLineTotal: '$$billItem.netLineTotal',
+                                                lineTotal: '$$billItem.lineTotal',
+                                                itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                                billDiscountShare: '$$billItem.billDiscountShare'
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
                     }
-                },
-                sellingPrice: 1,
-                incomingPrice: 1
+                }
+            },
+            {
+                $addFields: {
+                    soldRevenue: {
+                        $sum: {
+                            $map: {
+                                input: '$soldItems',
+                                as: 'soldItem',
+                                in: {
+                                    $let: {
+                                        vars: {
+                                            matchedBillItem: {
+                                                $arrayElemAt: [
+                                                    {
+                                                        $filter: {
+                                                            input: '$billItemRows',
+                                                            as: 'billItem',
+                                                            cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                                                        }
+                                                    },
+                                                    0
+                                                ]
+                                            }
+                                        },
+                                        in: {
+                                            $ifNull: [
+                                                '$$matchedBillItem.netLineTotal',
+                                                { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    soldDiscount: {
+                        $sum: {
+                            $map: {
+                                input: '$soldItems',
+                                as: 'soldItem',
+                                in: {
+                                    $let: {
+                                        vars: {
+                                            matchedBillItem: {
+                                                $arrayElemAt: [
+                                                    {
+                                                        $filter: {
+                                                            input: '$billItemRows',
+                                                            as: 'billItem',
+                                                            cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                                                        }
+                                                    },
+                                                    0
+                                                ]
+                                            }
+                                        },
+                                        in: {
+                                            $add: [
+                                                { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                                                { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    soldCost: { $multiply: ['$qtySold', '$incomingPrice'] }
+                }
+            },
+            {
+                $addFields: {
+                    realizedProfit: { $subtract: ['$soldRevenue', '$soldCost'] }
+                }
             }
-        },
-        {
-            $group: {
-                _id: null,
-                overallPurchased: { $sum: '$qtyPurchased' },
-                overallSold: { $sum: '$qtySold' },
-                overallInvestment: { $sum: '$totalInvestment' },
-                overallSoldRevenue: { $sum: { $multiply: ['$qtySold', '$sellingPrice'] } },
-                overallSoldCost: { $sum: { $multiply: ['$qtySold', '$incomingPrice'] } },
+        ];
+        let pipeline;
+        if (sortMode === 'recentSales') {
+            // For recent sales sort: lookup first, then sort by lastSoldDate, then paginate
+            pipeline = [
+                ...lookupStages,
+                projectStage,
+                { $sort: { lastSoldDate: -1, entryDate: -1, createdAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+                ...computeStages,
+            ];
+        }
+        else {
+            // Default: sort by entry date first (efficient — paginate before lookups)
+            pipeline = [
+                { $sort: { entryDate: -1, createdAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+                ...lookupStages,
+                projectStage,
+                ...computeStages,
+            ];
+        }
+        const data = await StockEntry.aggregate(pipeline);
+        const total = await StockEntry.countDocuments();
+        const overallPipeline = [
+            {
+                $lookup: {
+                    from: 'stockitems',
+                    localField: '_id',
+                    foreignField: 'stockEntry',
+                    as: 'items'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'bills',
+                    localField: 'items.soldInBill',
+                    foreignField: '_id',
+                    as: 'soldBills'
+                }
+            },
+            {
+                $project: {
+                    totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
+                    qtyPurchased: '$quantity',
+                    qtySold: {
+                        $size: {
+                            $filter: {
+                                input: '$items',
+                                as: 'item',
+                                cond: { $eq: ['$$item.status', 'sold'] }
+                            }
+                        }
+                    },
+                    soldRevenue: {
+                        $sum: {
+                            $map: {
+                                input: {
+                                    $filter: {
+                                        input: '$items',
+                                        as: 'item',
+                                        cond: { $eq: ['$$item.status', 'sold'] }
+                                    }
+                                },
+                                as: 'soldItem',
+                                in: {
+                                    $let: {
+                                        vars: {
+                                            billRows: {
+                                                $reduce: {
+                                                    input: '$soldBills',
+                                                    initialValue: [],
+                                                    in: {
+                                                        $concatArrays: [
+                                                            '$$value',
+                                                            {
+                                                                $map: {
+                                                                    input: { $ifNull: ['$$this.items', []] },
+                                                                    as: 'billItem',
+                                                                    in: {
+                                                                        barcode: '$$billItem.barcode',
+                                                                        netLineTotal: '$$billItem.netLineTotal',
+                                                                        lineTotal: '$$billItem.lineTotal',
+                                                                        itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                                                        billDiscountShare: '$$billItem.billDiscountShare'
+                                                                    }
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        in: {
+                                            $let: {
+                                                vars: {
+                                                    matchedBillItem: {
+                                                        $arrayElemAt: [
+                                                            {
+                                                                $filter: {
+                                                                    input: '$$billRows',
+                                                                    as: 'billItem',
+                                                                    cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                                                                }
+                                                            },
+                                                            0
+                                                        ]
+                                                    }
+                                                },
+                                                in: {
+                                                    $ifNull: [
+                                                        '$$matchedBillItem.netLineTotal',
+                                                        { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    soldDiscount: {
+                        $sum: {
+                            $map: {
+                                input: {
+                                    $filter: {
+                                        input: '$items',
+                                        as: 'item',
+                                        cond: { $eq: ['$$item.status', 'sold'] }
+                                    }
+                                },
+                                as: 'soldItem',
+                                in: {
+                                    $let: {
+                                        vars: {
+                                            billRows: {
+                                                $reduce: {
+                                                    input: '$soldBills',
+                                                    initialValue: [],
+                                                    in: {
+                                                        $concatArrays: [
+                                                            '$$value',
+                                                            {
+                                                                $map: {
+                                                                    input: { $ifNull: ['$$this.items', []] },
+                                                                    as: 'billItem',
+                                                                    in: {
+                                                                        barcode: '$$billItem.barcode',
+                                                                        itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                                                        billDiscountShare: '$$billItem.billDiscountShare'
+                                                                    }
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        in: {
+                                            $let: {
+                                                vars: {
+                                                    matchedBillItem: {
+                                                        $arrayElemAt: [
+                                                            {
+                                                                $filter: {
+                                                                    input: '$$billRows',
+                                                                    as: 'billItem',
+                                                                    cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                                                                }
+                                                            },
+                                                            0
+                                                        ]
+                                                    }
+                                                },
+                                                in: {
+                                                    $add: [
+                                                        { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                                                        { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    sellingPrice: 1,
+                    incomingPrice: 1
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    overallPurchased: { $sum: '$qtyPurchased' },
+                    overallSold: { $sum: '$qtySold' },
+                    overallInvestment: { $sum: '$totalInvestment' },
+                    overallSoldRevenue: { $sum: '$soldRevenue' },
+                    overallSoldCost: { $sum: { $multiply: ['$qtySold', '$incomingPrice'] } },
+                    overallSoldDiscount: { $sum: '$soldDiscount' },
+                }
             }
-        }
-    ];
-    const overallRows = await StockEntry.aggregate(overallPipeline);
-    const overall = overallRows[0] || { overallPurchased: 0, overallSold: 0, overallInvestment: 0, overallSoldRevenue: 0, overallSoldCost: 0 };
-    const overallRealizedProfit = (overall.overallSoldRevenue || 0) - (overall.overallSoldCost || 0);
-    res.json({
-        data,
-        total,
-        page,
-        limit,
-        summary: {
-            overallPurchased: overall.overallPurchased || 0,
-            overallSold: overall.overallSold || 0,
-            totalInvestment: overall.overallInvestment || 0,
-            totalSoldRevenue: overall.overallSoldRevenue || 0,
-            totalRealizedProfit: overallRealizedProfit || 0,
-            profitMargin: overall.overallSoldRevenue ? (overallRealizedProfit / overall.overallSoldRevenue) * 100 : 0
-        }
-    });
+        ];
+        const overallRows = await StockEntry.aggregate(overallPipeline);
+        const overall = overallRows[0] || { overallPurchased: 0, overallSold: 0, overallInvestment: 0, overallSoldRevenue: 0, overallSoldCost: 0, overallSoldDiscount: 0 };
+        const overallRealizedProfit = (overall.overallSoldRevenue || 0) - (overall.overallSoldCost || 0);
+        res.json({
+            data,
+            total,
+            page,
+            limit,
+            summary: {
+                overallPurchased: overall.overallPurchased || 0,
+                overallSold: overall.overallSold || 0,
+                totalInvestment: overall.overallInvestment || 0,
+                totalSoldRevenue: overall.overallSoldRevenue || 0,
+                totalSoldDiscount: overall.overallSoldDiscount || 0,
+                totalRealizedProfit: overallRealizedProfit || 0,
+                profitMargin: overall.overallSoldRevenue ? (overallRealizedProfit / overall.overallSoldRevenue) * 100 : 0
+            }
+        });
+    }
+    catch (err) {
+        console.error('❌ /profit error:', err?.message || err);
+        res.status(500).json({ message: 'Failed to load profit data', error: err?.message });
+    }
 });
 router.get('/profit/export', (0, billingRoleMiddleware_1.requirePermission)('canViewReports'), async (req, res) => {
     const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
     const data = await StockEntry.aggregate([
         { $sort: { entryDate: -1, createdAt: -1 } },
         { $lookup: { from: 'stockitems', localField: '_id', foreignField: 'stockEntry', as: 'items' } },
+        { $lookup: { from: 'bills', localField: 'items.soldInBill', foreignField: '_id', as: 'soldBills' } },
         { $lookup: { from: 'suppliers', localField: 'supplier', foreignField: '_id', as: 'supplierDoc' } },
         { $lookup: { from: 'billingcategories', localField: 'category', foreignField: '_id', as: 'categoryDoc' } },
         {
@@ -606,9 +890,137 @@ router.get('/profit/export', (0, billingRoleMiddleware_1.requirePermission)('can
                 quantity: 1,
                 incomingPrice: 1,
                 sellingPrice: 1,
+                items: 1,
+                soldBills: 1,
                 qtySold: {
                     $size: {
                         $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
+                    }
+                },
+                soldRevenue: {
+                    $sum: {
+                        $map: {
+                            input: {
+                                $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
+                            },
+                            as: 'soldItem',
+                            in: {
+                                $let: {
+                                    vars: {
+                                        billRows: {
+                                            $reduce: {
+                                                input: '$soldBills',
+                                                initialValue: [],
+                                                in: {
+                                                    $concatArrays: [
+                                                        '$$value',
+                                                        {
+                                                            $map: {
+                                                                input: { $ifNull: ['$$this.items', []] },
+                                                                as: 'billItem',
+                                                                in: {
+                                                                    barcode: '$$billItem.barcode',
+                                                                    netLineTotal: '$$billItem.netLineTotal',
+                                                                    lineTotal: '$$billItem.lineTotal',
+                                                                    itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                                                    billDiscountShare: '$$billItem.billDiscountShare'
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    in: {
+                                        $let: {
+                                            vars: {
+                                                matchedBillItem: {
+                                                    $arrayElemAt: [
+                                                        {
+                                                            $filter: {
+                                                                input: '$$billRows',
+                                                                as: 'billItem',
+                                                                cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                                                            }
+                                                        },
+                                                        0
+                                                    ]
+                                                }
+                                            },
+                                            in: {
+                                                $ifNull: [
+                                                    '$$matchedBillItem.netLineTotal',
+                                                    { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                soldDiscount: {
+                    $sum: {
+                        $map: {
+                            input: {
+                                $filter: { input: '$items', as: 'item', cond: { $eq: ['$$item.status', 'sold'] } }
+                            },
+                            as: 'soldItem',
+                            in: {
+                                $let: {
+                                    vars: {
+                                        billRows: {
+                                            $reduce: {
+                                                input: '$soldBills',
+                                                initialValue: [],
+                                                in: {
+                                                    $concatArrays: [
+                                                        '$$value',
+                                                        {
+                                                            $map: {
+                                                                input: { $ifNull: ['$$this.items', []] },
+                                                                as: 'billItem',
+                                                                in: {
+                                                                    barcode: '$$billItem.barcode',
+                                                                    itemDiscountAmount: '$$billItem.itemDiscountAmount',
+                                                                    billDiscountShare: '$$billItem.billDiscountShare'
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    in: {
+                                        $let: {
+                                            vars: {
+                                                matchedBillItem: {
+                                                    $arrayElemAt: [
+                                                        {
+                                                            $filter: {
+                                                                input: '$$billRows',
+                                                                as: 'billItem',
+                                                                cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] }
+                                                            }
+                                                        },
+                                                        0
+                                                    ]
+                                                }
+                                            },
+                                            in: {
+                                                $add: [
+                                                    { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                                                    { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -626,12 +1038,14 @@ router.get('/profit/export', (0, billingRoleMiddleware_1.requirePermission)('can
         { header: 'Total Invested', key: 'invested', width: 15 },
         { header: 'Selling Price', key: 'sellingPrice', width: 15 },
         { header: 'Qty Sold', key: 'qtySold', width: 12 },
+        { header: 'Discount', key: 'discount', width: 15 },
         { header: 'Est. Revenue', key: 'revenue', width: 15 },
         { header: 'Realized Profit', key: 'profit', width: 15 },
     ];
     data.forEach((row) => {
         const invested = row.quantity * row.incomingPrice;
-        const revenue = row.qtySold * row.sellingPrice;
+        const revenue = Number(row.soldRevenue || 0);
+        const discount = Number(row.soldDiscount || 0);
         const costOfGoodsSold = row.qtySold * row.incomingPrice;
         const profit = revenue - costOfGoodsSold;
         sheet.addRow({
@@ -641,11 +1055,12 @@ router.get('/profit/export', (0, billingRoleMiddleware_1.requirePermission)('can
             category: row.categoryName || '-',
             qtyPurchased: row.quantity || 0,
             costPrice: row.incomingPrice || 0,
-            invested: invested || 0,
+            invested,
             sellingPrice: row.sellingPrice || 0,
             qtySold: row.qtySold || 0,
-            revenue: revenue || 0,
-            profit: profit || 0,
+            discount,
+            revenue,
+            profit,
         });
     });
     const buffer = await workbook.xlsx.writeBuffer();

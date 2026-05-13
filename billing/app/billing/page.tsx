@@ -158,7 +158,7 @@ export default function BillingPage() {
     if (activeTab.billDiscountType === "percent" && Number(activeTab.billDiscountValue || 0) > maxAllowedDiscount) {
       return setToast(`Discount cannot exceed ${maxAllowedDiscount}%`);
     }
-    const ok = window.confirm(`Complete bill for ₹${totals.totalAmount}?`);
+    const ok = window.confirm(`Complete bill for ₹${Math.round(totals.taxableAmount * 1.05)}?`);
     if (!ok) return;
     const completed = await billingApi.completeBill({
       customer: activeTab.customer,
@@ -280,8 +280,8 @@ export default function BillingPage() {
               <div className="flex justify-between"><span>Taxable</span><span>₹{totals.taxableAmount.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>CGST 2.5%</span><span>₹{(totals.taxableAmount * 0.025).toFixed(2)}</span></div>
               <div className="flex justify-between"><span>SGST 2.5%</span><span>₹{(totals.taxableAmount * 0.025).toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>Round Off</span><span>{totals.roundOff.toFixed(2)}</span></div>
-              <div className="flex justify-between text-2xl font-bold text-[var(--gold)]"><span>TOTAL</span><span>₹{totals.totalAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>Round Off</span><span>{(Math.round(totals.taxableAmount * 1.05) - (totals.taxableAmount * 1.05)).toFixed(2)}</span></div>
+              <div className="flex justify-between text-2xl font-bold text-[var(--gold)]"><span>TOTAL</span><span>₹{Math.round(totals.taxableAmount * 1.05).toFixed(2)}</span></div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button className="h-11 rounded border border-[var(--border)]" onClick={onHold}>HOLD BILL</button>

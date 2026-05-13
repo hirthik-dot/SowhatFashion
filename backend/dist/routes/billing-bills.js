@@ -67,7 +67,18 @@ const calculateBillTotals = (items, billDiscountType, billDiscountValue) => {
         const itemDiscountAmount = discountType === 'percent' ? (mrp * discountValue) / 100 : discountType === 'amount' ? discountValue : 0;
         const sellingPrice = Math.max(0, mrp - itemDiscountAmount);
         const lineTotal = sellingPrice * quantity;
-        return { ...item, mrp, quantity, itemDiscountType: discountType, itemDiscountValue: discountValue, itemDiscountAmount, sellingPrice, lineTotal };
+        return {
+            ...item,
+            mrp,
+            quantity,
+            itemDiscountType: discountType,
+            itemDiscountValue: discountValue,
+            itemDiscountAmount,
+            billDiscountShare: 0,
+            sellingPrice,
+            lineTotal,
+            netLineTotal: lineTotal,
+        };
     });
     const subtotal = normalizedItems.reduce((sum, item) => sum + item.mrp * item.quantity, 0);
     const totalItemDiscount = normalizedItems.reduce((sum, item) => sum + item.itemDiscountAmount * item.quantity, 0);
@@ -78,18 +89,33 @@ const calculateBillTotals = (items, billDiscountType, billDiscountValue) => {
         : billDiscountType === 'amount'
             ? safeBillDiscountValue
             : 0;
-    const taxableAmount = Math.max(0, afterItemDiscount - billDiscountAmount);
-    const gstAmount = taxableAmount * 0.05;
-    const cgst = gstAmount / 2;
-    const sgst = gstAmount / 2;
-    const rawTotal = taxableAmount + gstAmount;
+    const effectiveBillDiscount = Math.min(Math.max(0, billDiscountAmount), Math.max(0, afterItemDiscount));
+    const withBillDiscount = normalizedItems.map((item) => ({ ...item }));
+    if (withBillDiscount.length > 0 && effectiveBillDiscount > 0 && afterItemDiscount > 0) {
+        let assigned = 0;
+        withBillDiscount.forEach((item, index) => {
+            const proportionalShare = index === withBillDiscount.length - 1
+                ? effectiveBillDiscount - assigned
+                : Number(((item.lineTotal / afterItemDiscount) * effectiveBillDiscount).toFixed(2));
+            const safeShare = Math.max(0, Math.min(item.lineTotal, proportionalShare));
+            item.billDiscountShare = safeShare;
+            item.netLineTotal = Math.max(0, Number((item.lineTotal - safeShare).toFixed(2)));
+            assigned += safeShare;
+        });
+    }
+    const taxableAmount = Math.max(0, afterItemDiscount - effectiveBillDiscount);
+    // GST is display-only on customer bill; persisted records remain tax-free.
+    const gstAmount = 0;
+    const cgst = 0;
+    const sgst = 0;
+    const rawTotal = taxableAmount;
     const roundOff = Math.round(rawTotal) - rawTotal;
     const totalAmount = Math.round(rawTotal);
     return {
-        normalizedItems,
+        normalizedItems: withBillDiscount,
         subtotal,
         totalItemDiscount,
-        billDiscountAmount,
+        billDiscountAmount: effectiveBillDiscount,
         taxableAmount,
         gstAmount,
         cgst,

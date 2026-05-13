@@ -20,7 +20,9 @@ router.get('/', async (_req, res: Response) => {
 router.get('/flat', async (req, res: Response) => {
   const supplier = String(req.query.supplier || '').trim();
   const query: any = { isActive: true };
-  if (supplier) query.supplier = supplier;
+  if (supplier && supplier.match(/^[0-9a-fA-F]{24}$/)) {
+    query.supplier = supplier;
+  }
   const categories = await BillingCategory.find(query).sort({ order: 1, name: 1 });
   res.json(categories);
 });
@@ -28,7 +30,9 @@ router.get('/flat', async (req, res: Response) => {
 router.get('/:id/subcategories', async (req, res: Response) => {
   const supplier = String(req.query.supplier || '').trim();
   const query: any = { parentCategory: req.params.id, isActive: true };
-  if (supplier) query.supplier = supplier;
+  if (supplier && supplier.match(/^[0-9a-fA-F]{24}$/)) {
+    query.supplier = supplier;
+  }
   const categories = await BillingCategory.find(query).sort({
     order: 1,
     name: 1,

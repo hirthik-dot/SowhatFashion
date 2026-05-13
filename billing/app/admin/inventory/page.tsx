@@ -7,6 +7,7 @@ import BillingShell from "@/components/layout/BillingShell";
 import BarcodePrintSheet from "@/components/stock/BarcodePrintSheet";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
+import EditProductModal from "@/components/inventory/EditProductModal";
 
 const LABELS_PER_PAGE = 15;
 
@@ -134,14 +135,26 @@ export default function AdminInventoryPage() {
     if (!editingProduct) return;
     setSavingProduct(true);
     try {
-      await billingApi.updateInventoryProduct(editingProduct._id, {
+      const payload: any = {
         name: editingProduct.name,
         price: editingProduct.mrp,
         incomingPrice: editingProduct.incomingPrice,
-        category: editingProduct.category,
-        subCategory: editingProduct.subCategory,
-        supplier: editingProduct.supplier?._id || editingProduct.supplier,
-      });
+        supplier: editingProduct._editSupplierId || editingProduct.supplier?._id || editingProduct.supplier,
+        notes: editingProduct.notes,
+        sizeEntries: editingProduct.sizeEntries,
+      };
+      // Send ObjectId references if user picked from dropdown
+      if (editingProduct._editCategoryId) {
+        payload.billingCategory = editingProduct._editCategoryId;
+      } else {
+        payload.category = editingProduct.category;
+      }
+      if (editingProduct._editSubCategoryId) {
+        payload.billingSubCategory = editingProduct._editSubCategoryId;
+      } else {
+        payload.subCategory = editingProduct.subCategory;
+      }
+      await billingApi.updateInventoryProduct(editingProduct._id, payload);
       setEditingProduct(null);
       await load();
     } catch (err: any) {
@@ -453,93 +466,14 @@ export default function AdminInventoryPage() {
       ) : null}
 
       {editingProduct ? (
-        <div className="fixed inset-0 bg-black/50 z-[80] grid place-items-center p-4">
-          <div className="pos-card p-4 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-lg">Edit Product</h3>
-              <button onClick={() => setEditingProduct(null)}>Close</button>
-            </div>
-            <form onSubmit={handleEditSave} className="space-y-3">
-              <div>
-                <label className="block text-sm text-[var(--text-secondary)] mb-1">Name</label>
-                <input
-                  required
-                  className="pos-input w-full"
-                  value={editingProduct.name || ""}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--text-secondary)] mb-1">Category</label>
-                <input
-                  required
-                  className="pos-input w-full"
-                  value={editingProduct.category || ""}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--text-secondary)] mb-1">Subcategory</label>
-                <input
-                  className="pos-input w-full"
-                  value={editingProduct.subCategory || ""}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, subCategory: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-[var(--text-secondary)] mb-1">MRP (Selling Price)</label>
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="pos-input w-full"
-                    value={editingProduct.mrp || 0}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, mrp: Number(e.target.value) })}
-                  />
-                  <p className="text-xs text-[var(--text-secondary)] mt-1">Updates all available items</p>
-                </div>
-                {isSuperAdmin && (
-                  <div>
-                    <label className="block text-sm text-[var(--text-secondary)] mb-1">Incoming Price</label>
-                    <input
-                      required
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="pos-input w-full"
-                      value={editingProduct.incomingPrice || 0}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, incomingPrice: Number(e.target.value) })}
-                    />
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--text-secondary)] mb-1">Supplier</label>
-                <select
-                  className="pos-input w-full"
-                  value={editingProduct.supplier?._id || editingProduct.supplier || ""}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, supplier: e.target.value })}
-                >
-                  <option value="">Select Supplier</option>
-                  {suppliers.map(s => (
-                    <option key={s._id} value={s._id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end pt-3">
-                <button
-                  type="submit"
-                  disabled={savingProduct}
-                  className="h-11 px-4 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50"
-                >
-                  {savingProduct ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <EditProductModal
+          editingProduct={editingProduct}
+          setEditingProduct={setEditingProduct}
+          suppliers={suppliers}
+          isSuperAdmin={isSuperAdmin}
+          savingProduct={savingProduct}
+          onSave={handleEditSave}
+        />
       ) : null}
     </BillingShell>
   );
