@@ -12,6 +12,7 @@ export type BillItem = {
   productId?: string;
   stockItemId?: string;
   barcode: string;
+  barcodes: string[];
   name: string;
   category?: string;
   size?: string;
@@ -21,6 +22,14 @@ export type BillItem = {
   itemDiscountType: DiscountType;
   itemDiscountValue: number;
 };
+
+export type AddItemResult = { added: boolean; message?: string };
+
+const lineKey = (productId: string, size?: string) => `${productId}|${size || ""}`;
+
+const itemBarcodes = (item: BillItem) => (item.barcodes?.length ? item.barcodes : item.barcode ? [item.barcode] : []);
+
+const tabBarcodes = (items: BillItem[]) => items.flatMap((item) => itemBarcodes(item));
 
 export type BillTab = {
   id: string;
@@ -56,10 +65,12 @@ type BillState = {
   createTab: () => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
-  addItem: (tabId: string, product: any) => void;
+  addItem: (tabId: string, product: any) => AddItemResult;
   removeItem: (tabId: string, itemIndex: number) => void;
   updateItemDiscount: (tabId: string, itemIndex: number, type: "percent" | "amount", value: number) => void;
-  updateQuantity: (tabId: string, itemIndex: number, qty: number) => void;
+  incrementItemQuantity: (tabId: string, itemIndex: number) => Promise<AddItemResult>;
+  decrementItemQuantity: (tabId: string, itemIndex: number) => void;
+  getTabBarcodes: (tabId: string) => string[];
   setCustomer: (tabId: string, name: string, phone: string) => void;
   setSalesman: (tabId: string, salesmanId: string) => void;
   setPaymentMethod: (tabId: string, method: PaymentMethod) => void;
@@ -151,27 +162,56 @@ export const useBillStore = create<BillState>((set, get) => ({
       return { tabs, activeTabId: state.activeTabId === id ? tabs[0].id : state.activeTabId };
     }),
   setActiveTab: (id) => set({ activeTabId: id }),
-  addItem: (tabId, product) =>
+  getTabBarcodes: (tabId) => {
+    const tab = get().tabs.find((entry) => entry.id === tabId);
+    return tab ? tabBarcodes(tab.items) : [];
+  },
+  addItem: (tabId, product) => {
+    const barcode = String(product.barcode || "").trim();
+    if (!barcode) return { added: false, message: "Product has no barcode" };
+
+    const productId = String(product.productId || product._id || "");
+    const size = String(product.size || "");
+    let result: AddItemResult = { added: false, message: "Bill tab not found" };
+
     set((state) => {
       const tabs = state.tabs.map((tab) => {
         if (tab.id !== tabId) return tab;
-        const existing = tab.items.find((item) => item.barcode === product.barcode);
-        if (existing) {
-          // Each barcode represents a unique physical unit; don't increase quantity for same barcode.
+        const used = new Set(tabBarcodes(tab.items));
+        if (used.has(barcode)) {
+          result = { added: false, message: "This barcode is already on the bill" };
           return tab;
         }
+
+        const key = lineKey(productId, size);
+        const existingIndex = tab.items.findIndex(
+          (item) => lineKey(String(item.productId || item.product), item.size) === key
+        );
+
+        if (existingIndex >= 0) {
+          const items = tab.items.map((item, index) => {
+            if (index !== existingIndex) return item;
+            const barcodes = [...itemBarcodes(item), barcode];
+            return { ...item, barcodes, barcode: barcodes[0], quantity: barcodes.length };
+          });
+          result = { added: true };
+          return { ...tab, items };
+        }
+
+        result = { added: true };
         return {
           ...tab,
           items: [
             ...tab.items,
             {
-              product: product.productId || product._id,
-              productId: product.productId || product._id,
+              product: productId,
+              productId,
               stockItemId: product.stockItemId,
-              barcode: product.barcode,
+              barcode,
+              barcodes: [barcode],
               name: product.name,
               category: product.category || "",
-              size: product.size || "",
+              size,
               mrp: Number(product.mrp || product.price || 0),
               stock: 1,
               quantity: 1,
@@ -182,7 +222,10 @@ export const useBillStore = create<BillState>((set, get) => ({
         };
       });
       return { tabs };
-    }),
+    });
+
+    return result;
+  },
   removeItem: (tabId, itemIndex) =>
     set((state) => ({
       tabs: state.tabs.map((tab) =>
@@ -202,18 +245,51 @@ export const useBillStore = create<BillState>((set, get) => ({
         };
       }),
     })),
-  updateQuantity: (tabId, itemIndex, qty) =>
+  incrementItemQuantity: async (tabId, itemIndex) => {
+    const tab = get().tabs.find((entry) => entry.id === tabId);
+    const item = tab?.items[itemIndex];
+    if (!item) return { added: false, message: "Item not found" };
+
+    const exclude = tabBarcodes(tab.items);
+    try {
+      const next = await billingApi.nextBarcode(
+        String(item.productId || item.product),
+        item.size || "",
+        exclude
+      );
+      const barcode = String(next.barcode || "").trim();
+      if (!barcode) return { added: false, message: "No barcode returned" };
+
+      set((state) => ({
+        tabs: state.tabs.map((entry) => {
+          if (entry.id !== tabId) return entry;
+          return {
+            ...entry,
+            items: entry.items.map((row, index) => {
+              if (index !== itemIndex) return row;
+              const barcodes = [...itemBarcodes(row), barcode];
+              return { ...row, barcodes, barcode: barcodes[0], quantity: barcodes.length };
+            }),
+          };
+        }),
+      }));
+      return { added: true };
+    } catch (error: any) {
+      return { added: false, message: error?.message || "No more stock available" };
+    }
+  },
+  decrementItemQuantity: (tabId, itemIndex) =>
     set((state) => ({
       tabs: state.tabs.map((tab) => {
         if (tab.id !== tabId) return tab;
-        return {
-          ...tab,
-          items: tab.items.map((item, index) => {
-            if (index !== itemIndex) return item;
-            const safeQty = Math.min(Math.max(1, qty), 1);
-            return { ...item, quantity: safeQty };
-          }),
-        };
+        const items = tab.items.flatMap((item, index) => {
+          if (index !== itemIndex) return [item];
+          const barcodes = [...itemBarcodes(item)];
+          if (barcodes.length <= 1) return [];
+          barcodes.pop();
+          return [{ ...item, barcodes, barcode: barcodes[0], quantity: barcodes.length }];
+        });
+        return { ...tab, items };
       }),
     })),
   setCustomer: (tabId, name, phone) =>
@@ -325,18 +401,29 @@ export const useBillStore = create<BillState>((set, get) => ({
               ...(Number(bill.splitPayment?.cash || 0) > 0 ? [{ method: "cash" as const, amount: Number(bill.splitPayment.cash || 0) }] : []),
               ...(Number(bill.splitPayment?.gpay || 0) > 0 ? [{ method: "gpay" as const, amount: Number(bill.splitPayment.gpay || 0) }] : []),
             ],
-        items: (bill.items || []).map((item: any) => ({
-          product: item.product,
-          barcode: item.barcode,
-          name: item.name,
-          category: item.category,
-          size: item.size,
-          mrp: Number(item.mrp || 0),
-          stock: 999,
-          quantity: Number(item.quantity || 1),
-          itemDiscountType: item.itemDiscountType || "none",
-          itemDiscountValue: Number(item.itemDiscountValue || 0),
-        })),
+        items: (bill.items || []).map((item: any) => {
+          const barcodes =
+            Array.isArray(item.barcodes) && item.barcodes.length > 0
+              ? item.barcodes.map((code: string) => String(code).trim()).filter(Boolean)
+              : item.barcode
+              ? [String(item.barcode).trim()]
+              : [];
+          const quantity = Math.max(1, Number(item.quantity || barcodes.length || 1));
+          return {
+            product: item.product,
+            productId: item.productId || item.product,
+            barcode: barcodes[0] || String(item.barcode || ""),
+            barcodes: barcodes.length ? barcodes : [String(item.barcode || "")].filter(Boolean),
+            name: item.name,
+            category: item.category,
+            size: item.size,
+            mrp: Number(item.mrp || 0),
+            stock: 999,
+            quantity,
+            itemDiscountType: item.itemDiscountType || "none",
+            itemDiscountValue: Number(item.itemDiscountValue || 0),
+          };
+        }),
         billDiscountType: bill.billDiscountType || "none",
         billDiscountValue: Number(bill.billDiscountValue || 0),
         cashReceived: Number(bill.cashReceived || 0),

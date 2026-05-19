@@ -77,6 +77,7 @@ export const ReceiptPrint = forwardRef<
   const receiptRoundOff = billGrandTotal - rawGrandTotal;
   const received = Number(bill.cashReceived ?? billGrandTotal);
   const balance = Math.max(0, Number(bill.changeReturned ?? 0));
+  const totalSavings = totalItemDiscount + billDiscountAmount;
   const customerPhone = formatPhone(
     bill.customer?.phone || bill.customer?.mobile || bill.customer?.mobileNumber || ""
   );
@@ -135,6 +136,7 @@ export const ReceiptPrint = forwardRef<
         const amount = Number(item.lineTotal || 0);
         const mrpPrice = Number(item.mrp || 0) || (quantity > 0 ? amount / quantity : amount);
         const sellingPrice = Number(item.sellingPrice || 0) || (quantity > 0 ? amount / quantity : amount);
+        const hasItemDiscount = mrpPrice > sellingPrice + 0.009;
         return (
           <div key={`${item.barcode || "item"}-${index}`} className="item-row">
             <div className="col-num">{index + 1}</div>
@@ -142,9 +144,21 @@ export const ReceiptPrint = forwardRef<
               <div className="item-name">{item.name || "Item"}</div>
               <div className="item-qty">{`Size: ${item.size || "-"}`}</div>
               <div className="item-qty">{`${quantity}Nos`}</div>
+              {hasItemDiscount ? (
+                <div className="item-discount-tag">{`Disc: -${money(mrpPrice - sellingPrice)}`}</div>
+              ) : null}
             </div>
-            <div className="col-price">{`${money(mrpPrice)} / ${money(sellingPrice)}`}</div>
-            <div className="col-amt">{money(sellingPrice * quantity)}</div>
+            <div className="col-price">
+              {hasItemDiscount ? (
+                <>
+                  <span className="price-struck">{money(mrpPrice)}</span>
+                  <span>{` / ${money(sellingPrice)}`}</span>
+                </>
+              ) : (
+                `${money(mrpPrice)} / ${money(sellingPrice)}`
+              )}
+            </div>
+            <div className={`col-amt${hasItemDiscount ? " price-discounted" : ""}`}>{money(sellingPrice * quantity)}</div>
           </div>
         );
       })}
@@ -160,18 +174,23 @@ export const ReceiptPrint = forwardRef<
         <span>:</span>
         <span>{money(subtotal)}</span>
       </div>
-      {totalItemDiscount > 0 && (
-        <div className="amount-row">
-          <span>Item Disc</span>
-          <span>:</span>
-          <span>-{money(totalItemDiscount)}</span>
-        </div>
-      )}
-      {billDiscountAmount > 0 && (
-        <div className="amount-row">
-          <span>Bill Disc</span>
-          <span>:</span>
-          <span>-{money(billDiscountAmount)}</span>
+      {totalSavings > 0 && (
+        <div className="discount-section">
+          {totalItemDiscount > 0 && (
+            <div className="amount-row discount-row">
+              <span>Item Disc</span>
+              <span>:</span>
+              <span>-{money(totalItemDiscount)}</span>
+            </div>
+          )}
+          {billDiscountAmount > 0 && (
+            <div className="amount-row discount-row">
+              <span>Bill Disc</span>
+              <span>:</span>
+              <span>-{money(billDiscountAmount)}</span>
+            </div>
+          )}
+          <div className="you-saved">You saved ₹{money(totalSavings)}</div>
         </div>
       )}
 

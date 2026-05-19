@@ -28,7 +28,9 @@ export default function BillingPage() {
   const addItem = useBillStore((s) => s.addItem);
   const removeItem = useBillStore((s) => s.removeItem);
   const updateItemDiscount = useBillStore((s) => s.updateItemDiscount);
-  const updateQuantity = useBillStore((s) => s.updateQuantity);
+  const incrementItemQuantity = useBillStore((s) => s.incrementItemQuantity);
+  const decrementItemQuantity = useBillStore((s) => s.decrementItemQuantity);
+  const getTabBarcodes = useBillStore((s) => s.getTabBarcodes);
   const setCustomer = useBillStore((s) => s.setCustomer);
   const setSalesman = useBillStore((s) => s.setSalesman);
   const setPaymentMethod = useBillStore((s) => s.setPaymentMethod);
@@ -88,7 +90,12 @@ export default function BillingPage() {
     if (!value || !activeTab) return;
     try {
       const product = await billingApi.scanBarcode(value);
-      addItem(activeTab.id, product);
+      const result = addItem(activeTab.id, product);
+      if (!result.added) {
+        playError();
+        setToast(result.message || "Could not add item");
+        return;
+      }
       playSuccess();
       setToast(`${product.name} added`);
     } catch (error: any) {
@@ -193,9 +200,11 @@ export default function BillingPage() {
           inputRef={scannerRef}
           flashError={flashError}
           onScanBarcode={(barcode) => billingApi.scanBarcode(barcode)}
+          usedBarcodes={activeTab ? getTabBarcodes(activeTab.id) : []}
           onAdd={async (product) => {
             if (!activeTab) return;
-            addItem(activeTab.id, product);
+            const result = addItem(activeTab.id, product);
+            if (!result.added) throw new Error(result.message || "Could not add item");
           }}
           onToast={setToast}
           playSuccess={playSuccess}
@@ -212,7 +221,11 @@ export default function BillingPage() {
                   index={index}
                   onDiscountType={(type) => updateItemDiscount(activeTab.id, index, type, item.itemDiscountValue)}
                   onDiscountValue={(value) => updateItemDiscount(activeTab.id, index, item.itemDiscountType === "none" ? "percent" : item.itemDiscountType, value)}
-                  onQty={(qty) => updateQuantity(activeTab.id, index, qty)}
+                  onIncrement={async () => {
+                    const result = await incrementItemQuantity(activeTab.id, index);
+                    if (!result.added) setToast(result.message || "No more stock available");
+                  }}
+                  onDecrement={() => decrementItemQuantity(activeTab.id, index)}
                   onRemove={() => removeItem(activeTab.id, index)}
                 />
               ))}
@@ -244,14 +257,16 @@ export default function BillingPage() {
               <div className="mt-2">
                 <p className="text-[var(--text-secondary)]">ITEM DISCOUNTS</p>
                 {itemDiscountRows.map((row, index) => (
-                  <div key={`${row.name}-${index}`} className="flex justify-between">
+                  <div key={`${row.name}-${index}`} className="flex justify-between font-bold text-[var(--text-primary)]">
                     <span>{row.name} {row.label}</span>
                     <span>-₹{row.amount.toFixed(2)}</span>
                   </div>
                 ))}
-                <div className="flex justify-between border-t border-[var(--border)] mt-1 pt-1">
-                  <span>Total Item Disc</span><span>-₹{totals.totalItemDiscount.toFixed(2)}</span>
-                </div>
+                {totals.totalItemDiscount > 0 && (
+                  <div className="flex justify-between border-t border-[var(--border)] mt-1 pt-1 font-bold text-[var(--text-primary)]">
+                    <span>Total Item Disc</span><span>-₹{totals.totalItemDiscount.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
               <div className="flex justify-between"><span>After Item Disc</span><span>₹{totals.afterItemDiscount.toFixed(2)}</span></div>
               <p className="text-[var(--text-secondary)] mt-2">BILL DISCOUNT</p>
@@ -264,7 +279,7 @@ export default function BillingPage() {
                   {activeTab?.billDiscountType === "percent" ? "%" : "₹"}
                 </button>
                 <input
-                  className="pos-input h-9 min-h-0 flex-1"
+                  className={`pos-input h-9 min-h-0 flex-1 ${totals.billDiscountAmount > 0 ? "font-bold text-[var(--text-primary)]" : ""}`}
                   type="number"
                   inputMode="decimal"
                   max={isSuperAdmin ? 100 : maxDiscount}
@@ -272,7 +287,9 @@ export default function BillingPage() {
                   value={activeTab?.billDiscountValue || 0}
                   onChange={(e) => activeTab && setBillDiscount(activeTab.id, activeTab.billDiscountType === "none" ? "percent" : activeTab.billDiscountType, Number(e.target.value || 0))}
                 />
-                <span>-₹{totals.billDiscountAmount.toFixed(2)}</span>
+                <span className={totals.billDiscountAmount > 0 ? "font-bold text-[var(--text-primary)]" : ""}>
+                  -₹{totals.billDiscountAmount.toFixed(2)}
+                </span>
               </div>
               {!isSuperAdmin && can("canDiscount") ? (
                 <p className="text-xs text-[var(--text-secondary)]">Max allowed discount: {maxDiscount}%</p>

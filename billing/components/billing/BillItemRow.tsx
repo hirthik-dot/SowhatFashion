@@ -7,14 +7,16 @@ export default function BillItemRow({
   index,
   onDiscountType,
   onDiscountValue,
-  onQty,
+  onIncrement,
+  onDecrement,
   onRemove,
 }: {
   item: BillItem;
   index: number;
   onDiscountType: (type: "percent" | "amount") => void;
   onDiscountValue: (value: number) => void;
-  onQty: (qty: number) => void;
+  onIncrement: () => void | Promise<void>;
+  onDecrement: () => void;
   onRemove: () => void;
 }) {
   const discountAmount =
@@ -23,6 +25,7 @@ export default function BillItemRow({
       : item.itemDiscountType === "amount"
       ? item.itemDiscountValue
       : 0;
+  const hasDiscount = discountAmount > 0;
   const price = Math.max(0, item.mrp - discountAmount);
   const total = price * item.quantity;
   return (
@@ -34,13 +37,18 @@ export default function BillItemRow({
         <button className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => onDiscountType(item.itemDiscountType === "percent" ? "amount" : "percent")}>
           {item.itemDiscountType === "percent" ? "%" : "₹"}
         </button>
-        <input className="pos-input h-9 min-h-0 w-full" type="number" value={item.itemDiscountValue} onChange={(e) => onDiscountValue(Number(e.target.value || 0))} />
+        <input
+          className={`pos-input h-9 min-h-0 w-full ${hasDiscount ? "font-bold text-[var(--text-primary)]" : ""}`}
+          type="number"
+          value={item.itemDiscountValue}
+          onChange={(e) => onDiscountValue(Number(e.target.value || 0))}
+        />
       </div>
-      <div className="col-span-1 md:col-span-1">₹{price.toFixed(2)}</div>
+      <div className={`col-span-1 md:col-span-1 ${hasDiscount ? "font-bold text-[var(--text-primary)]" : ""}`}>₹{price.toFixed(2)}</div>
       <div className="col-span-1 md:col-span-2 flex items-center gap-1">
-        <button className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => onQty(item.quantity - 1)}>-</button>
+        <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => onDecrement()}>-</button>
         <span className="w-8 text-center">{item.quantity}</span>
-        <button className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => onQty(item.quantity + 1)}>+</button>
+        <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => void onIncrement()}>+</button>
       </div>
       <div className="col-span-1 md:col-span-1 font-semibold">₹{total.toFixed(2)}</div>
       <button className="col-span-1 md:col-span-1 text-[var(--error)] justify-self-end md:justify-self-start" onClick={onRemove}>✕</button>

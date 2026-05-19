@@ -4,6 +4,7 @@ const ItemSchema = new Schema(
   {
     product: { type: Schema.Types.ObjectId, ref: 'Product' },
     barcode: { type: String, trim: true, default: '' },
+    barcodes: [{ type: String, trim: true }],
     name: { type: String, trim: true, default: '' },
     category: { type: String, trim: true, default: '' },
     size: { type: String, trim: true, default: '' },

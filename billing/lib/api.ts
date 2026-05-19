@@ -51,7 +51,13 @@ export const billingApi = {
   me: () => request("/api/billing/auth/me"),
   logout: () => request("/api/billing/auth/logout", { method: "POST" }),
   dashboardSummary: () => request("/api/billing/reports/summary"),
-  scanBarcode: (barcode: string) => request(`/api/billing/bills/scan/${barcode}`),
+  scanBarcode: (barcode: string) => request(`/api/billing/bills/scan/${encodeURIComponent(barcode)}`),
+  nextBarcode: (productId: string, size: string, exclude: string[] = []) => {
+    const params = new URLSearchParams({ productId });
+    if (size) params.set("size", size);
+    if (exclude.length) params.set("exclude", exclude.join(","));
+    return request(`/api/billing/bills/next-barcode?${params.toString()}`);
+  },
   calculateBill: (payload: any) =>
     request("/api/billing/bills/calculate", { method: "POST", body: JSON.stringify(payload) }),
   holdBill: (payload: any) =>

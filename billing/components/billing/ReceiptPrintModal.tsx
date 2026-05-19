@@ -117,6 +117,41 @@ export default function ReceiptPrintModal({
               .item-qty {
                 word-break: break-word;
               }
+              .item-discount-tag {
+                font-weight: 700;
+                font-size: 10px;
+                margin-top: 1px;
+              }
+              .price-struck {
+                text-decoration: line-through;
+              }
+              .price-discounted {
+                font-weight: 700;
+              }
+              .discount-section {
+                background: #000;
+                color: #fff;
+                padding: 3px 4px;
+                margin: 3px 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .discount-section .amount-row {
+                color: #fff;
+              }
+              .amount-row.discount-row {
+                font-weight: 700;
+                padding: 1px 0;
+                margin: 0;
+              }
+              .you-saved {
+                text-align: center;
+                font-weight: 800;
+                font-size: 13px;
+                padding: 3px 0 1px;
+                border-top: 1px dashed #fff;
+                margin-top: 2px;
+              }
               .amount-row,
               .points-row {
                 display: flex;

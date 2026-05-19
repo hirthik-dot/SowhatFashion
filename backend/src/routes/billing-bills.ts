@@ -144,18 +144,9 @@ router.get('/next-number', async (_req, res: Response) => {
   return res.json({ billNumber });
 });
 
-router.get('/scan/:barcode', async (req, res: Response) => {
-  const barcode = String(req.params.barcode || '').trim();
-  const stockItem = await StockItem.findOne({ barcode, status: 'available' }).populate(
-    'product',
-    'name category billingSubCategory'
-  );
-  if (!stockItem) {
-    return res.status(404).json({ error: 'Barcode not found or already sold' });
-  }
-
+const scanStockItemResponse = (stockItem: any) => {
   const product: any = stockItem.product;
-  return res.json({
+  return {
     stockItemId: stockItem._id,
     barcode: stockItem.barcode,
     productId: product?._id,
@@ -166,7 +157,50 @@ router.get('/scan/:barcode', async (req, res: Response) => {
     mrp: stockItem.sellingPrice,
     incomingPrice: stockItem.incomingPrice,
     stock: 1,
-  });
+  };
+};
+
+router.get('/scan/:barcode', async (req, res: Response) => {
+  const barcode = String(req.params.barcode || '').trim();
+  const stockItem = await StockItem.findOne({ barcode, status: 'available' }).populate(
+    'product',
+    'name category billingSubCategory'
+  );
+  if (!stockItem) {
+    return res.status(404).json({ error: 'Barcode not found or already sold' });
+  }
+
+  return res.json(scanStockItemResponse(stockItem));
+});
+
+router.get('/next-barcode', async (req, res: Response) => {
+  const productId = String(req.query.productId || '').trim();
+  const size = String(req.query.size || '').trim();
+  const exclude = String(req.query.exclude || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+    return res.status(400).json({ message: 'Valid productId is required' });
+  }
+
+  const match: any = {
+    product: new mongoose.Types.ObjectId(productId),
+    status: 'available',
+    ...(exclude.length ? { barcode: { $nin: exclude } } : {}),
+  };
+  if (size) match.size = size;
+
+  const stockItem = await StockItem.findOne(match)
+    .sort({ barcode: 1 })
+    .populate('product', 'name category billingSubCategory');
+
+  if (!stockItem) {
+    return res.status(404).json({ message: 'No more stock available for this item' });
+  }
+
+  return res.json(scanStockItemResponse(stockItem));
 });
 
 router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
@@ -360,20 +394,27 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
 
     for (const item of totals.normalizedItems) {
       const productId = item.productId || item.product;
-      const barcode = String(item.barcode || '').trim();
       const size = String(item.size || '').trim();
+      const barcodes =
+        Array.isArray(item.barcodes) && item.barcodes.length > 0
+          ? item.barcodes.map((value: string) => String(value || '').trim()).filter(Boolean)
+          : [String(item.barcode || '').trim()].filter(Boolean);
       const quantity = Math.max(1, Number(item.quantity || 1));
 
-      if (quantity !== 1) {
-        return res.status(400).json({ message: `Quantity must be 1 per barcode (${barcode})` });
+      if (barcodes.length !== quantity) {
+        return res.status(400).json({
+          message: `Barcode count (${barcodes.length}) must match quantity (${quantity}) for ${item.name || 'item'}`,
+        });
       }
 
-      const updated = await StockItem.findOneAndUpdate(
-        { barcode, status: 'available' },
-        { status: 'sold', soldInBill: completed._id }
-      );
-      if (!updated) {
-        return res.status(400).json({ message: `Barcode not available: ${barcode}` });
+      for (const barcode of barcodes) {
+        const updated = await StockItem.findOneAndUpdate(
+          { barcode, status: 'available' },
+          { status: 'sold', soldInBill: completed._id }
+        );
+        if (!updated) {
+          return res.status(400).json({ message: `Barcode not available: ${barcode}` });
+        }
       }
 
       const product = await Product.findById(productId);

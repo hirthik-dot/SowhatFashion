@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { searchProducts } from "@/lib/api";
+import { billingApi, searchProducts } from "@/lib/api";
 
 type SearchProduct = {
   _id: string;
@@ -30,13 +30,14 @@ function getDisplayPrice(p: SearchProduct) {
 export default function BarcodeScanner(props: {
   inputRef?: React.RefObject<HTMLInputElement | null>;
   flashError?: boolean;
+  usedBarcodes?: string[];
   onAdd: (product: any, source: "scan" | "search") => Promise<void> | void;
   onScanBarcode: (barcode: string) => Promise<any>;
   onToast?: (message: string) => void;
   playSuccess?: () => void;
   playError?: () => void;
 }) {
-  const { inputRef, flashError, onAdd, onScanBarcode, onToast, playSuccess, playError } = props;
+  const { inputRef, flashError, usedBarcodes = [], onAdd, onScanBarcode, onToast, playSuccess, playError } = props;
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const internalRef = useRef<HTMLInputElement>(null);
@@ -85,17 +86,35 @@ export default function BarcodeScanner(props: {
     }
   };
 
+  const pickBarcode = (p: SearchProduct) => {
+    const used = new Set(usedBarcodes);
+    const candidates =
+      p.barcodes && p.barcodes.length > 0 ? p.barcodes : p.barcode ? [p.barcode] : [];
+    return candidates.find((code) => code && !used.has(code)) || null;
+  };
+
   const runSelect = async (p: SearchProduct) => {
     if (!p?._id) return;
-    if (!p.barcode) {
-      onToast?.("Selected product has no barcode");
+    let barcode = pickBarcode(p);
+    if (!barcode) {
+      try {
+        const next = await billingApi.nextBarcode(p._id, p.size || "", usedBarcodes);
+        barcode = String(next.barcode || "").trim() || null;
+      } catch {
+        onToast?.("No more stock available for this product");
+        return;
+      }
+    }
+    if (!barcode) {
+      onToast?.("No unused barcode available for this product on this bill");
       return;
     }
     const mrp = getDisplayPrice(p);
     await onAdd(
       {
         _id: p._id,
-        barcode: p.barcode,
+        productId: p._id,
+        barcode,
         name: p.name,
         size: p.size || "",
         category: p.category || "",
