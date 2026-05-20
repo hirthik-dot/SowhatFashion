@@ -141,7 +141,7 @@ export default function ReportsPage() {
       const key = bill.salesmanName || "Unknown";
       if (!salesmanMap[key]) salesmanMap[key] = { Name: key, Bills: 0, Revenue: 0, AvgBill: 0, Returns: 0, GSTCollected: 0 };
       salesmanMap[key].Bills += 1;
-      salesmanMap[key].Revenue += Number(bill.totalAmount || 0);
+      salesmanMap[key].Revenue += billExGst(bill);
       salesmanMap[key].GSTCollected += Number(bill.gstAmount || 0);
       if (bill.status?.includes("return")) salesmanMap[key].Returns += 1;
     });
@@ -172,18 +172,23 @@ export default function ReportsPage() {
 
   const paymentData = Object.entries(summary?.paymentMethodBreakdown || {}).map(([name, value]) => ({ name, value }));
   const categoryData = Object.entries(summary?.categoryBreakdown || {}).map(([name, value]) => ({ name, value }));
+  const billExGst = (bill: any) =>
+    Math.max(
+      0,
+      Number(bill.subtotal || 0) - Number(bill.totalItemDiscount || 0) - Number(bill.billDiscountAmount || 0)
+    );
   const revenueBars = (summary?.dailyRevenue || []).length
     ? (summary.dailyRevenue || []).map((row: any) => ({
         label: row.label || row.day || "",
         value: Number(row.value || 0),
       }))
-    : bills.map((bill) => ({ label: new Date(bill.createdAt).toLocaleDateString(), value: bill.totalAmount }));
+    : bills.map((bill) => ({ label: new Date(bill.createdAt).toLocaleDateString(), value: billExGst(bill) }));
   const topProducts = Object.values(
     bills.flatMap((bill) => bill.items || []).reduce((acc: any, item: any) => {
       const key = `${item.name}-${item.category || ""}`;
       if (!acc[key]) acc[key] = { product: item.name, category: item.category || "-", qty: 0, revenue: 0, returns: 0 };
       acc[key].qty += Number(item.quantity || 0);
-      acc[key].revenue += Number(item.lineTotal || 0);
+      acc[key].revenue += Number(item.netLineTotal ?? item.lineTotal ?? 0);
       return acc;
     }, {})
   )
@@ -194,7 +199,7 @@ export default function ReportsPage() {
       const key = bill.salesmanName || "Unknown";
       if (!acc[key]) acc[key] = { name: key, bills: 0, revenue: 0, avg: 0, returns: 0, bestDay: "-" };
       acc[key].bills += 1;
-      acc[key].revenue += Number(bill.totalAmount || 0);
+      acc[key].revenue += billExGst(bill);
       if (bill.status?.includes("return")) acc[key].returns += 1;
       const day = new Date(bill.createdAt).toLocaleDateString(undefined, { weekday: "short" });
       acc[key].bestDay = day;
@@ -285,7 +290,7 @@ export default function ReportsPage() {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: "Revenue", value: `₹${Math.round(summary?.totalRevenue || 0)}` },
+                { label: "Revenue (ex-GST)", value: `₹${Math.round(summary?.totalRevenue || 0)}` },
                 { label: "Bills", value: summary?.totalBills || 0 },
                 { label: "Items Sold", value: summary?.totalItems || 0 },
                 { label: "Returns", value: summary?.totalReturns || 0 },
@@ -375,7 +380,7 @@ export default function ReportsPage() {
             <div className="pos-card p-4 flex flex-wrap gap-4 items-center justify-between">
               <div>
                 <h3 className="font-bold text-lg text-white">Stock Batch & Profit Margin</h3>
-                <p className="text-sm text-[var(--text-secondary)]">Understand your inventory investment, sales tracking, and exact realized profit</p>
+                <p className="text-sm text-[var(--text-secondary)]">Revenue and profit use MRP after discounts only — GST is excluded (see Tax Overview on Sales tab).</p>
               </div>
               <div className="flex items-center gap-2 ml-auto">
                 <div className="flex rounded border border-[var(--border)] overflow-hidden text-sm">
@@ -410,7 +415,7 @@ export default function ReportsPage() {
                 <p className="text-2xl font-black mt-1 text-white">₹{(profitSummary?.totalInvestment || 0).toLocaleString()}</p>
               </div>
                <div className="pos-card p-4 border-l-4 border-l-blue-400">
-                <p className="text-xs font-bold text-[var(--text-secondary)] uppercase">Total Realized Revenue</p>
+                <p className="text-xs font-bold text-[var(--text-secondary)] uppercase">Total Realized Revenue (ex-GST)</p>
                 <p className="text-2xl font-black mt-1 text-white">₹{(profitSummary?.totalSoldRevenue || 0).toLocaleString()}</p>
                 <p className="text-xs mt-1 text-blue-400">{profitSummary?.overallSold || 0} units sold</p>
               </div>
@@ -435,7 +440,7 @@ export default function ReportsPage() {
                     <th className="p-3 font-semibold text-right text-blue-400 bg-blue-900/10">Qty Sold</th>
                     <th className="p-3 font-semibold text-right text-blue-400 bg-blue-900/10">Sell Price</th>
                     <th className="p-3 font-semibold text-right text-red-400 bg-blue-900/10">Discount</th>
-                    <th className="p-3 font-semibold text-right text-blue-400 bg-blue-900/10">Est. Revenue</th>
+                    <th className="p-3 font-semibold text-right text-blue-400 bg-blue-900/10">Revenue (ex-GST)</th>
                     <th className="p-3 font-semibold text-right text-[var(--success)] bg-green-900/10 rounded-tr-lg">Realized Profit</th>
                   </tr>
                 </thead>

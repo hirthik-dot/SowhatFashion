@@ -16,6 +16,75 @@ const gstOnSubtotal = (subtotal: number) => {
   return { taxableAmount, gstAmount, cgst: gstAmount / 2, sgst: gstAmount / 2 };
 };
 
+/** Bill amount excluding GST — used everywhere except the tax overview. */
+const billRevenueExGst = (bill: any) => {
+  const items = bill.items || [];
+  if (items.length) {
+    const fromLines = items.reduce(
+      (sum: number, item: any) => sum + Number(item.netLineTotal ?? item.lineTotal ?? 0),
+      0
+    );
+    if (fromLines > 0) return fromLines;
+  }
+  return Math.max(
+    0,
+    Number(bill.subtotal || 0) -
+      Number(bill.totalItemDiscount || 0) -
+      Number(bill.billDiscountAmount || 0)
+  );
+};
+
+const billItemRowFields = {
+  barcode: '$$billItem.barcode',
+  mrp: '$$billItem.mrp',
+  quantity: '$$billItem.quantity',
+  netLineTotal: '$$billItem.netLineTotal',
+  lineTotal: '$$billItem.lineTotal',
+  itemDiscountAmount: '$$billItem.itemDiscountAmount',
+  billDiscountShare: '$$billItem.billDiscountShare',
+};
+
+/** Per-bill sales value excluding GST (for aggregations). */
+const billExGstMongoExpr = {
+  $max: [
+    0,
+    {
+      $subtract: [
+        { $subtract: [{ $ifNull: ['$subtotal', 0] }, { $ifNull: ['$totalItemDiscount', 0] }] },
+        { $ifNull: ['$billDiscountAmount', 0] },
+      ],
+    },
+  ],
+};
+
+/** Profit batch: MRP minus discounts only (never customer total with GST). */
+const profitLineRevenueExpr = {
+  $max: [
+    0,
+    {
+      $subtract: [
+        {
+          $multiply: [
+            { $ifNull: ['$$matchedBillItem.mrp', '$$soldItem.sellingPrice'] },
+            { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+          ],
+        },
+        {
+          $add: [
+            {
+              $multiply: [
+                { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+              ],
+            },
+            { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 const parseDateString = (dateStr: string) => {
   if (dateStr.length === 10 && dateStr.includes('-')) {
     const parts = dateStr.split('-');
@@ -58,7 +127,7 @@ router.get('/summary', async (req, res: Response) => {
     startDate || endDate ? { createdAt: (query as any).createdAt || {} } : {}
   );
 
-  const totalRevenue = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
+  const totalRevenue = bills.reduce((sum, bill) => sum + billRevenueExGst(bill), 0);
   const totalBills = bills.length;
   const totalItems = bills.reduce((sum, bill) => sum + (bill.items || []).reduce((x: number, i: any) => x + Number(i.quantity || 0), 0), 0);
   const totalDiscount = bills.reduce((sum, bill) => sum + Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0), 0);
@@ -71,14 +140,14 @@ router.get('/summary', async (req, res: Response) => {
 
   const paymentMethodBreakdown = bills.reduce((acc: any, bill: any) => {
     const method = bill.paymentMethod || 'unknown';
-    acc[method] = (acc[method] || 0) + Number(bill.totalAmount || 0);
+    acc[method] = (acc[method] || 0) + billRevenueExGst(bill);
     return acc;
   }, {});
 
   const categoryBreakdown = bills.reduce((acc: any, bill: any) => {
     (bill.items || []).forEach((item: any) => {
       const key = item.category || 'Uncategorized';
-      acc[key] = (acc[key] || 0) + Number(item.lineTotal || 0);
+      acc[key] = (acc[key] || 0) + Number(item.netLineTotal ?? item.lineTotal ?? 0);
     });
     return acc;
   }, {});
@@ -97,7 +166,7 @@ router.get('/summary', async (req, res: Response) => {
       };
     }
     acc[salesmanId].totalBills += 1;
-    acc[salesmanId].totalRevenue += Number(bill.totalAmount || 0);
+    acc[salesmanId].totalRevenue += billRevenueExGst(bill);
     if (String(bill.status || '').includes('return')) acc[salesmanId].totalReturns += 1;
     return acc;
   }, {});
@@ -115,7 +184,7 @@ router.get('/summary', async (req, res: Response) => {
 
   const dailyRevenueMap = bills.reduce((acc: any, bill: any) => {
     const dayStr = getLocalDateString(new Date(bill.createdAt));
-    acc[dayStr] = (acc[dayStr] || 0) + Number(bill.totalAmount || 0);
+    acc[dayStr] = (acc[dayStr] || 0) + billRevenueExGst(bill);
     return acc;
   }, {});
   
@@ -220,11 +289,11 @@ router.get('/customers', requirePermission('canViewCustomerReports'), async (req
         name: { $last: '$customer.name' },
         phone: { $first: '$customer.phone' },
         totalBills: { $sum: 1 },
-        totalSpent: { $sum: '$totalAmount' },
+        totalSpent: { $sum: billExGstMongoExpr },
         totalDiscount: { $sum: { $add: ['$totalItemDiscount', '$billDiscountAmount'] } },
         lastVisit: { $max: '$createdAt' },
         firstVisit: { $min: '$createdAt' },
-        avgBillValue: { $avg: '$totalAmount' },
+        avgBillValue: { $avg: billExGstMongoExpr },
       },
     },
   ];
@@ -277,7 +346,7 @@ router.get('/customers', requirePermission('canViewCustomerReports'), async (req
       $group: {
         _id: '$customer.phone',
         totalBills: { $sum: 1 },
-        totalSpent: { $sum: '$totalAmount' },
+        totalSpent: { $sum: billExGstMongoExpr },
         lastVisit: { $max: '$createdAt' },
       },
     },
@@ -295,7 +364,7 @@ router.get('/customers', requirePermission('canViewCustomerReports'), async (req
       $group: {
         _id: '$customer.phone',
         totalBills: { $sum: 1 },
-        totalSpent: { $sum: '$totalAmount' },
+        totalSpent: { $sum: billExGstMongoExpr },
         firstVisit: { $min: '$createdAt' },
       },
     },
@@ -361,7 +430,7 @@ router.get('/customers/:phone', requirePermission('canViewCustomerReports'), asy
 
   const billMetrics = bills.reduce(
     (acc: any, bill: any) => {
-      acc.totalSpent += Number(bill.totalAmount || 0);
+      acc.totalSpent += billRevenueExGst(bill);
       acc.totalDiscount += Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0);
       acc.payments[bill.paymentMethod || 'unknown'] = (acc.payments[bill.paymentMethod || 'unknown'] || 0) + 1;
       (bill.items || []).forEach((item: any) => {
@@ -487,7 +556,7 @@ router.get('/export', async (req, res: Response) => {
       };
     }
     acc[key].bills += 1;
-    acc[key].revenue += Number(bill.totalAmount || 0);
+    acc[key].revenue += billRevenueExGst(bill);
     acc[key].gstCollected += Number(bill.gstAmount || 0);
     if (String(bill.status || '').includes('return')) acc[key].returns += 1;
     return acc;
@@ -605,13 +674,7 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
                   $map: {
                     input: { $ifNull: ['$$this.items', []] },
                     as: 'billItem',
-                    in: {
-                      barcode: '$$billItem.barcode',
-                      netLineTotal: '$$billItem.netLineTotal',
-                      lineTotal: '$$billItem.lineTotal',
-                      itemDiscountAmount: '$$billItem.itemDiscountAmount',
-                      billDiscountShare: '$$billItem.billDiscountShare'
-                    }
+                    in: billItemRowFields
                   }
                 }
               ]
@@ -643,12 +706,7 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
                       ]
                     }
                   },
-                  in: {
-                    $ifNull: [
-                      '$$matchedBillItem.netLineTotal',
-                      { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
-                    ]
-                  }
+                  in: profitLineRevenueExpr
                 }
               }
             }
@@ -778,13 +836,7 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
                               $map: {
                                 input: { $ifNull: ['$$this.items', []] },
                                 as: 'billItem',
-                                in: {
-                                  barcode: '$$billItem.barcode',
-                                  netLineTotal: '$$billItem.netLineTotal',
-                                  lineTotal: '$$billItem.lineTotal',
-                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
-                                  billDiscountShare: '$$billItem.billDiscountShare'
-                                }
+                                in: billItemRowFields
                               }
                             }
                           ]
@@ -808,12 +860,7 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
                           ]
                         }
                       },
-                      in: {
-                        $ifNull: [
-                          '$$matchedBillItem.netLineTotal',
-                          { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
-                        ]
-                      }
+                      in: profitLineRevenueExpr
                     }
                   }
                 }
@@ -846,11 +893,7 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
                               $map: {
                                 input: { $ifNull: ['$$this.items', []] },
                                 as: 'billItem',
-                                in: {
-                                  barcode: '$$billItem.barcode',
-                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
-                                  billDiscountShare: '$$billItem.billDiscountShare'
-                                }
+                                in: billItemRowFields
                               }
                             }
                           ]
@@ -974,13 +1017,7 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
                               $map: {
                                 input: { $ifNull: ['$$this.items', []] },
                                 as: 'billItem',
-                                in: {
-                                  barcode: '$$billItem.barcode',
-                                  netLineTotal: '$$billItem.netLineTotal',
-                                  lineTotal: '$$billItem.lineTotal',
-                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
-                                  billDiscountShare: '$$billItem.billDiscountShare'
-                                }
+                                in: billItemRowFields
                               }
                             }
                           ]
@@ -1004,12 +1041,7 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
                           ]
                         }
                       },
-                      in: {
-                        $ifNull: [
-                          '$$matchedBillItem.netLineTotal',
-                          { $ifNull: ['$$matchedBillItem.lineTotal', '$$soldItem.sellingPrice'] }
-                        ]
-                      }
+                      in: profitLineRevenueExpr
                     }
                   }
                 }
@@ -1038,11 +1070,7 @@ router.get('/profit/export', requirePermission('canViewReports'), async (req, re
                               $map: {
                                 input: { $ifNull: ['$$this.items', []] },
                                 as: 'billItem',
-                                in: {
-                                  barcode: '$$billItem.barcode',
-                                  itemDiscountAmount: '$$billItem.itemDiscountAmount',
-                                  billDiscountShare: '$$billItem.billDiscountShare'
-                                }
+                                in: billItemRowFields
                               }
                             }
                           ]

@@ -134,7 +134,10 @@ export default function BillingShell({
         }`}
       >
         <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--border)]">
-          <span className="font-semibold">SOWAAT POS</span>
+          <Link href="/dashboard" className="flex items-center gap-2 min-w-0" onClick={() => setMenuOpen(false)}>
+            <img src="/1775556627469.png" alt="Sowaat" className="h-8 w-auto object-contain shrink-0" />
+            <span className="font-semibold truncate">SOWAAT POS</span>
+          </Link>
           <button
             type="button"
             className="h-9 w-9 rounded border border-[var(--border)] text-lg leading-none hover:border-[var(--gold)]"
@@ -150,7 +153,7 @@ export default function BillingShell({
       </aside>
 
       <div>
-        <header className="min-h-14 border-b border-[var(--border)] bg-[var(--surface)] px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 sm:gap-3">
+        <header className="sticky top-0 z-30 min-h-14 border-b border-[var(--border)] bg-[var(--surface)] px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             type="button"
             className="h-10 w-10 shrink-0 rounded border border-[var(--border)] flex flex-col items-center justify-center gap-1 hover:border-[var(--gold)]"
@@ -162,6 +165,9 @@ export default function BillingShell({
             <span className={`block h-0.5 w-5 bg-current transition-opacity ${menuOpen ? "opacity-0" : ""}`} />
             <span className={`block h-0.5 w-5 bg-current transition-transform ${menuOpen ? "-translate-y-1.5 -rotate-45" : ""}`} />
           </button>
+          <Link href="/dashboard" className="flex items-center shrink-0" aria-label="Sowaat home">
+            <img src="/1775556627469.png" alt="Sowaat" className="h-8 w-auto object-contain" />
+          </Link>
           <h1 className="font-semibold text-sm sm:text-base flex-1 min-w-0">{title}</h1>
           <div className="text-xs sm:text-sm flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end">
             <span className="text-[var(--text-secondary)]">

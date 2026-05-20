@@ -78,14 +78,22 @@ export default function DashboardPage() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const cards = [
-    { label: "Today's Revenue", value: `₹${Math.round(summary?.totalRevenue || 0)}` },
+    { label: "Today's Revenue (ex-GST)", value: `₹${Math.round(summary?.totalRevenue || 0)}` },
     { label: "Bills Today", value: todayBillsCount },
     { label: "Items Sold", value: summary?.totalItems || 0 },
     { label: "Low Stock", value: lowStock.length || 0 },
   ];
   const paymentData = Object.entries(summary?.paymentMethodBreakdown || {}).map(([name, value]) => ({ name, value }));
   const categoryData = Object.entries(summary?.categoryBreakdown || {}).map(([name, value]) => ({ name, value }));
-  const cashierRevenue = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
+  const cashierRevenue = bills.reduce(
+    (sum, bill) =>
+      sum +
+      Math.max(
+        0,
+        Number(bill.subtotal || 0) - Number(bill.totalItemDiscount || 0) - Number(bill.billDiscountAmount || 0)
+      ),
+    0
+  );
 
   return (
     <BillingShell title="Dashboard">
