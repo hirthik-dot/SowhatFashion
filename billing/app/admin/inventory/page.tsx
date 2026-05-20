@@ -130,19 +130,33 @@ export default function AdminInventoryPage() {
     setBatchCurrentPage(1);
   };
 
+  const resolveSupplierId = (product: any) => {
+    if (product._editSupplierId) return product._editSupplierId;
+    if (product.supplierId) return product.supplierId;
+    if (product.supplier?._id) return product.supplier._id;
+    if (typeof product.supplier === "string") {
+      const byId = suppliers.find((s) => s._id === product.supplier);
+      if (byId) return byId._id;
+      const byName = suppliers.find((s) => s.name === product.supplier);
+      if (byName) return byName._id;
+    }
+    return "";
+  };
+
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
     setSavingProduct(true);
     try {
+      const supplierId = resolveSupplierId(editingProduct);
       const payload: any = {
         name: editingProduct.name,
         price: editingProduct.mrp,
         incomingPrice: editingProduct.incomingPrice,
-        supplier: editingProduct._editSupplierId || editingProduct.supplier?._id || editingProduct.supplier,
         notes: editingProduct.notes,
         sizeEntries: editingProduct.sizeEntries,
       };
+      if (supplierId) payload.supplier = supplierId;
       // Send ObjectId references if user picked from dropdown
       if (editingProduct._editCategoryId) {
         payload.billingCategory = editingProduct._editCategoryId;
@@ -154,9 +168,26 @@ export default function AdminInventoryPage() {
       } else {
         payload.subCategory = editingProduct.subCategory;
       }
-      await billingApi.updateInventoryProduct(editingProduct._id, payload);
+      const updated = await billingApi.updateInventoryProduct(editingProduct._id, payload);
       setEditingProduct(null);
       await load();
+      if (selectedProduct?._id === editingProduct._id) {
+        const supplierName = suppliers.find((s) => s._id === String(updated?.supplier || supplierId))?.name;
+        setSelectedProduct((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                name: updated?.billingName || updated?.name || prev.name,
+                mrp: Number(updated?.price ?? prev.mrp),
+                category: updated?.category || prev.category,
+                subCategory: updated?.subCategory || prev.subCategory,
+                supplier: supplierName || prev.supplier,
+                sizeStock: updated?.sizeStock || prev.sizeStock,
+                totalStock: Number(updated?.totalStock ?? updated?.stock ?? prev.totalStock),
+              }
+            : prev
+        );
+      }
     } catch (err: any) {
       alert(err.message || "Failed to update product");
     } finally {
@@ -234,10 +265,24 @@ export default function AdminInventoryPage() {
                     <td>{row.totalStock || 0}</td>
                     <td>{row.sold || 0}</td>
                     <td>₹{Number(row.mrp || row.price || 0).toFixed(2)}</td>
+                    <td>{statusData.icon} {statusData.label}</td>
                     <td>
                       <div className="flex gap-2">
                         <button className="underline" onClick={() => openProduct(row)}>View</button>
-                        <button className="underline text-[var(--gold)]" onClick={() => setEditingProduct({...row, mrp: row.mrp || row.price})}>Edit</button>
+                        <button
+                          className="underline text-[var(--gold)]"
+                          onClick={() =>
+                            setEditingProduct({
+                              ...row,
+                              mrp: row.mrp || row.price,
+                              _editSupplierId: row.supplierId || "",
+                              _editCategoryId: row.billingCategory || "",
+                              _editSubCategoryId: row.billingSubCategory || "",
+                            })
+                          }
+                        >
+                          Edit
+                        </button>
                       </div>
                     </td>
                   </tr>

@@ -38,6 +38,7 @@ export default function EditProductModal({
 
   const supplierId = useMemo(() => {
     if (editingProduct._editSupplierId) return editingProduct._editSupplierId;
+    if (editingProduct.supplierId) return editingProduct.supplierId;
     if (editingProduct.supplier?._id) return editingProduct.supplier._id;
     if (typeof editingProduct.supplier === "string") {
       const found = suppliers.find((s) => s.name === editingProduct.supplier);
@@ -68,10 +69,10 @@ export default function EditProductModal({
 
   const categoryId = useMemo(() => {
     if (editingProduct._editCategoryId) return editingProduct._editCategoryId;
-    if (editingProduct.billingCategory) {
-      const found = filteredCategories.find(c => c._id === editingProduct.billingCategory);
-      if (found) return found._id;
+    if (editingProduct.billingCategory && typeof editingProduct.billingCategory === "string") {
+      return editingProduct.billingCategory;
     }
+    if (editingProduct.billingCategory?._id) return editingProduct.billingCategory._id;
     if (editingProduct.category) {
       const found = filteredCategories.find((c) => c.name === editingProduct.category);
       return found ? found._id : "";
@@ -143,10 +144,10 @@ export default function EditProductModal({
 
   const subCategoryId = useMemo(() => {
     if (editingProduct._editSubCategoryId) return editingProduct._editSubCategoryId;
-    if (editingProduct.billingSubCategory) {
-      const found = filteredSubcategories.find(c => c._id === editingProduct.billingSubCategory);
-      if (found) return found._id;
+    if (editingProduct.billingSubCategory && typeof editingProduct.billingSubCategory === "string") {
+      return editingProduct.billingSubCategory;
     }
+    if (editingProduct.billingSubCategory?._id) return editingProduct.billingSubCategory._id;
     if (editingProduct.subCategory) {
       const found = filteredSubcategories.find((s) => s.name === editingProduct.subCategory);
       return found ? found._id : "";

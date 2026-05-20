@@ -165,7 +165,7 @@ export default function BillingPage() {
     if (activeTab.billDiscountType === "percent" && Number(activeTab.billDiscountValue || 0) > maxAllowedDiscount) {
       return setToast(`Discount cannot exceed ${maxAllowedDiscount}%`);
     }
-    const ok = window.confirm(`Complete bill for ₹${Math.round(totals.taxableAmount * 1.05)}?`);
+    const ok = window.confirm(`Complete bill for ₹${totals.totalAmount}?`);
     if (!ok) return;
     const completed = await billingApi.completeBill({
       customer: activeTab.customer,
@@ -221,6 +221,7 @@ export default function BillingPage() {
                   index={index}
                   onDiscountType={(type) => updateItemDiscount(activeTab.id, index, type, item.itemDiscountValue)}
                   onDiscountValue={(value) => updateItemDiscount(activeTab.id, index, item.itemDiscountType === "none" ? "percent" : item.itemDiscountType, value)}
+                  atStockMax={Number(item.stock || 0) > 0 && item.quantity >= Number(item.stock || 0)}
                   onIncrement={async () => {
                     const result = await incrementItemQuantity(activeTab.id, index);
                     if (!result.added) setToast(result.message || "No more stock available");
@@ -253,7 +254,9 @@ export default function BillingPage() {
               />
             ) : null}
             <div className="border-t border-[var(--border)] pt-2 text-sm space-y-1">
-              <div className="flex justify-between"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>Subtotal (MRP)</span><span>₹{totals.subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>GST 5%</span><span className="text-[var(--success)]">+₹{totals.gstAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between font-medium"><span>Before Discount</span><span>₹{totals.grossWithGst.toFixed(2)}</span></div>
               <div className="mt-2">
                 <p className="text-[var(--text-secondary)]">ITEM DISCOUNTS</p>
                 {itemDiscountRows.map((row, index) => (
@@ -294,11 +297,11 @@ export default function BillingPage() {
               {!isSuperAdmin && can("canDiscount") ? (
                 <p className="text-xs text-[var(--text-secondary)]">Max allowed discount: {maxDiscount}%</p>
               ) : null}
-              <div className="flex justify-between"><span>Taxable</span><span>₹{totals.taxableAmount.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>CGST 2.5%</span><span>₹{(totals.taxableAmount * 0.025).toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>SGST 2.5%</span><span>₹{(totals.taxableAmount * 0.025).toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>Round Off</span><span>{(Math.round(totals.taxableAmount * 1.05) - (totals.taxableAmount * 1.05)).toFixed(2)}</span></div>
-              <div className="flex justify-between text-2xl font-bold text-[var(--gold)]"><span>TOTAL</span><span>₹{Math.round(totals.taxableAmount * 1.05).toFixed(2)}</span></div>
+              <div className="flex justify-between border-t border-[var(--border)] pt-1 mt-1 text-xs text-[var(--text-secondary)]">
+                <span>CGST / SGST</span><span>₹{totals.cgst.toFixed(2)} / ₹{totals.sgst.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between"><span>Round Off</span><span>{totals.roundOff.toFixed(2)}</span></div>
+              <div className="flex justify-between text-2xl font-bold text-[var(--gold)]"><span>TOTAL</span><span>₹{totals.totalAmount.toFixed(2)}</span></div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button className="h-11 rounded border border-[var(--border)]" onClick={onHold}>HOLD BILL</button>

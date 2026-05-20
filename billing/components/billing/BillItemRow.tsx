@@ -5,6 +5,7 @@ import { BillItem } from "@/lib/bill-store";
 export default function BillItemRow({
   item,
   index,
+  atStockMax = false,
   onDiscountType,
   onDiscountValue,
   onIncrement,
@@ -13,6 +14,7 @@ export default function BillItemRow({
 }: {
   item: BillItem;
   index: number;
+  atStockMax?: boolean;
   onDiscountType: (type: "percent" | "amount") => void;
   onDiscountValue: (value: number) => void;
   onIncrement: () => void | Promise<void>;
@@ -48,7 +50,15 @@ export default function BillItemRow({
       <div className="col-span-1 md:col-span-2 flex items-center gap-1">
         <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => onDecrement()}>-</button>
         <span className="w-8 text-center">{item.quantity}</span>
-        <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => void onIncrement()}>+</button>
+        <button
+          type="button"
+          className="h-9 w-9 rounded border border-[var(--border)] disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={atStockMax}
+          title={atStockMax ? "No more stock available" : undefined}
+          onClick={() => void onIncrement()}
+        >
+          +
+        </button>
       </div>
       <div className="col-span-1 md:col-span-1 font-semibold">₹{total.toFixed(2)}</div>
       <button className="col-span-1 md:col-span-1 text-[var(--error)] justify-self-end md:justify-self-start" onClick={onRemove}>✕</button>

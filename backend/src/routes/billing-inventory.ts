@@ -176,13 +176,10 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     if (updates.supplier !== undefined) {
       if (!updates.supplier) {
         product.supplier = undefined;
-      } else if (updates.supplier.match(/^[0-9a-fA-F]{24}$/)) {
+      } else if (String(updates.supplier).match(/^[0-9a-fA-F]{24}$/)) {
         product.supplier = updates.supplier;
-      } else {
-        // If it's an invalid ObjectId (like a raw string name), we ignore it or require them to re-select
-        // Let's just unset it if it's totally invalid so the save doesn't crash
-        product.supplier = undefined;
       }
+      // Ignore invalid supplier values (e.g. display names) so we don't clear the existing link
     }
 
     if (updates.notes !== undefined) {

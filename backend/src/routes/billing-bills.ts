@@ -9,6 +9,9 @@ import { triggerRevalidate } from '../lib/revalidateFrontend';
 
 const router = express.Router();
 
+/** GST is added on top of MRP subtotal; shop discounts are then subtracted from (subtotal + GST). */
+const BILLING_GST_RATE = 0.05;
+
 const canEditBills = (admin: any) =>
   admin?.role === 'superadmin' || (admin?.role === 'admin' && Boolean(admin?.permissions?.canEditBills));
 
@@ -109,12 +112,13 @@ const calculateBillTotals = (items: any[], billDiscountType: string, billDiscoun
       assigned += safeShare;
     });
   }
-  const taxableAmount = Math.max(0, afterItemDiscount - effectiveBillDiscount);
-  // GST is display-only on customer bill; persisted records remain tax-free.
-  const gstAmount = 0;
-  const cgst = 0;
-  const sgst = 0;
-  const rawTotal = taxableAmount;
+  const taxableAmount = Math.max(0, subtotal);
+  const gstAmount = taxableAmount * BILLING_GST_RATE;
+  const cgst = gstAmount / 2;
+  const sgst = gstAmount / 2;
+  const grossWithGst = taxableAmount + gstAmount;
+  const totalDiscount = totalItemDiscount + effectiveBillDiscount;
+  const rawTotal = Math.max(0, grossWithGst - totalDiscount);
   const roundOff = Math.round(rawTotal) - rawTotal;
   const totalAmount = Math.round(rawTotal);
   return {
@@ -144,8 +148,18 @@ router.get('/next-number', async (_req, res: Response) => {
   return res.json({ billNumber });
 });
 
-const scanStockItemResponse = (stockItem: any) => {
+const countAvailableStock = async (productId: string, size: string) =>
+  StockItem.countDocuments({
+    product: new mongoose.Types.ObjectId(productId),
+    status: 'available',
+    ...(size ? { size } : {}),
+  });
+
+const scanStockItemResponse = async (stockItem: any) => {
   const product: any = stockItem.product;
+  const productId = String(product?._id || stockItem.product || '');
+  const size = String(stockItem.size || '');
+  const availableStock = productId ? await countAvailableStock(productId, size) : 1;
   return {
     stockItemId: stockItem._id,
     barcode: stockItem.barcode,
@@ -156,7 +170,7 @@ const scanStockItemResponse = (stockItem: any) => {
     size: stockItem.size,
     mrp: stockItem.sellingPrice,
     incomingPrice: stockItem.incomingPrice,
-    stock: 1,
+    stock: availableStock,
   };
 };
 
@@ -170,7 +184,7 @@ router.get('/scan/:barcode', async (req, res: Response) => {
     return res.status(404).json({ error: 'Barcode not found or already sold' });
   }
 
-  return res.json(scanStockItemResponse(stockItem));
+  return res.json(await scanStockItemResponse(stockItem));
 });
 
 router.get('/next-barcode', async (req, res: Response) => {
@@ -200,7 +214,7 @@ router.get('/next-barcode', async (req, res: Response) => {
     return res.status(404).json({ message: 'No more stock available for this item' });
   }
 
-  return res.json(scanStockItemResponse(stockItem));
+  return res.json(await scanStockItemResponse(stockItem));
 });
 
 router.get('/search', billingAuthMiddleware, async (req, res: Response) => {

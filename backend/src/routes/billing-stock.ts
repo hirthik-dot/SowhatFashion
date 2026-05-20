@@ -343,7 +343,7 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
     .populate('billingCategory', 'name')
     .populate('billingSubCategory', 'name')
     .populate('supplier', 'name')
-    .select('name billingName sizeStock totalStock price incomingPrice isActive billingCategory billingSubCategory supplier notes')
+    .select('name billingName category subCategory sizeStock totalStock price incomingPrice isActive billingCategory billingSubCategory supplier notes')
     .lean();
 
   // Sold = total StockItems sold (for this product). We compute per product for correctness.
@@ -358,9 +358,12 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
   const data = products.map((p: any) => ({
     _id: p._id,
     name: p.billingName || p.name,
-    category: p.billingCategory?.name || '',
-    subCategory: p.billingSubCategory?.name || '',
+    category: p.billingCategory?.name || p.category || '',
+    subCategory: p.billingSubCategory?.name || p.subCategory || '',
     supplier: p.supplier?.name || '',
+    supplierId: p.supplier?._id ? String(p.supplier._id) : '',
+    billingCategory: p.billingCategory?._id ? String(p.billingCategory._id) : '',
+    billingSubCategory: p.billingSubCategory?._id ? String(p.billingSubCategory._id) : '',
     sizeStock: p.sizeStock || [],
     totalStock: Number(p.totalStock ?? p.stock ?? 0),
     sold: soldByProduct.get(String(p._id)) || 0,

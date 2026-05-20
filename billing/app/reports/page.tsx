@@ -97,7 +97,10 @@ export default function ReportsPage() {
       Items: summary?.totalItems || 0,
       Returns: summary?.totalReturns || 0,
       Discount: summary?.totalDiscount || 0,
-      GST: summary?.totalGst || 0,
+      "Taxable (ex-GST)": summary?.totalTaxable || 0,
+      CGST: summary?.totalCgst || 0,
+      SGST: summary?.totalSgst || 0,
+      "Total GST": summary?.totalGst || 0,
     }]);
     XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
     const billsSheet = XLSX.utils.json_to_sheet(
@@ -169,7 +172,12 @@ export default function ReportsPage() {
 
   const paymentData = Object.entries(summary?.paymentMethodBreakdown || {}).map(([name, value]) => ({ name, value }));
   const categoryData = Object.entries(summary?.categoryBreakdown || {}).map(([name, value]) => ({ name, value }));
-  const revenueBars = (summary?.dailyRevenue || []).length ? summary.dailyRevenue : bills.map((bill) => ({ label: new Date(bill.createdAt).toLocaleDateString(), value: bill.totalAmount }));
+  const revenueBars = (summary?.dailyRevenue || []).length
+    ? (summary.dailyRevenue || []).map((row: any) => ({
+        label: row.label || row.day || "",
+        value: Number(row.value || 0),
+      }))
+    : bills.map((bill) => ({ label: new Date(bill.createdAt).toLocaleDateString(), value: bill.totalAmount }));
   const topProducts = Object.values(
     bills.flatMap((bill) => bill.items || []).reduce((acc: any, item: any) => {
       const key = `${item.name}-${item.category || ""}`;
@@ -229,8 +237,11 @@ export default function ReportsPage() {
         {activeTab === "sales" && (
           <div className="space-y-3 animate-fade-in">
             <div className="pos-card p-3 flex flex-wrap gap-2 items-center">
-              <div className="w-full text-xs text-[var(--text-secondary)] flex gap-3 pb-1">
-                <span className="text-[var(--gold)]">📈 Overview</span>
+              <div className="w-full text-xs text-[var(--text-secondary)] flex flex-wrap gap-3 pb-1">
+                <span className="text-[var(--gold)] font-semibold">📈 Overview</span>
+                <a href="#tax-overview" className="text-[var(--gold)] font-semibold underline">
+                  🧾 Tax
+                </a>
                 <Link href="/reports/customers" className="underline">
                   📋 Customers
                 </Link>
@@ -248,6 +259,29 @@ export default function ReportsPage() {
               <button className="h-10 px-3 rounded border border-[var(--border)]" onClick={() => loadSales(salesPage)}>Apply</button>
               <button className="h-10 px-3 rounded bg-[var(--gold)] text-black sm:ml-auto font-semibold shadow-sm hover:opacity-90 w-full sm:w-auto" onClick={exportSalesExcel}>⬇ Export Sales Excel</button>
             </div>
+
+            <section id="tax-overview" className="pos-card p-4 border-2 border-[var(--gold)] bg-[var(--surface-2)]">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h3 className="text-lg font-bold text-[var(--gold)]">🧾 Tax Overview (GST 5%)</h3>
+                <span className="text-xs text-[var(--text-secondary)]">5% GST added on MRP subtotal (before shop discounts)</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Taxable (ex-GST)", value: `₹${Number(summary?.totalTaxable || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                  { label: "CGST (2.5%)", value: `₹${Number(summary?.totalCgst || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                  { label: "SGST (2.5%)", value: `₹${Number(summary?.totalSgst || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                  { label: "Total GST", value: `₹${Number(summary?.totalGst || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                ].map((card) => (
+                  <div key={card.label} className="rounded-lg border border-[var(--gold)]/40 bg-[var(--surface)] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">{card.label}</p>
+                    <p className="text-2xl font-black text-white mt-2">{card.value}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] mt-3">
+                Example: MRP ₹100 + GST ₹5 = ₹105, then shop discount is subtracted from ₹105.
+              </p>
+            </section>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
@@ -507,10 +541,29 @@ export default function ReportsPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 pt-3 border-t border-[var(--border)] text-right">
-              <p className="text-[var(--text-secondary)]">Subtotal: ₹{selectedBill.subtotal}</p>
-              <p className="text-[var(--success)]">Coupons/Discount: -₹{(selectedBill.totalItemDiscount || 0) + (selectedBill.billDiscountAmount || 0)}</p>
-              <p className="text-[var(--text-secondary)]">GST: +₹{selectedBill.gstAmount}</p>
+            <div className="mt-4 pt-3 border-t border-[var(--border)] text-right space-y-1">
+              <p className="text-[var(--text-secondary)]">Subtotal: ₹{selectedBill.subtotal?.toLocaleString()}</p>
+              <p className="text-[var(--success)]">Discount: -₹{((selectedBill.totalItemDiscount || 0) + (selectedBill.billDiscountAmount || 0)).toLocaleString()}</p>
+              <p className="text-[var(--text-secondary)]">
+                MRP ₹{Number(selectedBill.subtotal || 0).toLocaleString()} + GST 5% ₹
+                {(
+                  Number(selectedBill.gstAmount || 0) > 0
+                    ? Number(selectedBill.gstAmount)
+                    : Number(selectedBill.subtotal || 0) * 0.05
+                ).toFixed(2)}{" "}
+                = ₹
+                {(
+                  Number(selectedBill.subtotal || 0) +
+                  (Number(selectedBill.gstAmount || 0) > 0
+                    ? Number(selectedBill.gstAmount)
+                    : Number(selectedBill.subtotal || 0) * 0.05)
+                ).toFixed(2)}{" "}
+                before discount
+              </p>
+              <p className="text-[var(--text-secondary)]">
+                CGST / SGST: ₹{Number(selectedBill.cgst || (Number(selectedBill.subtotal || 0) * 0.05) / 2).toFixed(2)} / ₹
+                {Number(selectedBill.sgst || (Number(selectedBill.subtotal || 0) * 0.05) / 2).toFixed(2)}
+              </p>
               <h2 className="text-2xl font-bold text-[var(--gold)] mt-2">Total: ₹{selectedBill.totalAmount?.toLocaleString()}</h2>
             </div>
           </div>

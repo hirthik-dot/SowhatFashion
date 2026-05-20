@@ -67,17 +67,22 @@ export const ReceiptPrint = forwardRef<
   const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
   const totalItemDiscount = Number(bill.totalItemDiscount || 0);
   const billDiscountAmount = Number(bill.billDiscountAmount || 0);
-  const taxableAmount = Math.max(0, subtotal - totalItemDiscount - billDiscountAmount);
-  const gstPercent = 5;
-  const gstAmount = taxableAmount * (gstPercent / 100);
-  const cgst = gstAmount / 2;
-  const sgst = gstAmount / 2;
-  const rawGrandTotal = taxableAmount + gstAmount;
+  const taxableAmount = Math.max(0, Number(bill.taxableAmount || 0) > 0 ? Number(bill.taxableAmount) : subtotal);
+  const gstAmount =
+    Number(bill.gstAmount || 0) > 0 ? Number(bill.gstAmount) : taxableAmount * 0.05;
+  const cgst = Number(bill.cgst || 0) > 0 ? Number(bill.cgst) : gstAmount / 2;
+  const sgst = Number(bill.sgst || 0) > 0 ? Number(bill.sgst) : gstAmount / 2;
+  const grossWithGst = taxableAmount + gstAmount;
+  const totalSavings = totalItemDiscount + billDiscountAmount;
+  const rawGrandTotal =
+    Number(bill.totalAmount || 0) > 0
+      ? Number(bill.totalAmount)
+      : Math.max(0, grossWithGst - totalSavings);
   const billGrandTotal = Math.round(rawGrandTotal);
-  const receiptRoundOff = billGrandTotal - rawGrandTotal;
+  const receiptRoundOff =
+    Number(bill.roundOff || 0) !== 0 ? Number(bill.roundOff) : billGrandTotal - rawGrandTotal;
   const received = Number(bill.cashReceived ?? billGrandTotal);
   const balance = Math.max(0, Number(bill.changeReturned ?? 0));
-  const totalSavings = totalItemDiscount + billDiscountAmount;
   const customerPhone = formatPhone(
     bill.customer?.phone || bill.customer?.mobile || bill.customer?.mobileNumber || ""
   );
@@ -174,6 +179,16 @@ export const ReceiptPrint = forwardRef<
         <span>:</span>
         <span>{money(subtotal)}</span>
       </div>
+      <div className="amount-row">
+        <span>GST (5%)</span>
+        <span>:</span>
+        <span>+{money(gstAmount)}</span>
+      </div>
+      <div className="amount-row">
+        <span>Before Discount</span>
+        <span>:</span>
+        <span>{money(grossWithGst)}</span>
+      </div>
       {totalSavings > 0 && (
         <div className="discount-section">
           {totalItemDiscount > 0 && (
@@ -207,7 +222,7 @@ export const ReceiptPrint = forwardRef<
           <span>{money(taxableAmount)}</span>
           <span>{money(cgst)}</span>
           <span>{money(sgst)}</span>
-          <span>{money(billGrandTotal)}</span>
+          <span>{money(grossWithGst)}</span>
         </div>
       </div>
       <div className="line" />

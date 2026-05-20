@@ -25,6 +25,9 @@ export type BillItem = {
 
 export type AddItemResult = { added: boolean; message?: string };
 
+/** GST is added on MRP subtotal; discounts reduce (subtotal + GST). */
+const BILLING_GST_RATE = 0.05;
+
 const lineKey = (productId: string, size?: string) => `${productId}|${size || ""}`;
 
 const itemBarcodes = (item: BillItem) => (item.barcodes?.length ? item.barcodes : item.barcode ? [item.barcode] : []);
@@ -51,8 +54,12 @@ export type BillTotals = {
   totalItemDiscount: number;
   afterItemDiscount: number;
   billDiscountAmount: number;
+  grossWithGst: number;
+  netInclusive: number;
   taxableAmount: number;
   gstAmount: number;
+  cgst: number;
+  sgst: number;
   roundOff: number;
   totalAmount: number;
   changeReturned: number;
@@ -124,10 +131,14 @@ const computeTotals = (tab?: BillTab): BillTotals => {
     billDiscountAmount = tab.billDiscountValue;
   }
   billDiscountAmount = Math.min(afterItemDiscount, Math.max(0, billDiscountAmount));
-  const taxableAmount = Math.max(0, afterItemDiscount - billDiscountAmount);
-  // Persisted billing totals are kept GST-free; GST is shown only on printed receipt.
-  const gstAmount = 0;
-  const raw = taxableAmount;
+  const taxableAmount = Math.max(0, subtotal);
+  const gstAmount = taxableAmount * BILLING_GST_RATE;
+  const cgst = gstAmount / 2;
+  const sgst = gstAmount / 2;
+  const grossWithGst = taxableAmount + gstAmount;
+  const totalDiscount = totalItemDiscount + billDiscountAmount;
+  const netInclusive = Math.max(0, grossWithGst - totalDiscount);
+  const raw = netInclusive;
   const roundOff = Math.round(raw) - raw;
   const totalAmount = Math.round(raw);
   const cashPortion =
@@ -139,7 +150,21 @@ const computeTotals = (tab?: BillTab): BillTotals => {
       ? totalAmount
       : 0;
   const changeReturned = Math.max(0, Number(tab?.cashReceived || 0) - cashPortion);
-  return { subtotal, totalItemDiscount, afterItemDiscount, billDiscountAmount, taxableAmount, gstAmount, roundOff, totalAmount, changeReturned };
+  return {
+    subtotal,
+    totalItemDiscount,
+    afterItemDiscount,
+    billDiscountAmount,
+    grossWithGst,
+    netInclusive,
+    taxableAmount,
+    gstAmount,
+    cgst,
+    sgst,
+    roundOff,
+    totalAmount,
+    changeReturned,
+  };
 };
 
 export const useBillStore = create<BillState>((set, get) => ({
@@ -189,6 +214,12 @@ export const useBillStore = create<BillState>((set, get) => ({
         );
 
         if (existingIndex >= 0) {
+          const existing = tab.items[existingIndex];
+          const stockLimit = Number(existing.stock || product.stock || 0);
+          if (stockLimit > 0 && existing.quantity >= stockLimit) {
+            result = { added: false, message: "No more stock available" };
+            return tab;
+          }
           const items = tab.items.map((item, index) => {
             if (index !== existingIndex) return item;
             const barcodes = [...itemBarcodes(item), barcode];
@@ -196,6 +227,12 @@ export const useBillStore = create<BillState>((set, get) => ({
           });
           result = { added: true };
           return { ...tab, items };
+        }
+
+        const stockLimit = Number(product.stock || 0);
+        if (stockLimit <= 0) {
+          result = { added: false, message: "No more stock available" };
+          return tab;
         }
 
         result = { added: true };
@@ -213,7 +250,7 @@ export const useBillStore = create<BillState>((set, get) => ({
               category: product.category || "",
               size,
               mrp: Number(product.mrp || product.price || 0),
-              stock: 1,
+              stock: stockLimit,
               quantity: 1,
               itemDiscountType: "none" as const,
               itemDiscountValue: 0,
@@ -249,6 +286,11 @@ export const useBillStore = create<BillState>((set, get) => ({
     const tab = get().tabs.find((entry) => entry.id === tabId);
     const item = tab?.items[itemIndex];
     if (!item) return { added: false, message: "Item not found" };
+
+    const stockLimit = Number(item.stock || 0);
+    if (stockLimit > 0 && item.quantity >= stockLimit) {
+      return { added: false, message: "No more stock available" };
+    }
 
     const exclude = tabBarcodes(tab.items);
     try {
@@ -418,7 +460,7 @@ export const useBillStore = create<BillState>((set, get) => ({
             category: item.category,
             size: item.size,
             mrp: Number(item.mrp || 0),
-            stock: 999,
+            stock: quantity,
             quantity,
             itemDiscountType: item.itemDiscountType || "none",
             itemDiscountValue: Number(item.itemDiscountValue || 0),

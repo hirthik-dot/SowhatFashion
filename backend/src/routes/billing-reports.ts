@@ -8,6 +8,13 @@ const router = express.Router();
 router.use(requireAdmin);
 router.use(requirePermission('canViewReports'));
 const FINALIZED_STATUSES = ['completed', 'replaced', 'partial_replaced', 'returned', 'partial_return'];
+const BILLING_GST_RATE = 0.05;
+
+const gstOnSubtotal = (subtotal: number) => {
+  const taxableAmount = Math.max(0, Number(subtotal || 0));
+  const gstAmount = taxableAmount * BILLING_GST_RATE;
+  return { taxableAmount, gstAmount, cgst: gstAmount / 2, sgst: gstAmount / 2 };
+};
 
 const parseDateString = (dateStr: string) => {
   if (dateStr.length === 10 && dateStr.includes('-')) {
@@ -55,7 +62,11 @@ router.get('/summary', async (req, res: Response) => {
   const totalBills = bills.length;
   const totalItems = bills.reduce((sum, bill) => sum + (bill.items || []).reduce((x: number, i: any) => x + Number(i.quantity || 0), 0), 0);
   const totalDiscount = bills.reduce((sum, bill) => sum + Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0), 0);
-  const totalGst = bills.reduce((sum, bill) => sum + Number(bill.gstAmount || 0), 0);
+  // GST is 5% added on MRP subtotal (before shop discounts).
+  const totalGst = bills.reduce((sum, bill) => sum + gstOnSubtotal(Number(bill.subtotal || 0)).gstAmount, 0);
+  const totalTaxable = bills.reduce((sum, bill) => sum + gstOnSubtotal(Number(bill.subtotal || 0)).taxableAmount, 0);
+  const totalCgst = bills.reduce((sum, bill) => sum + gstOnSubtotal(Number(bill.subtotal || 0)).cgst, 0);
+  const totalSgst = bills.reduce((sum, bill) => sum + gstOnSubtotal(Number(bill.subtotal || 0)).sgst, 0);
   const avgBillValue = totalBills ? totalRevenue / totalBills : 0;
 
   const paymentMethodBreakdown = bills.reduce((acc: any, bill: any) => {
@@ -119,6 +130,9 @@ router.get('/summary', async (req, res: Response) => {
     totalReturns: returnsCount,
     totalDiscount,
     totalGst,
+    totalTaxable,
+    totalCgst,
+    totalSgst,
     avgBillValue,
     topProducts: [],
     salesmanPerformance,
