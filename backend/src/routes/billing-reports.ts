@@ -3,35 +3,21 @@ import ExcelJS from 'exceljs';
 import Bill from '../models/Bill';
 import BillingReturn from '../models/Return';
 import { requireAdmin, requirePermission } from '../middleware/billingRoleMiddleware';
+import {
+  BILLING_GST_RATE,
+  billRevenueExGst,
+  lineRevenueExGst,
+} from '../lib/billing-revenue';
 
 const router = express.Router();
 router.use(requireAdmin);
 router.use(requirePermission('canViewReports'));
 const FINALIZED_STATUSES = ['completed', 'replaced', 'partial_replaced', 'returned', 'partial_return'];
-const BILLING_GST_RATE = 0.05;
 
 const gstOnSubtotal = (subtotal: number) => {
   const taxableAmount = Math.max(0, Number(subtotal || 0));
   const gstAmount = taxableAmount * BILLING_GST_RATE;
   return { taxableAmount, gstAmount, cgst: gstAmount / 2, sgst: gstAmount / 2 };
-};
-
-/** Bill amount excluding GST — used everywhere except the tax overview. */
-const billRevenueExGst = (bill: any) => {
-  const items = bill.items || [];
-  if (items.length) {
-    const fromLines = items.reduce(
-      (sum: number, item: any) => sum + Number(item.netLineTotal ?? item.lineTotal ?? 0),
-      0
-    );
-    if (fromLines > 0) return fromLines;
-  }
-  return Math.max(
-    0,
-    Number(bill.subtotal || 0) -
-      Number(bill.totalItemDiscount || 0) -
-      Number(bill.billDiscountAmount || 0)
-  );
 };
 
 const billItemRowFields = {
@@ -44,45 +30,77 @@ const billItemRowFields = {
   billDiscountShare: '$$billItem.billDiscountShare',
 };
 
-/** Per-bill sales value excluding GST (for aggregations). */
+/** Per-bill sales value excluding GST; discount consumes GST share first. */
 const billExGstMongoExpr = {
-  $max: [
-    0,
-    {
-      $subtract: [
-        { $subtract: [{ $ifNull: ['$subtotal', 0] }, { $ifNull: ['$totalItemDiscount', 0] }] },
-        { $ifNull: ['$billDiscountAmount', 0] },
-      ],
+  $let: {
+    vars: {
+      subtotal: { $ifNull: ['$subtotal', 0] },
+      totalDiscount: {
+        $add: [{ $ifNull: ['$totalItemDiscount', 0] }, { $ifNull: ['$billDiscountAmount', 0] }],
+      },
     },
-  ],
+    in: {
+      $let: {
+        vars: {
+          mrpDiscount: {
+            $max: [
+              0,
+              {
+                $subtract: [
+                  '$$totalDiscount',
+                  { $multiply: ['$$subtotal', BILLING_GST_RATE] },
+                ],
+              },
+            ],
+          },
+        },
+        in: { $max: [0, { $subtract: ['$$subtotal', '$$mrpDiscount'] }] },
+      },
+    },
+  },
 };
 
-/** Profit batch: MRP minus discounts only (never customer total with GST). */
+/** Profit batch: MRP minus discount remainder after GST portion is absorbed. */
 const profitLineRevenueExpr = {
-  $max: [
-    0,
-    {
-      $subtract: [
-        {
-          $multiply: [
-            { $ifNull: ['$$matchedBillItem.mrp', '$$soldItem.sellingPrice'] },
-            { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
-          ],
-        },
-        {
-          $add: [
-            {
-              $multiply: [
-                { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
-                { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
-              ],
-            },
-            { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
-          ],
-        },
-      ],
+  $let: {
+    vars: {
+      lineMrp: {
+        $multiply: [
+          { $ifNull: ['$$matchedBillItem.mrp', '$$soldItem.sellingPrice'] },
+          { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+        ],
+      },
+      lineDiscount: {
+        $add: [
+          {
+            $multiply: [
+              { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+              { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+            ],
+          },
+          { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
+        ],
+      },
     },
-  ],
+    in: {
+      $let: {
+        vars: {
+          mrpDiscount: {
+            $max: [
+              0,
+              {
+                $subtract: [
+                  '$$lineDiscount',
+                  { $multiply: ['$$lineMrp', BILLING_GST_RATE] },
+                ],
+              },
+            ],
+          },
+        },
+        in: { $max: [0, { $subtract: ['$$lineMrp', '$$mrpDiscount'] }] },
+      },
+    },
+  },
 };
 
 const parseDateString = (dateStr: string) => {
@@ -147,7 +165,7 @@ router.get('/summary', async (req, res: Response) => {
   const categoryBreakdown = bills.reduce((acc: any, bill: any) => {
     (bill.items || []).forEach((item: any) => {
       const key = item.category || 'Uncategorized';
-      acc[key] = (acc[key] || 0) + Number(item.netLineTotal ?? item.lineTotal ?? 0);
+      acc[key] = (acc[key] || 0) + lineRevenueExGst(item);
     });
     return acc;
   }, {});

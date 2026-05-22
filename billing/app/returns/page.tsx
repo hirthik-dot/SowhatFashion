@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import BillingShell from "@/components/layout/BillingShell";
+import BarcodeScanner from "@/components/billing/BarcodeScanner";
 import { billingApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import ReplacementReceipt, { type ReturnDocument } from "@/components/returns/ReplacementReceipt";
@@ -21,8 +22,8 @@ export default function ReturnsPage() {
   const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [reasons, setReasons] = useState<Record<number, string>>({});
   const [returnType, setReturnType] = useState<"replacement" | "partial">("replacement");
-  const [replacementBarcode, setReplacementBarcode] = useState("");
   const [replacementItems, setReplacementItems] = useState<any[]>([]);
+  const [toast, setToast] = useState("");
   const [result, setResult] = useState<any>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<ReturnDocument | null>(null);
@@ -72,24 +73,29 @@ export default function ReturnsPage() {
     }
   };
 
-  const scanReplacement = async () => {
-    const barcode = replacementBarcode.trim();
-    if (!barcode) {
-      setError("Enter a replacement barcode");
-      return;
-    }
+  const replacementBarcodes = useMemo(
+    () => replacementItems.map((item) => item.barcode).filter(Boolean),
+    [replacementItems]
+  );
 
-    setError("");
-    try {
-      const item = await billingApi.scanBarcode(barcode);
-      setReplacementItems((prev) => [
-        ...prev,
-        { product: item._id, barcode: item.barcode, name: item.name, size: item.size, quantity: 1, sellingPrice: item.mrp },
-      ]);
-      setReplacementBarcode("");
-    } catch (err: any) {
-      setError(err?.message || "Unable to scan replacement item");
+  const addReplacementItem = async (product: any) => {
+    const barcode = String(product.barcode || "").trim();
+    if (!barcode) throw new Error("No barcode available for this item");
+    if (replacementBarcodes.includes(barcode)) {
+      throw new Error("This barcode is already in the replacement list");
     }
+    setError("");
+    setReplacementItems((prev) => [
+      ...prev,
+      {
+        product: product._id || product.productId,
+        barcode,
+        name: product.name,
+        size: product.size,
+        quantity: 1,
+        sellingPrice: product.mrp,
+      },
+    ]);
   };
 
   const processReturn = async () => {
@@ -186,18 +192,13 @@ export default function ReturnsPage() {
         ) : null}
         {step === 3 ? (
           <div className="space-y-2">
-            <div className="flex gap-2">
-              <input
-                className="pos-input flex-1"
-                placeholder="Scan replacement item barcode"
-                value={replacementBarcode}
-                onChange={(e) => setReplacementBarcode(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && scanReplacement()}
-              />
-              <button className="h-11 px-3 rounded border border-[var(--border)]" onClick={scanReplacement}>
-                Scan
-              </button>
-            </div>
+            {toast ? <div className="pos-card p-2 text-sm">{toast}</div> : null}
+            <BarcodeScanner
+              usedBarcodes={replacementBarcodes}
+              onScanBarcode={(barcode) => billingApi.scanBarcode(barcode)}
+              onAdd={addReplacementItem}
+              onToast={setToast}
+            />
             <div className="pos-card p-3">
               <p className="font-semibold mb-2">Replacement Items</p>
               {replacementItems.length === 0 ? (
