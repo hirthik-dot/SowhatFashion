@@ -42,6 +42,29 @@ export const searchProducts = async (q: string) => {
   return res.json();
 };
 
+export type CustomerSearchResult = {
+  name: string;
+  phone: string;
+  totalBills?: number;
+  lastVisit?: string;
+  pointsBalance?: number;
+};
+
+export const searchCustomers = async (q: string): Promise<CustomerSearchResult[]> => {
+  if (!API) throw new Error("NEXT_PUBLIC_API_URL is not set");
+  const trimmed = q.trim();
+  if (trimmed.length < 2) return [];
+  const res = await fetch(`${API}/api/billing/bills/customers/search?q=${encodeURIComponent(trimmed)}`, {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || "Customer search failed");
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+};
+
 export const billingApi = {
   login: (email: string, password: string) =>
     request("/api/billing/auth/login", {
@@ -64,6 +87,10 @@ export const billingApi = {
     request("/api/billing/bills/hold", { method: "POST", body: JSON.stringify(payload) }),
   completeBill: (payload: any) =>
     request("/api/billing/bills/complete", { method: "POST", body: JSON.stringify(payload) }),
+  pointsBalance: (phone: string) =>
+    request(`/api/billing/points/balance?phone=${encodeURIComponent(phone)}`),
+  pointsLedger: (phone: string, limit = 20) =>
+    request(`/api/billing/points/ledger?phone=${encodeURIComponent(phone)}&limit=${limit}`),
   getHeldBills: () => request("/api/billing/bills/held"),
   discardHeldBill: (id: string) => request(`/api/billing/bills/held/${id}`, { method: "DELETE" }),
   nextBillNumber: () => request("/api/billing/bills/next-number"),
@@ -120,7 +147,18 @@ export const billingApi = {
     request(`/api/billing/inventory/products/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   inventoryEntries: (query = "") => request(`/api/billing/inventory/entries${query ? `?${query}` : ""}`),
   stockInventory: (query = "") => request(`/api/billing/stock/inventory${query ? `?${query}` : ""}`),
+  searchStockProducts: (params: { supplier: string; category: string; subCategory: string; q?: string }) => {
+    const searchParams = new URLSearchParams({
+      supplier: params.supplier,
+      category: params.category,
+      subCategory: params.subCategory,
+    });
+    if (params.q?.trim()) searchParams.set("q", params.q.trim());
+    return request(`/api/billing/stock/products/search?${searchParams.toString()}`);
+  },
   stockInventoryItems: (productId: string, size?: string) =>
     request(`/api/billing/stock/inventory/${productId}/items${size ? `?size=${encodeURIComponent(size)}` : ""}`),
   reportProfit: (page = 1, sort = 'entryDate') => request(`/api/billing/reports/profit?page=${page}&sort=${sort}`),
+  reportBillProfit: (query = "") => request(`/api/billing/reports/bill-profit${query ? `?${query}` : ""}`),
+  reportBillProfitDetail: (id: string) => request(`/api/billing/reports/bill-profit/${id}`),
 };

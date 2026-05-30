@@ -63,12 +63,16 @@ export default function CustomerProfile({ open, loading, profile, onClose }: Cus
 
         {profile ? (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
                 { label: "Bills", value: profile.summary?.totalBills || 0 },
                 { label: "Spent", value: formatCurrency(profile.summary?.totalSpent || 0) },
                 { label: "Avg Bill", value: formatCurrency(profile.summary?.avgBillValue || 0) },
                 { label: "Returns", value: profile.summary?.totalReturns || 0 },
+                {
+                  label: "Points",
+                  value: Number(profile.summary?.pointsBalance ?? profile.points?.balance ?? 0),
+                },
               ].map((card) => (
                 <div key={card.label} className="pos-card p-4">
                   <p className="text-sm text-[var(--text-secondary)]">{card.label}</p>
@@ -158,6 +162,37 @@ export default function CustomerProfile({ open, loading, profile, onClose }: Cus
                 <p className="text-sm text-[var(--text-secondary)]">No items purchased yet.</p>
               )}
             </div>
+
+            {(profile.points?.ledger || []).length > 0 ? (
+              <div className="pos-card p-3 overflow-auto">
+                <p className="font-semibold mb-2">POINTS HISTORY</p>
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr className="text-left text-[var(--text-secondary)]">
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Points</th>
+                      <th>Bill</th>
+                      <th>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(profile.points.ledger || []).map((entry: any) => (
+                      <tr key={entry._id} className="border-t border-[var(--border)]">
+                        <td>{formatDateTime(entry.createdAt)}</td>
+                        <td>{String(entry.type || "").replace("_", " ")}</td>
+                        <td className={Number(entry.points) >= 0 ? "text-[var(--success)]" : ""}>
+                          {Number(entry.points) >= 0 ? "+" : ""}
+                          {entry.points}
+                        </td>
+                        <td>{entry.billNumber || "-"}</td>
+                        <td>{entry.balanceAfter}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
 
             <div className="pos-card p-3 overflow-auto">
               <p className="font-semibold mb-2">RETURNS</p>

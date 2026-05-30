@@ -2,15 +2,18 @@ import express, { Response } from 'express';
 import ExcelJS from 'exceljs';
 import Bill from '../models/Bill';
 import BillingReturn from '../models/Return';
-import { requireAdmin, requirePermission } from '../middleware/billingRoleMiddleware';
+import StockItem from '../models/StockItem';
+import { requirePermission } from '../middleware/billingRoleMiddleware';
 import {
   BILLING_GST_RATE,
   billRevenueExGst,
   lineRevenueExGst,
 } from '../lib/billing-revenue';
+import BillingPointsAccount from '../models/BillingPointsAccount';
+import BillingPointsLedger from '../models/BillingPointsLedger';
+import { normalizeBillingPhone } from '../lib/billing-points';
 
 const router = express.Router();
-router.use(requireAdmin);
 router.use(requirePermission('canViewReports'));
 const FINALIZED_STATUSES = ['completed', 'replaced', 'partial_replaced', 'returned', 'partial_return'];
 
@@ -263,6 +266,296 @@ router.get('/bills', async (req, res: Response) => {
   });
 });
 
+const billProfitSortFields: Record<string, string> = {
+  date: 'createdAt',
+  revenue: 'revenue',
+  cost: 'cost',
+  profit: 'profit',
+  margin: 'margin',
+};
+
+const buildBillProfitLines = (bill: any, stockItems: any[]) => {
+  const itemsByBarcode = (stockItems || []).reduce((acc: Record<string, any[]>, row: any) => {
+    const key = String(row.barcode || '').trim();
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+
+  const lines = (bill.items || []).map((item: any) => {
+    const barcodes =
+      Array.isArray(item.barcodes) && item.barcodes.length > 0
+        ? item.barcodes.map((value: string) => String(value || '').trim()).filter(Boolean)
+        : [String(item.barcode || '').trim()].filter(Boolean);
+    const matchedStock = barcodes.flatMap((barcode: string) => itemsByBarcode[barcode] || []);
+    const cost = matchedStock.reduce((sum: number, row: any) => sum + Number(row.incomingPrice || 0), 0);
+    const revenue = lineRevenueExGst(item);
+    const profit = revenue - cost;
+    return {
+      name: item.name,
+      barcode: item.barcode,
+      barcodes,
+      size: item.size,
+      category: item.category,
+      quantity: item.quantity,
+      mrp: item.mrp,
+      sellingPrice: item.sellingPrice,
+      itemDiscountAmount: item.itemDiscountAmount,
+      billDiscountShare: item.billDiscountShare,
+      lineTotal: item.lineTotal,
+      revenue,
+      cost,
+      profit,
+      margin: revenue ? (profit / revenue) * 100 : 0,
+      stockItems: matchedStock.map((row: any) => ({
+        barcode: row.barcode,
+        incomingPrice: Number(row.incomingPrice || 0),
+        sellingPrice: Number(row.sellingPrice || 0),
+      })),
+    };
+  });
+
+  const revenue = billRevenueExGst(bill);
+  const cost = (stockItems || []).reduce((sum: number, row: any) => sum + Number(row.incomingPrice || 0), 0);
+  const profit = revenue - cost;
+
+  return {
+    lines,
+    revenue,
+    cost,
+    profit,
+    margin: revenue ? (profit / revenue) * 100 : 0,
+    stockUnits: stockItems?.length || 0,
+  };
+};
+
+router.get('/bill-profit', async (req, res: Response) => {
+  try {
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
+    const skip = (page - 1) * limit;
+    const { startDate, endDate, search, sortBy: sortByRaw, sortOrder: sortOrderRaw } = req.query as {
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      sortBy?: string;
+      sortOrder?: string;
+    };
+    const sortField = billProfitSortFields[String(sortByRaw || 'date')] || 'createdAt';
+    const sortOrder = String(sortOrderRaw || 'desc').toLowerCase() === 'asc' ? 1 : -1;
+
+    const query = getDateFilter(startDate, endDate);
+    const trimmedSearch = String(search || '').trim();
+    if (trimmedSearch) {
+      const regex = new RegExp(trimmedSearch, 'i');
+      query.$or = [{ billNumber: regex }, { 'customer.name': regex }, { 'customer.phone': regex }];
+    }
+
+    const [rows, countRows, summaryRows] = await Promise.all([
+      Bill.aggregate([
+        { $match: query },
+        {
+          $lookup: {
+            from: 'stockitems',
+            let: { billId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [{ $eq: ['$soldInBill', '$$billId'] }, { $eq: ['$status', 'sold'] }],
+                  },
+                },
+              },
+              {
+                $group: {
+                  _id: null,
+                  cost: { $sum: { $ifNull: ['$incomingPrice', 0] } },
+                  stockUnits: { $sum: 1 },
+                },
+              },
+            ],
+            as: 'costDoc',
+          },
+        },
+        {
+          $addFields: {
+            revenue: billExGstMongoExpr,
+            cost: { $ifNull: [{ $arrayElemAt: ['$costDoc.cost', 0] }, 0] },
+            stockUnits: { $ifNull: [{ $arrayElemAt: ['$costDoc.stockUnits', 0] }, 0] },
+            itemCount: { $size: { $ifNull: ['$items', []] } },
+          },
+        },
+        {
+          $addFields: {
+            profit: { $subtract: ['$revenue', '$cost'] },
+            margin: {
+              $cond: [
+                { $gt: ['$revenue', 0] },
+                {
+                  $multiply: [
+                    { $divide: [{ $subtract: ['$revenue', '$cost'] }, '$revenue'] },
+                    100,
+                  ],
+                },
+                0,
+              ],
+            },
+          },
+        },
+        { $sort: { [sortField]: sortOrder, createdAt: -1, _id: 1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'salesmen',
+            localField: 'salesman',
+            foreignField: '_id',
+            as: 'salesmanDoc',
+          },
+        },
+        {
+          $project: {
+            billNumber: 1,
+            customer: 1,
+            createdAt: 1,
+            status: 1,
+            paymentMethod: 1,
+            totalAmount: 1,
+            subtotal: 1,
+            totalItemDiscount: 1,
+            billDiscountAmount: 1,
+            gstAmount: 1,
+            revenue: 1,
+            cost: 1,
+            profit: 1,
+            margin: 1,
+            stockUnits: 1,
+            itemCount: 1,
+            salesmanName: { $ifNull: [{ $arrayElemAt: ['$salesmanDoc.name', 0] }, ''] },
+            salesmanPhone: { $ifNull: [{ $arrayElemAt: ['$salesmanDoc.phone', 0] }, ''] },
+          },
+        },
+      ]),
+      Bill.aggregate([{ $match: query }, { $count: 'total' }]),
+      Bill.aggregate([
+        { $match: query },
+        {
+          $lookup: {
+            from: 'stockitems',
+            let: { billId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [{ $eq: ['$soldInBill', '$$billId'] }, { $eq: ['$status', 'sold'] }],
+                  },
+                },
+              },
+              { $group: { _id: null, cost: { $sum: { $ifNull: ['$incomingPrice', 0] } } } },
+            ],
+            as: 'costDoc',
+          },
+        },
+        {
+          $addFields: {
+            revenue: billExGstMongoExpr,
+            cost: { $ifNull: [{ $arrayElemAt: ['$costDoc.cost', 0] }, 0] },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalBills: { $sum: 1 },
+            totalRevenue: { $sum: '$revenue' },
+            totalCost: { $sum: '$cost' },
+          },
+        },
+        {
+          $addFields: {
+            totalProfit: { $subtract: ['$totalRevenue', '$totalCost'] },
+            profitMargin: {
+              $cond: [
+                { $gt: ['$totalRevenue', 0] },
+                {
+                  $multiply: [
+                    { $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalRevenue'] },
+                    100,
+                  ],
+                },
+                0,
+              ],
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const summary = summaryRows?.[0] || {
+      totalBills: 0,
+      totalRevenue: 0,
+      totalCost: 0,
+      totalProfit: 0,
+      profitMargin: 0,
+    };
+
+    res.json({
+      data: rows,
+      total: Number(countRows?.[0]?.total || 0),
+      page,
+      limit,
+      summary: {
+        totalBills: Number(summary.totalBills || 0),
+        totalRevenue: Number(summary.totalRevenue || 0),
+        totalCost: Number(summary.totalCost || 0),
+        totalProfit: Number(summary.totalProfit || 0),
+        profitMargin: Number(summary.profitMargin || 0),
+      },
+    });
+  } catch (err: any) {
+    console.error('❌ /bill-profit error:', err?.message || err);
+    res.status(500).json({ message: 'Failed to load bill profit data', error: err?.message });
+  }
+});
+
+router.get('/bill-profit/:id', async (req, res: Response) => {
+  try {
+    const bill = await Bill.findById(req.params.id).populate('salesman', 'name phone').lean();
+    if (!bill) return res.status(404).json({ message: 'Bill not found' });
+    if (!FINALIZED_STATUSES.includes(String((bill as any).status || ''))) {
+      return res.status(400).json({ message: 'Bill is not finalized' });
+    }
+
+    const stockItems = await StockItem.find({
+      soldInBill: bill._id,
+      status: 'sold',
+    }).lean();
+    const metrics = buildBillProfitLines(bill, stockItems);
+
+    res.json({
+      bill: {
+        _id: bill._id,
+        billNumber: bill.billNumber,
+        customer: bill.customer,
+        salesmanName: (bill as any).salesman?.name || '',
+        salesmanPhone: (bill as any).salesman?.phone || '',
+        createdAt: (bill as any).createdAt,
+        status: bill.status,
+        paymentMethod: bill.paymentMethod,
+        subtotal: bill.subtotal,
+        totalItemDiscount: bill.totalItemDiscount,
+        billDiscountAmount: bill.billDiscountAmount,
+        gstAmount: bill.gstAmount,
+        totalAmount: bill.totalAmount,
+      },
+      ...metrics,
+    });
+  } catch (err: any) {
+    console.error('❌ /bill-profit/:id error:', err?.message || err);
+    res.status(500).json({ message: 'Failed to load bill profit detail', error: err?.message });
+  }
+});
+
 router.get('/customers', requirePermission('canViewCustomerReports'), async (req, res: Response) => {
   const page = Math.max(1, Number(req.query.page || 1));
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
@@ -439,9 +732,17 @@ router.get('/customers/:phone', requirePermission('canViewCustomerReports'), asy
   if (!phone) return res.status(400).json({ message: 'Phone is required' });
 
   const billQuery = { status: { $in: FINALIZED_STATUSES }, 'customer.phone': phone };
-  const [bills, returns] = await Promise.all([
+  const normalizedPhone = normalizeBillingPhone(phone);
+
+  const [bills, returns, pointsAccount, pointsLedger] = await Promise.all([
     Bill.find(billQuery).populate('salesman', 'name phone').sort({ createdAt: -1 }).lean(),
     BillingReturn.find({ 'customer.phone': phone }).sort({ createdAt: -1 }).lean(),
+    normalizedPhone.length >= 10
+      ? BillingPointsAccount.findOne({ phone: normalizedPhone }).lean()
+      : Promise.resolve(null),
+    normalizedPhone.length >= 10
+      ? BillingPointsLedger.find({ phone: normalizedPhone }).sort({ createdAt: -1 }).limit(20).lean()
+      : Promise.resolve([]),
   ]);
 
   if (!bills.length && !returns.length) return res.status(404).json({ message: 'Customer not found' });
@@ -486,6 +787,11 @@ router.get('/customers/:phone', requirePermission('canViewCustomerReports'), asy
       lastVisit,
       favouriteCategory,
       favouritePayment,
+      pointsBalance: Number(pointsAccount?.balance || 0),
+    },
+    points: {
+      balance: Number(pointsAccount?.balance || 0),
+      ledger: pointsLedger || [],
     },
     bills,
     returns,

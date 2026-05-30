@@ -3,10 +3,10 @@ import Product from '../models/Product';
 import StockEntry from '../models/StockEntry';
 import StockItem from '../models/StockItem';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
-import { requireAdmin } from '../middleware/billingRoleMiddleware';
+import { requireAnyPermission } from '../middleware/billingRoleMiddleware';
 
 const router = express.Router();
-router.use(requireAdmin);
+router.use(requireAnyPermission('canManageStock', 'canViewReports', 'canManageSuppliersCategories'));
 
 router.get('/summary', async (req: BillingAuthRequest, res: Response) => {
   const query = { isBillingProduct: true } as any;

@@ -32,6 +32,10 @@ export type ReceiptPrintBill = {
   totalAmount?: number;
   cashReceived?: number;
   changeReturned?: number;
+  pointsEarned?: number;
+  pointsRedeemed?: number;
+  pointsDiscountAmount?: number;
+  pointsBalanceAfter?: number;
 };
 
 const formatBillDate = (d: Date) =>
@@ -200,7 +204,7 @@ export const ReceiptPrint = forwardRef<
           )}
           {billDiscountAmount > 0 && (
             <div className="amount-row discount-row">
-              <span>Bill Disc</span>
+              <span>Customer Disc</span>
               <span>:</span>
               <span>-{money(billDiscountAmount)}</span>
             </div>
@@ -251,16 +255,35 @@ export const ReceiptPrint = forwardRef<
         <span>{money(balance)}</span>
       </div>
 
+      {Number(bill.pointsDiscountAmount || 0) > 0 ? (
+        <div className="amount-row">
+          <span>Points used</span>
+          <span>:</span>
+          <span>
+            {Number(bill.pointsRedeemed || 0)} (-{money(Number(bill.pointsDiscountAmount || 0))})
+          </span>
+        </div>
+      ) : null}
+      {Number(bill.pointsEarned || 0) > 0 ? (
+        <div className="amount-row">
+          <span>Points earned</span>
+          <span>:</span>
+          <span>+{Number(bill.pointsEarned || 0)}</span>
+        </div>
+      ) : null}
       <div className="line" />
       <div className="points-row">
         <span>Available Points</span>
         <span>:</span>
-        <span>0.00</span>
+        <span>{Number(bill.pointsBalanceAfter ?? 0).toFixed(0)}</span>
       </div>
       <div className="line" />
 
       <div className="terms-title">Terms &amp; Conditions</div>
-      <div className="center">No replacement without label</div>
+      <div className="terms-item">* No return &amp; no refund.</div>
+      <div className="terms-item">* Exchange allowed only with original bill and tag.</div>
+      <div className="terms-item">* No exchange on offer items.</div>
+      <div className="terms-item">* Exchange accepted within 7 days from the date of purchase.</div>
       <div className="center">Thank you for doing business with us.</div>
     </div>
   );

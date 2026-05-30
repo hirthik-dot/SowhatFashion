@@ -42,6 +42,12 @@ export interface IBill extends Document {
   paymentBreakdown?: Array<{ method: 'cash' | 'gpay' | 'upi' | 'card'; amount: number }>;
   cashReceived?: number;
   changeReturned?: number;
+  pointsMode?: 'earn' | 'redeem' | 'none';
+  awardPoints?: boolean;
+  pointsEarned?: number;
+  pointsRedeemed?: number;
+  pointsDiscountAmount?: number;
+  pointsBalanceAfter?: number;
   status: 'draft' | 'held' | 'completed' | 'replaced' | 'partial_replaced';
   createdBy?: mongoose.Types.ObjectId;
   completedAt?: Date;
@@ -84,6 +90,12 @@ const BillSchema = new Schema<IBill>(
     ],
     cashReceived: { type: Number, default: 0 },
     changeReturned: { type: Number, default: 0 },
+    pointsMode: { type: String, enum: ['earn', 'redeem', 'none'], default: 'none' },
+    awardPoints: { type: Boolean, default: false },
+    pointsEarned: { type: Number, default: 0, min: 0 },
+    pointsRedeemed: { type: Number, default: 0, min: 0 },
+    pointsDiscountAmount: { type: Number, default: 0, min: 0 },
+    pointsBalanceAfter: { type: Number, min: 0 },
     status: {
       type: String,
       enum: ['draft', 'held', 'completed', 'replaced', 'partial_replaced'],

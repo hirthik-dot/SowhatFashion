@@ -6,33 +6,24 @@ import { usePathname, useRouter } from "next/navigation";
 import { billingApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useRole } from "@/hooks/useRole";
-
-const links = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/billing", label: "Billing" },
-  { href: "/history", label: "History" },
-  { href: "/inventory", label: "Inventory", adminOnly: true },
-  { href: "/stock", label: "Stock Entry", adminOnly: true },
-  { href: "/returns", label: "Returns", adminOnly: true },
-  { href: "/reports", label: "📈 Reports Overview", adminOnly: true },
-  { href: "/reports/customers", label: "📋 Customers", adminOnly: true },
-  { href: "/admin", label: "Admin", adminOnly: true },
-  { href: "/admin/inventory", label: "Inventory", adminOnly: true },
-];
+import { billingNavLinks, canAccessBillingPath, hasAnyPermission } from "@/lib/billing-access";
+import type { BillingAdminPermissions } from "@/lib/auth-store";
 
 function NavLinks({
   pathname,
-  isAdmin,
+  permissions,
+  role,
   onNavigate,
 }: {
   pathname: string;
-  isAdmin: boolean;
+  permissions: BillingAdminPermissions | null;
+  role: string | null;
   onNavigate?: () => void;
 }) {
   return (
     <>
-      {links
-        .filter((link) => !link.adminOnly || isAdmin)
+      {billingNavLinks
+        .filter((link) => !link.permissions?.length || hasAnyPermission(permissions, link.permissions, role))
         .map((link) => {
           const active = pathname === link.href || pathname.startsWith(link.href + "/");
           return (
@@ -65,7 +56,7 @@ export default function BillingShell({
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const { isAdmin, isCashier } = useRole();
+  const { isCashier, permissions, role } = useRole();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -88,11 +79,10 @@ export default function BillingShell({
 
   useEffect(() => {
     if (!user) return;
-    const adminOnlyPaths = ["/inventory", "/stock", "/returns", "/reports", "/admin"];
-    if (adminOnlyPaths.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) && !isAdmin) {
+    if (!canAccessBillingPath(pathname, permissions, role)) {
       router.push("/billing");
     }
-  }, [pathname, isAdmin, router, user]);
+  }, [pathname, permissions, role, router, user]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -148,7 +138,7 @@ export default function BillingShell({
           </button>
         </div>
         <nav className="p-2 space-y-1 overflow-y-auto max-h-[calc(100vh-4rem)]">
-          <NavLinks pathname={pathname} isAdmin={isAdmin} onNavigate={() => setMenuOpen(false)} />
+          <NavLinks pathname={pathname} permissions={permissions} role={role} onNavigate={() => setMenuOpen(false)} />
         </nav>
       </aside>
 

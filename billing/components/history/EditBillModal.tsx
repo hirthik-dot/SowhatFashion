@@ -373,7 +373,7 @@ export default function EditBillModal({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto_auto] gap-2 items-center">
-          <div className="font-medium">Bill Discount</div>
+          <div className="font-medium">Customer Discount</div>
           <div className="flex gap-2">
             <select className="pos-input h-10 min-h-0" value={billDiscountType} onChange={(e) => setBillDiscountType(e.target.value as DiscountType)}>
               <option value="none">None</option>

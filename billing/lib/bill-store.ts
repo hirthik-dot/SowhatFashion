@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { billingApi } from "@/lib/api";
+import { calcPointsDiscountRupees, type PointsMode } from "@/lib/points";
 
 export type PaymentMethod = "cash" | "gpay" | "upi" | "card" | "partial";
 export type PaymentSplitMethod = "cash" | "gpay" | "upi" | "card";
@@ -45,6 +46,9 @@ export type BillTab = {
   billDiscountType: DiscountType;
   billDiscountValue: number;
   cashReceived: number;
+  pointsMode: PointsMode;
+  awardPoints: boolean;
+  pointsToRedeem: number;
   status: "active" | "held";
   createdAt: string;
 };
@@ -61,6 +65,8 @@ export type BillTotals = {
   cgst: number;
   sgst: number;
   roundOff: number;
+  prePointsTotalAmount: number;
+  pointsDiscountAmount: number;
   totalAmount: number;
   changeReturned: number;
 };
@@ -86,6 +92,9 @@ type BillState = {
   updatePaymentSplit: (tabId: string, index: number, amount: number) => void;
   setBillDiscount: (tabId: string, type: DiscountType, value: number) => void;
   setCashReceived: (tabId: string, amount: number) => void;
+  setPointsMode: (tabId: string, mode: PointsMode) => void;
+  setAwardPoints: (tabId: string, award: boolean) => void;
+  setPointsToRedeem: (tabId: string, points: number) => void;
   holdBill: (tabId: string) => Promise<any>;
   resumeHeldBill: (bill: any) => void;
   clearTab: (tabId: string) => void;
@@ -107,6 +116,9 @@ const makeTab = (): BillTab => ({
   billDiscountType: "none",
   billDiscountValue: 0,
   cashReceived: 0,
+  pointsMode: "earn",
+  awardPoints: true,
+  pointsToRedeem: 0,
   status: "active",
   createdAt: new Date().toISOString(),
 });
@@ -138,7 +150,15 @@ const computeTotals = (tab?: BillTab): BillTotals => {
   const grossWithGst = taxableAmount + gstAmount;
   const totalDiscount = totalItemDiscount + billDiscountAmount;
   const netInclusive = Math.max(0, grossWithGst - totalDiscount);
-  const raw = netInclusive;
+  const prePointsRaw = netInclusive;
+  const prePointsTotalAmount = Math.round(prePointsRaw);
+  const pointsRedeemed =
+    tab?.pointsMode === "redeem" ? Math.floor(Math.max(0, Number(tab.pointsToRedeem || 0))) : 0;
+  const pointsDiscountAmount =
+    pointsRedeemed > 0
+      ? Math.min(prePointsTotalAmount, calcPointsDiscountRupees(pointsRedeemed))
+      : 0;
+  const raw = Math.max(0, prePointsRaw - pointsDiscountAmount);
   const roundOff = Math.round(raw) - raw;
   const totalAmount = Math.round(raw);
   const cashPortion =
@@ -162,6 +182,8 @@ const computeTotals = (tab?: BillTab): BillTotals => {
     cgst,
     sgst,
     roundOff,
+    prePointsTotalAmount,
+    pointsDiscountAmount,
     totalAmount,
     changeReturned,
   };
@@ -402,6 +424,29 @@ export const useBillStore = create<BillState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, cashReceived: Math.max(0, Number(amount || 0)) } : tab)),
     })),
+  setPointsMode: (tabId, mode) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              pointsMode: mode,
+              pointsToRedeem: mode === "earn" ? 0 : tab.pointsToRedeem,
+              awardPoints: mode === "earn" ? tab.awardPoints : false,
+            }
+          : tab
+      ),
+    })),
+  setAwardPoints: (tabId, award) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, awardPoints: award } : tab)),
+    })),
+  setPointsToRedeem: (tabId, points) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, pointsToRedeem: Math.max(0, Math.floor(Number(points || 0))) } : tab
+      ),
+    })),
   holdBill: async (tabId) => {
     const tab = get().tabs.find((value) => value.id === tabId);
     if (!tab) return null;
@@ -415,6 +460,9 @@ export const useBillStore = create<BillState>((set, get) => ({
       billDiscountType: tab.billDiscountType,
       billDiscountValue: tab.billDiscountValue,
       cashReceived: tab.cashReceived,
+      pointsMode: tab.pointsMode,
+      awardPoints: tab.awardPoints,
+      pointsToRedeem: tab.pointsToRedeem,
       ...totals,
     };
     const held = await billingApi.holdBill(payload);
@@ -469,6 +517,9 @@ export const useBillStore = create<BillState>((set, get) => ({
         billDiscountType: bill.billDiscountType || "none",
         billDiscountValue: Number(bill.billDiscountValue || 0),
         cashReceived: Number(bill.cashReceived || 0),
+        pointsMode: bill.pointsMode === "redeem" ? "redeem" : "earn",
+        awardPoints: bill.awardPoints !== false,
+        pointsToRedeem: Number(bill.pointsRedeemed || bill.pointsToRedeem || 0),
         status: "active",
         createdAt: new Date().toISOString(),
       };

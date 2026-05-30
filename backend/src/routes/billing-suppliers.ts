@@ -1,20 +1,16 @@
 import express, { Response } from 'express';
 import Supplier from '../models/Supplier';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
-import { requireAdmin, requirePermission } from '../middleware/billingRoleMiddleware';
+import { requirePermission } from '../middleware/billingRoleMiddleware';
 
 const router = express.Router();
-router.use(requireAdmin);
 
 router.get('/', async (_req, res: Response) => {
   const suppliers = await Supplier.find({ isActive: true }).sort({ createdAt: -1 });
   res.json(suppliers);
 });
 
-router.post('/', async (req: BillingAuthRequest, res: Response) => {
-  if (req.billingAdmin?.role !== 'superadmin' && !req.billingAdmin?.permissions?.canManageSuppliersCategories) {
-    return res.status(403).json({ message: 'Permission denied' });
-  }
+router.post('/', requirePermission('canManageSuppliersCategories'), async (req: BillingAuthRequest, res: Response) => {
   const supplier = await Supplier.create(req.body || {});
   return res.status(201).json(supplier);
 });

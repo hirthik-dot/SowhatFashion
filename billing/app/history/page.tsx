@@ -59,7 +59,7 @@ export default function HistoryPage() {
   const [reprintBill, setReprintBill] = useState<any>(null);
 
   const canEdit = useMemo(
-    () => user?.role === "superadmin" || (user?.role === "admin" && Boolean(user?.permissions?.canEditBills)),
+    () => user?.role === "superadmin" || Boolean(user?.permissions?.canEditBills),
     [user]
   );
 
@@ -292,7 +292,7 @@ export default function HistoryPage() {
                 <div className="text-red-400">Item Discs: -₹{viewBill.totalItemDiscount}</div>
               )}
               {Number(viewBill.billDiscountAmount || 0) > 0 && (
-                <div className="text-red-400">Bill Disc: -₹{viewBill.billDiscountAmount}</div>
+                <div className="text-red-400">Customer Disc: -₹{viewBill.billDiscountAmount}</div>
               )}
               <div className="font-bold text-lg pt-2 mt-1 border-t border-[var(--border)] min-w-[200px] text-right">
                 Net Total: ₹{viewBill.totalAmount}

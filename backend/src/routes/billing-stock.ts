@@ -5,12 +5,11 @@ import StockItem from '../models/StockItem';
 import StockEntry from '../models/StockEntry';
 import Supplier from '../models/Supplier';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
-import { requireAdmin, requirePermission } from '../middleware/billingRoleMiddleware';
+import { requirePermission } from '../middleware/billingRoleMiddleware';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
 import slugify from 'slugify';
 
 const router = express.Router();
-router.use(requireAdmin);
 
 const getBarcodePrefix = (date = new Date()) => {
   const y = date.getFullYear();
@@ -308,6 +307,55 @@ router.post('/entry/bulk', requirePermission('canManageStock'), async (req: Bill
   } catch (error: any) {
     return res.status(500).json({ message: error.message || 'Bulk stock entry failed' });
   }
+});
+
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+router.get('/products/search', requirePermission('canManageStock'), async (req: BillingAuthRequest, res: Response) => {
+  const supplier = String(req.query.supplier || '').trim();
+  const category = String(req.query.category || '').trim();
+  const subCategory = String(req.query.subCategory || '').trim();
+  const q = String(req.query.q || '').trim();
+
+  if (!OBJECT_ID_RE.test(supplier)) {
+    return res.status(400).json({ message: 'Valid supplier is required' });
+  }
+  if (!OBJECT_ID_RE.test(category) || !OBJECT_ID_RE.test(subCategory)) {
+    return res.status(400).json({ message: 'Category and subcategory are required' });
+  }
+
+  const query: any = {
+    isBillingProduct: true,
+    supplier,
+    billingCategory: category,
+    billingSubCategory: subCategory,
+  };
+
+  if (q.length >= 1) {
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
+    query.$or = [{ name: regex }, { billingName: regex }];
+  }
+
+  const products = await Product.find(query)
+    .select('billingName name price incomingPrice notes totalStock stock sizeStock')
+    .sort({ billingName: 1, name: 1 })
+    .limit(25)
+    .lean();
+
+  const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
+
+  return res.json(
+    products.map((p: any) => ({
+      _id: String(p._id),
+      name: String(p.billingName || p.name || '').trim(),
+      incomingPrice: isSuperAdmin ? Number(p.incomingPrice ?? 0) : undefined,
+      sellingPrice: Number(p.price ?? 0),
+      notes: String(p.notes || ''),
+      totalStock: Number(p.totalStock ?? p.stock ?? 0),
+      sizeStock: Array.isArray(p.sizeStock) ? p.sizeStock : [],
+    }))
+  );
 });
 
 router.get('/entries', requirePermission('canManageStock'), async (req, res: Response) => {

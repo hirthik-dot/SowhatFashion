@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import BillingShell from "@/components/layout/BillingShell";
@@ -12,7 +12,8 @@ import { useRole } from "@/hooks/useRole";
 
 export default function ReturnsPage() {
   const router = useRouter();
-  const { isAdmin } = useRole();
+  const { can } = useRole();
+  const canAccess = can("canReturn");
   const [step, setStep] = useState(1);
   const [billNumber, setBillNumber] = useState("");
   const [phone, setPhone] = useState("");
@@ -27,11 +28,16 @@ export default function ReturnsPage() {
   const [result, setResult] = useState<any>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<ReturnDocument | null>(null);
+  const [flashError, setFlashError] = useState(false);
+  const scannerRef = useRef<HTMLInputElement>(null);
   const user = useAuthStore((s) => s.user);
 
+  const playSuccess = () => new Audio("/sounds/beep.mp3").play().catch(() => undefined);
+  const playError = () => new Audio("/sounds/error.mp3").play().catch(() => undefined);
+
   useEffect(() => {
-    if (!isAdmin) router.push("/billing");
-  }, [isAdmin, router]);
+    if (!canAccess) router.push("/billing");
+  }, [canAccess, router]);
 
   const selectedItems = useMemo(
     () =>
@@ -78,6 +84,27 @@ export default function ReturnsPage() {
     [replacementItems]
   );
 
+  const returnedTotal = useMemo(
+    () =>
+      selectedItems.reduce(
+        (sum: number, item: any) =>
+          sum + Number(item.sellingPrice || item.lineTotal / item.quantity || item.mrp || 0) * Number(item.quantity || 1),
+        0
+      ),
+    [selectedItems]
+  );
+
+  const replacementTotal = useMemo(
+    () => replacementItems.reduce((sum, item) => sum + Number(item.sellingPrice || 0) * Number(item.quantity || 1), 0),
+    [replacementItems]
+  );
+
+  const priceDifference = replacementTotal - returnedTotal;
+
+  useEffect(() => {
+    if (step === 3) scannerRef.current?.focus();
+  }, [step]);
+
   const addReplacementItem = async (product: any) => {
     const barcode = String(product.barcode || "").trim();
     if (!barcode) throw new Error("No barcode available for this item");
@@ -96,6 +123,14 @@ export default function ReturnsPage() {
         sellingPrice: product.mrp,
       },
     ]);
+  };
+
+  const updateReplacementQuantity = (index: number, delta: number) => {
+    setReplacementItems((prev) =>
+      prev
+        .map((item, i) => (i === index ? { ...item, quantity: Math.max(1, Number(item.quantity || 1) + delta) } : item))
+        .filter((item) => item.quantity > 0)
+    );
   };
 
   const processReturn = async () => {
@@ -133,7 +168,7 @@ export default function ReturnsPage() {
     }
   };
 
-  if (!isAdmin) return null;
+  if (!canAccess) return null;
 
   return (
     <BillingShell title="Returns">
@@ -145,6 +180,130 @@ export default function ReturnsPage() {
           }}
         />
       ) : null}
+      {step === 3 ? (
+        <div className="space-y-3 pb-20 md:pb-0">
+          {toast ? <div className="pos-card p-2 text-sm">{toast}</div> : null}
+          {error ? <div className="pos-card p-2 text-sm text-[var(--error)]">{error}</div> : null}
+          <BarcodeScanner
+            inputRef={scannerRef}
+            flashError={flashError}
+            usedBarcodes={replacementBarcodes}
+            onScanBarcode={(barcode) => billingApi.scanBarcode(barcode)}
+            onAdd={async (product) => {
+              try {
+                await addReplacementItem(product);
+              } catch (err: any) {
+                playError();
+                setFlashError(true);
+                setTimeout(() => setFlashError(false), 350);
+                throw err;
+              }
+            }}
+            onToast={setToast}
+            playSuccess={playSuccess}
+            playError={playError}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="pos-card p-3 xl:col-span-2">
+              <h2 className="font-semibold mb-3">Replacement Items</h2>
+              <div className="space-y-2">
+                {replacementItems.length === 0 ? (
+                  <p className="text-sm text-[var(--text-secondary)]">No replacement items scanned yet.</p>
+                ) : (
+                  replacementItems.map((item, index) => {
+                    const qty = Number(item.quantity || 1);
+                    const price = Number(item.sellingPrice || 0);
+                    const total = price * qty;
+                    return (
+                      <div key={`${item.barcode}-${index}`} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center bg-[var(--surface-2)] rounded p-2 text-sm">
+                        <div className="col-span-2 md:col-span-1 text-[var(--text-secondary)] md:text-inherit">#{index + 1}</div>
+                        <div className="col-span-2 md:col-span-4">
+                          {item.name} {item.size ? `(${item.size})` : ""}
+                          <div className="text-xs text-[var(--text-secondary)] truncate">{item.barcode}</div>
+                        </div>
+                        <div className="col-span-1 md:col-span-2">₹{price.toFixed(2)}</div>
+                        <div className="col-span-1 md:col-span-2 flex items-center gap-1">
+                          <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => updateReplacementQuantity(index, -1)}>-</button>
+                          <span className="w-8 text-center">{qty}</span>
+                          <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => updateReplacementQuantity(index, 1)}>+</button>
+                        </div>
+                        <div className="col-span-1 md:col-span-2 font-semibold">₹{total.toFixed(2)}</div>
+                        <button
+                          className="col-span-1 md:col-span-1 text-[var(--error)] justify-self-end md:justify-self-start"
+                          onClick={() => setReplacementItems((prev) => prev.filter((_, i) => i !== index))}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <div className="pos-card p-3 space-y-2">
+              <h2 className="font-semibold">Return Summary</h2>
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between"><span>Bill</span><span>{bill?.billNumber || "-"}</span></div>
+                <div className="flex justify-between"><span>Customer</span><span>{bill?.customer?.name || "-"}</span></div>
+                <div className="flex justify-between"><span>Type</span><span className="capitalize">{returnType}</span></div>
+              </div>
+              <div className="border-t border-[var(--border)] pt-2 text-sm space-y-1">
+                <p className="text-[var(--text-secondary)]">RETURNED ITEMS</p>
+                {selectedItems.map((item: any, index: number) => (
+                  <div key={`${item.barcode}-${index}`} className="flex justify-between gap-2">
+                    <span className="truncate">{item.name} ({item.size || "-"}) x{item.quantity || 1}</span>
+                    <span className="shrink-0">
+                      ₹{(Number(item.sellingPrice || item.lineTotal / item.quantity || item.mrp || 0) * Number(item.quantity || 1)).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between font-medium border-t border-[var(--border)] pt-1 mt-1">
+                  <span>Returned Value</span><span>₹{returnedTotal.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="border-t border-[var(--border)] pt-2 text-sm space-y-1">
+                <div className="flex justify-between"><span>Replacement Value</span><span>₹{replacementTotal.toFixed(2)}</span></div>
+                <div className="flex justify-between font-medium">
+                  <span>Price Difference</span>
+                  <span className={priceDifference > 0 ? "text-[var(--gold)]" : priceDifference < 0 ? "text-[var(--success)]" : ""}>
+                    {priceDifference > 0 ? "+" : ""}₹{priceDifference.toFixed(2)}
+                  </span>
+                </div>
+                {priceDifference > 0 ? (
+                  <p className="text-xs text-[var(--text-secondary)]">Customer pays the difference</p>
+                ) : priceDifference < 0 ? (
+                  <p className="text-xs text-[var(--text-secondary)]">Refund due to customer</p>
+                ) : (
+                  <p className="text-xs text-[var(--text-secondary)]">Even exchange — no payment due</p>
+                )}
+              </div>
+              <div className="flex justify-between text-2xl font-bold text-[var(--gold)] border-t border-[var(--border)] pt-2">
+                <span>DIFFERENCE</span>
+                <span>{priceDifference > 0 ? "+" : ""}₹{priceDifference.toFixed(2)}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button className="h-11 rounded border border-[var(--border)]" onClick={() => setStep(2)}>BACK</button>
+                <button className="h-11 rounded border border-[var(--border)]" onClick={() => setReplacementItems([])}>CLEAR</button>
+                <button
+                  className="h-11 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50"
+                  disabled={replacementItems.length === 0}
+                  onClick={processReturn}
+                >
+                  PROCESS RETURN
+                </button>
+              </div>
+              {result ? <p className="text-[var(--success)] text-sm">Replacement processed: {result.returnNumber}</p> : null}
+            </div>
+          </div>
+          <button
+            className="md:hidden fixed bottom-3 left-3 right-3 h-12 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50"
+            disabled={replacementItems.length === 0}
+            onClick={processReturn}
+          >
+            PROCESS RETURN
+          </button>
+        </div>
+      ) : (
       <div className="pos-card p-4 space-y-3">
         <h2 className="font-semibold">Return / Replacement</h2>
         {step === 1 ? (
@@ -190,37 +349,8 @@ export default function ReturnsPage() {
             <button className="h-11 px-3 rounded bg-[var(--gold)] text-black" onClick={() => setStep(3)}>NEXT</button>
           </div>
         ) : null}
-        {step === 3 ? (
-          <div className="space-y-2">
-            {toast ? <div className="pos-card p-2 text-sm">{toast}</div> : null}
-            <BarcodeScanner
-              usedBarcodes={replacementBarcodes}
-              onScanBarcode={(barcode) => billingApi.scanBarcode(barcode)}
-              onAdd={addReplacementItem}
-              onToast={setToast}
-            />
-            <div className="pos-card p-3">
-              <p className="font-semibold mb-2">Replacement Items</p>
-              {replacementItems.length === 0 ? (
-                <p className="text-sm text-[var(--text-secondary)]">No replacement items scanned yet.</p>
-              ) : (
-                <div className="space-y-1 text-sm">
-                  {replacementItems.map((item, index) => (
-                    <div key={`${item.barcode}-${index}`} className="flex justify-between">
-                      <span>{item.name} ({item.size || "-"})</span>
-                      <span>{item.barcode}</span>
-                      <button className="text-[var(--error)]" onClick={() => setReplacementItems((prev) => prev.filter((_, i) => i !== index))}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button className="h-11 px-3 rounded bg-[var(--gold)] text-black" onClick={processReturn}>PROCESS RETURN</button>
-            {result ? <p className="text-[var(--success)]">Replacement processed: {result.returnNumber}</p> : null}
-            {error ? <p className="text-sm text-[var(--error)]">{error}</p> : null}
-          </div>
-        ) : null}
       </div>
+      )}
     </BillingShell>
   );
 }

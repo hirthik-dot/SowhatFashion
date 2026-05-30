@@ -214,6 +214,12 @@ export default function ReceiptPrintModal({
                 font-weight: 700;
                 margin: 4px 0 2px;
               }
+              .terms-item {
+                font-size: 10px;
+                line-height: 1.25;
+                margin: 1px 0;
+                text-align: left;
+              }
 
               @media print {
                 body * { visibility: hidden; }

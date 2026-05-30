@@ -6,6 +6,14 @@ import StockItem from '../models/StockItem';
 import { BillingAuthRequest, billingAuthMiddleware } from '../middleware/billingAuthMiddleware';
 import { requireSuperAdmin } from '../middleware/billingRoleMiddleware';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
+import BillingPointsAccount from '../models/BillingPointsAccount';
+import BillingPointsLedger from '../models/BillingPointsLedger';
+import {
+  applyPointsLedger,
+  normalizeBillingPhone,
+  validatePointsForBill,
+  type PointsMode,
+} from '../lib/billing-points';
 
 const router = express.Router();
 
@@ -13,7 +21,7 @@ const router = express.Router();
 const BILLING_GST_RATE = 0.05;
 
 const canEditBills = (admin: any) =>
-  admin?.role === 'superadmin' || (admin?.role === 'admin' && Boolean(admin?.permissions?.canEditBills));
+  admin?.role === 'superadmin' || Boolean(admin?.permissions?.canEditBills);
 
 const enforceDiscountLimit = (req: BillingAuthRequest, payload: any) => {
   const role = req.billingAdmin?.role;
@@ -63,7 +71,12 @@ const adjustProductSizeStock = async (productId: string, size: string, delta: nu
   await product.save();
 };
 
-const calculateBillTotals = (items: any[], billDiscountType: string, billDiscountValue: number) => {
+const calculateBillTotals = (
+  items: any[],
+  billDiscountType: string,
+  billDiscountValue: number,
+  pointsDiscountAmount = 0
+) => {
   const normalizedItems = (items || []).map((item) => {
     const mrp = Number(item.mrp ?? item.price ?? 0);
     const quantity = Math.max(1, Number(item.quantity || 1));
@@ -118,7 +131,10 @@ const calculateBillTotals = (items: any[], billDiscountType: string, billDiscoun
   const sgst = gstAmount / 2;
   const grossWithGst = taxableAmount + gstAmount;
   const totalDiscount = totalItemDiscount + effectiveBillDiscount;
-  const rawTotal = Math.max(0, grossWithGst - totalDiscount);
+  const prePointsRaw = Math.max(0, grossWithGst - totalDiscount);
+  const prePointsTotal = Math.round(prePointsRaw);
+  const safePointsDiscount = Math.min(Math.max(0, pointsDiscountAmount), prePointsTotal);
+  const rawTotal = Math.max(0, prePointsRaw - safePointsDiscount);
   const roundOff = Math.round(rawTotal) - rawTotal;
   const totalAmount = Math.round(rawTotal);
   return {
@@ -131,7 +147,49 @@ const calculateBillTotals = (items: any[], billDiscountType: string, billDiscoun
     cgst,
     sgst,
     roundOff,
+    prePointsTotal,
+    pointsDiscountAmount: safePointsDiscount,
     totalAmount,
+  };
+};
+
+const resolvePointsForPayload = async (payload: any, prePointsTotal: number) => {
+  const phone = String(payload?.customer?.phone || '');
+  const requestedMode = String(payload?.pointsMode || 'earn') as PointsMode;
+  const awardPoints = payload?.awardPoints !== false;
+  const pointsToRedeem = Math.floor(Number(payload?.pointsToRedeem || payload?.pointsRedeemed || 0));
+
+  let balance = 0;
+  const normalized = normalizeBillingPhone(phone);
+  if (normalized.length >= 10) {
+    const account = await BillingPointsAccount.findOne({ phone: normalized }).lean();
+    balance = Number(account?.balance || 0);
+  }
+
+  const mode: PointsMode =
+    requestedMode === 'redeem' && pointsToRedeem > 0
+      ? 'redeem'
+      : requestedMode === 'earn'
+      ? 'earn'
+      : 'none';
+
+  const validated = validatePointsForBill({
+    pointsMode: mode,
+    awardPoints,
+    pointsToRedeem,
+    prePointsTotal,
+    balance,
+    phone,
+  });
+
+  const storedMode: PointsMode =
+    validated.pointsRedeemed > 0 ? 'redeem' : validated.pointsEarned > 0 || (mode === 'earn' && awardPoints) ? 'earn' : 'none';
+
+  return {
+    ...validated,
+    pointsMode: storedMode,
+    awardPoints: mode === 'earn' && awardPoints,
+    normalizedPhone: normalized,
   };
 };
 
@@ -283,9 +341,70 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
   );
 });
 
+const CUSTOMER_BILL_STATUSES = ['completed', 'replaced', 'partial_replaced', 'returned', 'partial_return', 'held'];
+
+router.get('/customers/search', async (req, res: Response) => {
+  const q = String(req.query.q || '').trim();
+  if (!q || q.length < 2) return res.json([]);
+
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escaped, 'i');
+
+  const results = await Bill.aggregate([
+    {
+      $match: {
+        status: { $in: CUSTOMER_BILL_STATUSES },
+        'customer.phone': { $exists: true, $ne: '' },
+        $or: [{ 'customer.name': regex }, { 'customer.phone': regex }],
+      },
+    },
+    { $sort: { createdAt: 1 } },
+    {
+      $group: {
+        _id: '$customer.phone',
+        name: { $last: '$customer.name' },
+        phone: { $first: '$customer.phone' },
+        totalBills: { $sum: 1 },
+        lastVisit: { $max: '$createdAt' },
+      },
+    },
+    { $sort: { lastVisit: -1 } },
+    { $limit: 10 },
+  ]);
+
+  const rows = results || [];
+  const phones = rows.map((row: any) => normalizeBillingPhone(String(row.phone || row._id || ''))).filter((p) => p.length >= 10);
+  const accounts =
+    phones.length > 0
+      ? await BillingPointsAccount.find({ phone: { $in: phones } })
+          .select('phone balance')
+          .lean()
+      : [];
+  const balanceByPhone = new Map(accounts.map((a: any) => [a.phone, Number(a.balance || 0)]));
+
+  return res.json(
+    rows.map((row: any) => {
+      const phone = String(row.phone || row._id || '').trim();
+      const normalized = normalizeBillingPhone(phone);
+      return {
+        name: String(row.name || '').trim() || 'Customer',
+        phone,
+        totalBills: Number(row.totalBills || 0),
+        lastVisit: row.lastVisit,
+        pointsBalance: balanceByPhone.get(normalized) ?? 0,
+      };
+    })
+  );
+});
+
 router.post('/calculate', async (req, res: Response) => {
-  const { items, billDiscountType, billDiscountValue } = req.body || {};
-  const totals = calculateBillTotals(items || [], billDiscountType || 'none', Number(billDiscountValue || 0));
+  const { items, billDiscountType, billDiscountValue, pointsDiscountAmount } = req.body || {};
+  const totals = calculateBillTotals(
+    items || [],
+    billDiscountType || 'none',
+    Number(billDiscountValue || 0),
+    Number(pointsDiscountAmount || 0)
+  );
   return res.json({
     subtotal: totals.subtotal,
     itemDiscounts: totals.totalItemDiscount,
@@ -295,6 +414,8 @@ router.post('/calculate', async (req, res: Response) => {
     cgst: totals.cgst,
     sgst: totals.sgst,
     roundOff: totals.roundOff,
+    prePointsTotal: totals.prePointsTotal,
+    pointsDiscountAmount: totals.pointsDiscountAmount,
     total: totals.totalAmount,
   });
 });
@@ -306,7 +427,26 @@ router.post('/hold', billingAuthMiddleware, async (req: BillingAuthRequest, res:
   } catch (error: any) {
     return res.status(403).json({ message: error.message || 'Discount permission denied' });
   }
-  const totals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+  const baseTotals = calculateBillTotals(
+    payload.items || [],
+    payload.billDiscountType || 'none',
+    Number(payload.billDiscountValue || 0)
+  );
+  let pointsResolved: any = { pointsEarned: 0, pointsRedeemed: 0, pointsDiscountAmount: 0, pointsMode: 'none', awardPoints: false };
+  try {
+    pointsResolved = await resolvePointsForPayload(payload, baseTotals.prePointsTotal);
+    if (pointsResolved.error) {
+      return res.status(400).json({ message: pointsResolved.error });
+    }
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message || 'Invalid points' });
+  }
+  const totals = calculateBillTotals(
+    payload.items || [],
+    payload.billDiscountType || 'none',
+    Number(payload.billDiscountValue || 0),
+    pointsResolved.pointsDiscountAmount
+  );
   const bill = await Bill.create({
     ...payload,
     items: totals.normalizedItems,
@@ -319,6 +459,11 @@ router.post('/hold', billingAuthMiddleware, async (req: BillingAuthRequest, res:
     sgst: totals.sgst,
     roundOff: totals.roundOff,
     totalAmount: totals.totalAmount,
+    pointsMode: pointsResolved.pointsMode,
+    awardPoints: pointsResolved.awardPoints,
+    pointsEarned: 0,
+    pointsRedeemed: pointsResolved.pointsRedeemed,
+    pointsDiscountAmount: totals.pointsDiscountAmount,
     status: 'held',
     createdBy: req.billingAdminId,
   });
@@ -345,7 +490,21 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
   try {
     const payload = req.body || {};
     enforceDiscountLimit(req, payload);
-    const totals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+    const baseTotals = calculateBillTotals(
+      payload.items || [],
+      payload.billDiscountType || 'none',
+      Number(payload.billDiscountValue || 0)
+    );
+    const pointsResolved = await resolvePointsForPayload(payload, baseTotals.prePointsTotal);
+    if (pointsResolved.error) {
+      return res.status(400).json({ message: pointsResolved.error });
+    }
+    const totals = calculateBillTotals(
+      payload.items || [],
+      payload.billDiscountType || 'none',
+      Number(payload.billDiscountValue || 0),
+      pointsResolved.pointsDiscountAmount
+    );
     const paymentBreakdown = Array.isArray(payload.paymentBreakdown)
       ? payload.paymentBreakdown
       : [
@@ -400,11 +559,42 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
       sgst: totals.sgst,
       roundOff: totals.roundOff,
       totalAmount: totals.totalAmount,
+      pointsMode: pointsResolved.pointsMode,
+      awardPoints: pointsResolved.awardPoints,
+      pointsEarned: pointsResolved.pointsEarned,
+      pointsRedeemed: pointsResolved.pointsRedeemed,
+      pointsDiscountAmount: totals.pointsDiscountAmount,
       changeReturned: Math.max(0, Number(payload.cashReceived || 0) - cashPortion),
       status: 'completed',
       completedAt: new Date(),
       createdBy: req.billingAdminId,
     });
+
+    if (
+      pointsResolved.pointsEarned > 0 ||
+      pointsResolved.pointsRedeemed > 0
+    ) {
+      const balanceAfter = await applyPointsLedger({
+        phone: String(payload.customer?.phone || ''),
+        customerName: String(payload.customer?.name || ''),
+        pointsEarned: pointsResolved.pointsEarned,
+        pointsRedeemed: pointsResolved.pointsRedeemed,
+        pointsDiscountAmount: totals.pointsDiscountAmount,
+        billId: completed._id,
+        billNumber,
+        createdBy: req.billingAdminId,
+        BillingPointsAccount,
+        BillingPointsLedger,
+      });
+      completed.pointsBalanceAfter = balanceAfter;
+      await completed.save();
+    } else if (pointsResolved.normalizedPhone.length >= 10) {
+      const account = await BillingPointsAccount.findOne({ phone: pointsResolved.normalizedPhone }).lean();
+      if (account) {
+        completed.pointsBalanceAfter = Number(account.balance || 0);
+        await completed.save();
+      }
+    }
 
     for (const item of totals.normalizedItems) {
       const productId = item.productId || item.product;

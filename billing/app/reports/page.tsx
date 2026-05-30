@@ -11,7 +11,8 @@ import { useRole } from "@/hooks/useRole";
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { isAdmin } = useRole();
+  const { can } = useRole();
+  const canAccess = can("canViewReports");
   const [activeTab, setActiveTab] = useState<"sales" | "profit">("sales");
   
   // Sales Tab State
@@ -78,8 +79,8 @@ export default function ReportsPage() {
   };
 
   useEffect(() => {
-    if (!isAdmin) router.push("/billing");
-  }, [isAdmin, router]);
+    if (!canAccess) router.push("/billing");
+  }, [canAccess, router]);
 
   useEffect(() => {
     if (activeTab === "sales") {
@@ -218,7 +219,7 @@ export default function ReportsPage() {
     return `BATCH-${y}${m}${d}-${idPart}`;
   };
 
-  if (!isAdmin) return null;
+  if (!canAccess) return null;
 
   return (
     <BillingShell title="Business Reports">
@@ -249,6 +250,9 @@ export default function ReportsPage() {
                 </a>
                 <Link href="/reports/customers" className="underline">
                   📋 Customers
+                </Link>
+                <Link href="/reports/bill-profit" className="underline">
+                  💰 Bill Wise Profit
                 </Link>
               </div>
               {[
@@ -379,6 +383,17 @@ export default function ReportsPage() {
             {/* Profit Tab Header */}
             <div className="pos-card p-4 flex flex-wrap gap-4 items-center justify-between">
               <div>
+                <div className="text-xs text-[var(--text-secondary)] flex flex-wrap gap-3 mb-2">
+                  <Link href="/reports" className="underline">
+                    📈 Overview
+                  </Link>
+                  <Link href="/reports/customers" className="underline">
+                    📋 Customers
+                  </Link>
+                  <Link href="/reports/bill-profit" className="underline text-[var(--gold)]">
+                    💰 Bill Wise Profit
+                  </Link>
+                </div>
                 <h3 className="font-bold text-lg text-white">Stock Batch & Profit Margin</h3>
                 <p className="text-sm text-[var(--text-secondary)]">Revenue and profit use MRP after discounts only — GST is excluded (see Tax Overview on Sales tab).</p>
               </div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import BillingShell from "@/components/layout/BillingShell";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
+import StockProductNameSearch, { StockProductSearchResult } from "@/components/stock/StockProductNameSearch";
 
 const SIZE_PRESETS: Record<string, string[]> = {
   alpha: ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "Free Size"],
@@ -16,7 +17,8 @@ const SIZE_PRESETS: Record<string, string[]> = {
 
 export default function StockPage() {
   const router = useRouter();
-  const { isAdmin } = useRole();
+  const { can } = useRole();
+  const canAccess = can("canManageStock");
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
@@ -65,8 +67,8 @@ export default function StockPage() {
   };
 
   useEffect(() => {
-    if (!isAdmin) router.push("/billing");
-  }, [isAdmin, router]);
+    if (!canAccess) router.push("/billing");
+  }, [canAccess, router]);
 
   useEffect(() => {
     billingApi.suppliers().then(setSuppliers).catch(() => setSuppliers([]));
@@ -141,6 +143,29 @@ export default function StockPage() {
 
   const totalMultiQty = Object.values(selectedSizes).reduce((sum, q) => sum + q, 0);
 
+  const clearProductFields = () => ({
+    productName: "",
+    incomingPrice: "",
+    sellingPrice: "",
+    notes: "",
+  });
+
+  const applySelectedProduct = (product: StockProductSearchResult) => {
+    setForm((prev) => ({
+      ...prev,
+      productName: product.name,
+      incomingPrice:
+        product.incomingPrice != null && product.incomingPrice > 0
+          ? String(product.incomingPrice)
+          : prev.incomingPrice,
+      sellingPrice:
+        product.sellingPrice != null && product.sellingPrice > 0
+          ? String(product.sellingPrice)
+          : prev.sellingPrice,
+      notes: product.notes || prev.notes,
+    }));
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
@@ -185,7 +210,7 @@ export default function StockPage() {
     }
   };
 
-  if (!isAdmin) return null;
+  if (!canAccess) return null;
 
   return (
     <BillingShell title="Stock Entry">
@@ -196,7 +221,14 @@ export default function StockPage() {
           className="pos-input w-full"
           value={form.supplier}
           onChange={(e) =>
-            setForm((prev) => ({ ...prev, supplier: e.target.value, category: "", subCategory: "", size: "" }))
+            setForm((prev) => ({
+              ...prev,
+              supplier: e.target.value,
+              category: "",
+              subCategory: "",
+              size: "",
+              ...clearProductFields(),
+            }))
           }
           required
         >
@@ -207,7 +239,15 @@ export default function StockPage() {
         <select
           className="pos-input w-full"
           value={form.category}
-          onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value, subCategory: "", size: "" }))}
+          onChange={(e) =>
+            setForm((prev) => ({
+              ...prev,
+              category: e.target.value,
+              subCategory: "",
+              size: "",
+              ...clearProductFields(),
+            }))
+          }
           required
         >
           <option value="">Select Category</option>
@@ -217,7 +257,9 @@ export default function StockPage() {
         <select
           className="pos-input w-full"
           value={form.subCategory}
-          onChange={(e) => setForm((prev) => ({ ...prev, subCategory: e.target.value, size: "" }))}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, subCategory: e.target.value, size: "", ...clearProductFields() }))
+          }
           required
         >
           <option value="">Select Subcategory</option>
@@ -225,12 +267,13 @@ export default function StockPage() {
         </select>
 
         <label className="block text-sm text-[var(--text-secondary)]">Product Name</label>
-        <input
-          className="pos-input w-full"
-          value={form.productName}
-          onChange={(e) => setForm((prev) => ({ ...prev, productName: e.target.value }))}
-          placeholder="Product display name"
-          required
+        <StockProductNameSearch
+          supplierId={form.supplier}
+          categoryId={form.category}
+          subCategoryId={form.subCategory}
+          productName={form.productName}
+          onProductNameChange={(name) => setForm((prev) => ({ ...prev, productName: name }))}
+          onSelectProduct={applySelectedProduct}
         />
 
         {/* Mode toggle */}

@@ -1,9 +1,8 @@
 import express, { Response } from 'express';
 import BillingCategory from '../models/BillingCategory';
-import { requireAdmin, requirePermission } from '../middleware/billingRoleMiddleware';
+import { requirePermission } from '../middleware/billingRoleMiddleware';
 
 const router = express.Router();
-router.use(requireAdmin);
 
 router.get('/', async (_req, res: Response) => {
   const categories = await BillingCategory.find({ isActive: true }).sort({ order: 1, name: 1 }).lean();

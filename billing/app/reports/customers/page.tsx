@@ -16,7 +16,8 @@ type SortField = "totalSpent" | "lastVisit" | "totalBills";
 
 export default function CustomerReportsPage() {
   const router = useRouter();
-  const { isAdmin } = useRole();
+  const { can } = useRole();
+  const canAccess = can("canViewCustomerReports");
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -71,8 +72,8 @@ export default function CustomerReportsPage() {
   };
 
   useEffect(() => {
-    if (!isAdmin) router.push("/billing");
-  }, [isAdmin, router]);
+    if (!canAccess) router.push("/billing");
+  }, [canAccess, router]);
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -122,7 +123,7 @@ export default function CustomerReportsPage() {
     }
   };
 
-  if (!isAdmin) return null;
+  if (!canAccess) return null;
 
   return (
     <BillingShell title="Customer Reports">
@@ -133,6 +134,9 @@ export default function CustomerReportsPage() {
             <div className="text-xs text-[var(--text-secondary)] mt-1 flex gap-3">
               <Link href="/reports" className="underline">
                 📈 Overview
+              </Link>
+              <Link href="/reports/bill-profit" className="underline">
+                💰 Bill Wise Profit
               </Link>
               <span className="text-[var(--gold)]">📋 Customers</span>
             </div>

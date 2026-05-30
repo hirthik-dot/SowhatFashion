@@ -8,7 +8,8 @@ import { useRole } from "@/hooks/useRole";
 
 export default function InventoryPage() {
   const router = useRouter();
-  const { isAdmin, isSuperAdmin } = useRole();
+  const { canAny, isSuperAdmin } = useRole();
+  const canAccess = canAny("canManageStock", "canViewReports");
   const [summary, setSummary] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -42,8 +43,8 @@ export default function InventoryPage() {
   };
 
   useEffect(() => {
-    if (!isAdmin) router.push("/billing");
-  }, [isAdmin, router]);
+    if (!canAccess) router.push("/billing");
+  }, [canAccess, router]);
 
   useEffect(() => {
     load(page).catch(() => {
@@ -70,7 +71,7 @@ export default function InventoryPage() {
     [summary, isSuperAdmin]
   );
 
-  if (!isAdmin) return null;
+  if (!canAccess) return null;
 
   return (
     <BillingShell title="Inventory">

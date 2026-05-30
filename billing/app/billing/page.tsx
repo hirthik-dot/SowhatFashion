@@ -10,7 +10,10 @@ import HeldBillsDrawer from "@/components/billing/HeldBillsDrawer";
 import ReceiptPrintModal from "@/components/billing/ReceiptPrintModal";
 import BarcodeScanner from "@/components/billing/BarcodeScanner";
 import PaymentSummary from "@/components/billing/PaymentSummary";
+import CustomerSearchFields from "@/components/billing/CustomerSearchFields";
+import PointsPanel from "@/components/billing/PointsPanel";
 import { useRole } from "@/hooks/useRole";
+import { MIN_REDEEM_POINTS } from "@/lib/points";
 
 export default function BillingPage() {
   const { can, maxDiscount, isSuperAdmin } = useRole();
@@ -36,6 +39,9 @@ export default function BillingPage() {
   const setPaymentMethod = useBillStore((s) => s.setPaymentMethod);
   const setBillDiscount = useBillStore((s) => s.setBillDiscount);
   const setCashReceived = useBillStore((s) => s.setCashReceived);
+  const setPointsMode = useBillStore((s) => s.setPointsMode);
+  const setAwardPoints = useBillStore((s) => s.setAwardPoints);
+  const setPointsToRedeem = useBillStore((s) => s.setPointsToRedeem);
   const addPaymentSplit = useBillStore((s) => s.addPaymentSplit);
   const removePaymentSplit = useBillStore((s) => s.removePaymentSplit);
   const updatePaymentSplit = useBillStore((s) => s.updatePaymentSplit);
@@ -56,10 +62,16 @@ export default function BillingPage() {
     () => (activeTab?.paymentBreakdown || []).some((entry) => Number(entry.amount || 0) <= 0),
     [activeTab?.paymentBreakdown]
   );
+  const redeemInvalid =
+    activeTab?.pointsMode === "redeem" &&
+    activeTab.pointsToRedeem > 0 &&
+    activeTab.pointsToRedeem < MIN_REDEEM_POINTS;
+
   const canComplete = Boolean(
     activeTab &&
       activeTab.customer.name.trim() &&
       activeTab.salesmanId &&
+      !redeemInvalid &&
       (activeTab.paymentMethod !== "partial"
         ? true
         : Math.round(paidAmount) === totals.totalAmount && !hasInvalidPartialSplit && (activeTab.paymentBreakdown || []).length > 0)
@@ -165,6 +177,9 @@ export default function BillingPage() {
     if (activeTab.billDiscountType === "percent" && Number(activeTab.billDiscountValue || 0) > maxAllowedDiscount) {
       return setToast(`Discount cannot exceed ${maxAllowedDiscount}%`);
     }
+    if (activeTab.pointsMode === "redeem" && activeTab.pointsToRedeem > 0 && activeTab.pointsToRedeem < MIN_REDEEM_POINTS) {
+      return setToast(`Minimum ${MIN_REDEEM_POINTS} points required to redeem`);
+    }
     const ok = window.confirm(`Complete bill for ₹${totals.totalAmount}?`);
     if (!ok) return;
     const completed = await billingApi.completeBill({
@@ -176,6 +191,9 @@ export default function BillingPage() {
       billDiscountType: activeTab.billDiscountType,
       billDiscountValue: activeTab.billDiscountValue,
       cashReceived: activeTab.cashReceived,
+      pointsMode: activeTab.pointsMode,
+      awardPoints: activeTab.awardPoints,
+      pointsToRedeem: activeTab.pointsToRedeem,
     });
     const selectedSalesman = salesmen.find((s) => s._id === activeTab.salesmanId);
     setReceiptBill({ ...completed, salesmanName: selectedSalesman?.name || "" });
@@ -234,8 +252,25 @@ export default function BillingPage() {
           </div>
           <div className="pos-card p-3 space-y-2">
             <h2 className="font-semibold">Customer & Payment</h2>
-            <input className="pos-input w-full" placeholder="Name" value={activeTab?.customer.name || ""} onChange={(e) => activeTab && setCustomer(activeTab.id, e.target.value, activeTab.customer.phone)} />
-            <input className="pos-input w-full" placeholder="Phone" inputMode="numeric" value={activeTab?.customer.phone || ""} onChange={(e) => activeTab && setCustomer(activeTab.id, activeTab.customer.name, e.target.value)} />
+            {activeTab ? (
+              <CustomerSearchFields
+                name={activeTab.customer.name || ""}
+                phone={activeTab.customer.phone || ""}
+                onChange={(customerName, customerPhone) => setCustomer(activeTab.id, customerName, customerPhone)}
+              />
+            ) : null}
+            {activeTab ? (
+              <PointsPanel
+                phone={activeTab.customer.phone || ""}
+                pointsMode={activeTab.pointsMode}
+                awardPoints={activeTab.awardPoints}
+                pointsToRedeem={activeTab.pointsToRedeem}
+                prePointsTotal={totals.prePointsTotalAmount}
+                onModeChange={(mode) => setPointsMode(activeTab.id, mode)}
+                onAwardChange={(award) => setAwardPoints(activeTab.id, award)}
+                onRedeemChange={(points) => setPointsToRedeem(activeTab.id, points)}
+              />
+            ) : null}
             <select className="pos-input w-full" value={activeTab?.salesmanId || ""} onChange={(e) => activeTab && setSalesman(activeTab.id, e.target.value)}>
               <option value="">Select salesman</option>
               {salesmen.map((salesman) => <option key={salesman._id} value={salesman._id}>{salesman.name}</option>)}
@@ -272,7 +307,7 @@ export default function BillingPage() {
                 )}
               </div>
               <div className="flex justify-between"><span>After Item Disc</span><span>₹{totals.afterItemDiscount.toFixed(2)}</span></div>
-              <p className="text-[var(--text-secondary)] mt-2">BILL DISCOUNT</p>
+              <p className="text-[var(--text-secondary)] mt-2">CUSTOMER DISCOUNT</p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   className="h-9 w-9 rounded border border-[var(--border)] disabled:opacity-50"
@@ -300,6 +335,12 @@ export default function BillingPage() {
               <div className="flex justify-between border-t border-[var(--border)] pt-1 mt-1 text-xs text-[var(--text-secondary)]">
                 <span>CGST / SGST</span><span>₹{totals.cgst.toFixed(2)} / ₹{totals.sgst.toFixed(2)}</span>
               </div>
+              {totals.pointsDiscountAmount > 0 ? (
+                <div className="flex justify-between text-[var(--success)]">
+                  <span>Points discount</span>
+                  <span>-₹{totals.pointsDiscountAmount.toFixed(2)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between"><span>Round Off</span><span>{totals.roundOff.toFixed(2)}</span></div>
               <div className="flex justify-between text-2xl font-bold text-[var(--gold)]"><span>TOTAL</span><span>₹{totals.totalAmount.toFixed(2)}</span></div>
             </div>

@@ -4,24 +4,20 @@ import BillingShell from "@/components/layout/BillingShell";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { adminHubLinks } from "@/lib/billing-access";
 import { useRole } from "@/hooks/useRole";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { isAdmin } = useRole();
+  const { canAny } = useRole();
+  const canAccess = canAny("canManageAdmins", "canManageSuppliersCategories");
   useEffect(() => {
-    if (!isAdmin) router.push("/billing");
-  }, [isAdmin, router]);
+    if (!canAccess) router.push("/billing");
+  }, [canAccess, router]);
 
-  if (!isAdmin) return null;
+  if (!canAccess) return null;
 
-  const items = [
-    { href: "/admin/inventory", label: "Inventory" },
-    { href: "/admin/suppliers", label: "Suppliers" },
-    { href: "/admin/categories", label: "Categories" },
-    { href: "/admin/salesmen", label: "Salesmen" },
-    { href: "/admin/staff", label: "Staff" },
-  ];
+  const items = adminHubLinks.filter((item) => canAny(...item.permissions));
   return (
     <BillingShell title="Admin">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

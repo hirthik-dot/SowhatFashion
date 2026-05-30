@@ -25,3 +25,14 @@ export const requirePermission = (permission: keyof BillingAdminPermissions) => 
     return next();
   };
 };
+
+export const requireAnyPermission = (...permissions: Array<keyof BillingAdminPermissions>) => {
+  return (req: BillingAuthRequest, res: Response, next: NextFunction) => {
+    if (req.billingAdmin?.role === 'superadmin') return next();
+    const userPermissions = req.billingAdmin?.permissions || {};
+    if (permissions.some((permission) => Boolean(userPermissions[permission]))) {
+      return next();
+    }
+    return res.status(403).json({ message: 'Permission denied' });
+  };
+};

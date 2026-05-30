@@ -4,11 +4,13 @@ import BillingReturn from '../models/Return';
 import Product from '../models/Product';
 import StockItem from '../models/StockItem';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
-import { requireAdmin, requirePermission } from '../middleware/billingRoleMiddleware';
+import { requirePermission } from '../middleware/billingRoleMiddleware';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
+import BillingPointsAccount from '../models/BillingPointsAccount';
+import BillingPointsLedger from '../models/BillingPointsLedger';
+import { clawbackPointsOnReturn } from '../lib/billing-points';
 
 const router = express.Router();
-router.use(requireAdmin);
 router.use(requirePermission('canReturn'));
 
 const generateReturnNumber = async () => {
@@ -107,6 +109,20 @@ router.post('/', async (req: BillingAuthRequest, res: Response) => {
 
     bill.status = returnType === 'partial' ? 'partial_replaced' : 'replaced';
     await bill.save();
+
+    const originalPointsEarned = Number((bill as any).pointsEarned || 0);
+    if (originalPointsEarned > 0 && returnedTotal > 0) {
+      await clawbackPointsOnReturn({
+        phone: String(bill.customer?.phone || ''),
+        refundAmount: returnedTotal,
+        originalPointsEarned,
+        billId: bill._id,
+        billNumber: String(bill.billNumber || ''),
+        createdBy: req.billingAdminId,
+        BillingPointsAccount,
+        BillingPointsLedger,
+      });
+    }
 
     await triggerRevalidate(['/', '/products']);
     // Ensure key fields are always present in response JSON
