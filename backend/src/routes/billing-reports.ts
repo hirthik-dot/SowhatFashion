@@ -713,8 +713,24 @@ router.get('/customers', requirePermission('canViewCustomerReports'), async (req
   ]);
   const stats = statsRows?.[0] || {};
 
+  const phones = (data || [])
+    .map((row: any) => normalizeBillingPhone(String(row.phone || row._id || '')))
+    .filter((p) => p.length >= 10);
+  const pointsAccounts =
+    phones.length > 0
+      ? await BillingPointsAccount.find({ phone: { $in: phones } })
+          .select('phone balance')
+          .lean()
+      : [];
+  const pointsByPhone = new Map(pointsAccounts.map((a: any) => [a.phone, Number(a.balance || 0)]));
+  const enrichedData = (data || []).map((row: any) => {
+    const normalized = normalizeBillingPhone(String(row.phone || row._id || ''));
+    const points = pointsByPhone.get(normalized) ?? 0;
+    return { ...row, points, pointsBalance: points };
+  });
+
   res.json({
-    data,
+    data: enrichedData,
     total: Number(countRows?.[0]?.total || 0),
     summary: {
       totalCustomers: Number(stats.totalCustomers || 0),

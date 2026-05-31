@@ -590,10 +590,8 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
       await completed.save();
     } else if (pointsResolved.normalizedPhone.length >= 10) {
       const account = await BillingPointsAccount.findOne({ phone: pointsResolved.normalizedPhone }).lean();
-      if (account) {
-        completed.pointsBalanceAfter = Number(account.balance || 0);
-        await completed.save();
-      }
+      completed.pointsBalanceAfter = Number(account?.balance || 0);
+      await completed.save();
     }
 
     for (const item of totals.normalizedItems) {

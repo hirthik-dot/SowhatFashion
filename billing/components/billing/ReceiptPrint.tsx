@@ -77,7 +77,16 @@ export const ReceiptPrint = forwardRef<
   const cgst = Number(bill.cgst || 0) > 0 ? Number(bill.cgst) : gstAmount / 2;
   const sgst = Number(bill.sgst || 0) > 0 ? Number(bill.sgst) : gstAmount / 2;
   const grossWithGst = taxableAmount + gstAmount;
-  const totalSavings = totalItemDiscount + billDiscountAmount;
+  const pointsDiscountAmount = Number(bill.pointsDiscountAmount || 0);
+  const pointsEarned = Number(bill.pointsEarned || 0);
+  const pointsRedeemed = Number(bill.pointsRedeemed || 0);
+  const pointsBalance = Number(bill.pointsBalanceAfter ?? 0);
+  const hasCustomerPhone = Boolean(
+    String(bill.customer?.phone || bill.customer?.mobile || bill.customer?.mobileNumber || "").replace(/\D/g, "").length >= 10
+  );
+  const showPoints =
+    hasCustomerPhone || pointsEarned > 0 || pointsRedeemed > 0 || pointsDiscountAmount > 0 || pointsBalance > 0;
+  const totalSavings = totalItemDiscount + billDiscountAmount + pointsDiscountAmount;
   const rawGrandTotal =
     Number(bill.totalAmount || 0) > 0
       ? Number(bill.totalAmount)
@@ -209,6 +218,15 @@ export const ReceiptPrint = forwardRef<
               <span>-{money(billDiscountAmount)}</span>
             </div>
           )}
+          {pointsDiscountAmount > 0 && (
+            <div className="amount-row discount-row">
+              <span>Points Disc</span>
+              <span>:</span>
+              <span>
+                {pointsRedeemed} (-{money(pointsDiscountAmount)})
+              </span>
+            </div>
+          )}
           <div className="you-saved">You saved ₹{money(totalSavings)}</div>
         </div>
       )}
@@ -255,29 +273,24 @@ export const ReceiptPrint = forwardRef<
         <span>{money(balance)}</span>
       </div>
 
-      {Number(bill.pointsDiscountAmount || 0) > 0 ? (
-        <div className="amount-row">
-          <span>Points used</span>
-          <span>:</span>
-          <span>
-            {Number(bill.pointsRedeemed || 0)} (-{money(Number(bill.pointsDiscountAmount || 0))})
-          </span>
-        </div>
+      {showPoints ? (
+        <>
+          {pointsEarned > 0 ? (
+            <div className="amount-row">
+              <span>Points earned</span>
+              <span>:</span>
+              <span>+{pointsEarned}</span>
+            </div>
+          ) : null}
+          <div className="line" />
+          <div className="points-row">
+            <span>Available Points</span>
+            <span>:</span>
+            <span>{pointsBalance.toFixed(0)}</span>
+          </div>
+          <div className="line" />
+        </>
       ) : null}
-      {Number(bill.pointsEarned || 0) > 0 ? (
-        <div className="amount-row">
-          <span>Points earned</span>
-          <span>:</span>
-          <span>+{Number(bill.pointsEarned || 0)}</span>
-        </div>
-      ) : null}
-      <div className="line" />
-      <div className="points-row">
-        <span>Available Points</span>
-        <span>:</span>
-        <span>{Number(bill.pointsBalanceAfter ?? 0).toFixed(0)}</span>
-      </div>
-      <div className="line" />
 
       <div className="terms-title">Terms &amp; Conditions</div>
       <div className="terms-item">* No return &amp; no refund.</div>

@@ -5,14 +5,60 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import BillingShell from "@/components/layout/BillingShell";
 import BarcodeScanner from "@/components/billing/BarcodeScanner";
+import BillItemRow from "@/components/billing/BillItemRow";
 import { billingApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import ReplacementReceipt, { type ReturnDocument } from "@/components/returns/ReplacementReceipt";
 import { useRole } from "@/hooks/useRole";
+import type { BillItem, DiscountType } from "@/lib/bill-store";
+
+const itemDiscountPerUnit = (mrp: number, type: DiscountType, value: number) => {
+  if (type === "percent") return (mrp * value) / 100;
+  if (type === "amount") return value;
+  return 0;
+};
+
+const computeReplacementTotals = (
+  items: BillItem[],
+  billDiscountType: DiscountType,
+  billDiscountValue: number
+) => {
+  const lines = items.map((item) => {
+    const discountPerUnit = itemDiscountPerUnit(item.mrp, item.itemDiscountType, item.itemDiscountValue);
+    const sellingPrice = Math.max(0, item.mrp - discountPerUnit);
+    const lineTotal = sellingPrice * item.quantity;
+    return { item, sellingPrice, lineTotal };
+  });
+  const subtotal = items.reduce((sum, item) => sum + item.mrp * item.quantity, 0);
+  const totalItemDiscount = items.reduce(
+    (sum, item) => sum + itemDiscountPerUnit(item.mrp, item.itemDiscountType, item.itemDiscountValue) * item.quantity,
+    0
+  );
+  const afterItemDiscount = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+  let billDiscountAmount = 0;
+  if (billDiscountType === "percent") billDiscountAmount = (afterItemDiscount * billDiscountValue) / 100;
+  else if (billDiscountType === "amount") billDiscountAmount = billDiscountValue;
+  billDiscountAmount = Math.min(afterItemDiscount, Math.max(0, billDiscountAmount));
+  const replacementTotal = afterItemDiscount - billDiscountAmount;
+  const apiItems = lines.map(({ item, lineTotal }) => {
+    const share = afterItemDiscount > 0 ? (lineTotal / afterItemDiscount) * billDiscountAmount : 0;
+    const netLine = lineTotal - share;
+    const sellingPrice = netLine / Math.max(1, item.quantity);
+    return {
+      product: item.product,
+      barcode: item.barcode,
+      name: item.name,
+      size: item.size,
+      quantity: item.quantity,
+      sellingPrice,
+    };
+  });
+  return { subtotal, totalItemDiscount, afterItemDiscount, billDiscountAmount, replacementTotal, apiItems };
+};
 
 export default function ReturnsPage() {
   const router = useRouter();
-  const { can } = useRole();
+  const { can, maxDiscount, isSuperAdmin } = useRole();
   const canAccess = can("canReturn");
   const [step, setStep] = useState(1);
   const [billNumber, setBillNumber] = useState("");
@@ -23,7 +69,9 @@ export default function ReturnsPage() {
   const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [reasons, setReasons] = useState<Record<number, string>>({});
   const [returnType, setReturnType] = useState<"replacement" | "partial">("replacement");
-  const [replacementItems, setReplacementItems] = useState<any[]>([]);
+  const [replacementItems, setReplacementItems] = useState<BillItem[]>([]);
+  const [billDiscountType, setBillDiscountType] = useState<DiscountType>("none");
+  const [billDiscountValue, setBillDiscountValue] = useState(0);
   const [toast, setToast] = useState("");
   const [result, setResult] = useState<any>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -94,12 +142,33 @@ export default function ReturnsPage() {
     [selectedItems]
   );
 
-  const replacementTotal = useMemo(
-    () => replacementItems.reduce((sum, item) => sum + Number(item.sellingPrice || 0) * Number(item.quantity || 1), 0),
-    [replacementItems]
+  const replacementTotals = useMemo(
+    () => computeReplacementTotals(replacementItems, billDiscountType, billDiscountValue),
+    [replacementItems, billDiscountType, billDiscountValue]
   );
+  const replacementTotal = replacementTotals.replacementTotal;
 
   const priceDifference = replacementTotal - returnedTotal;
+
+  const itemDiscountRows = useMemo(
+    () =>
+      replacementItems
+        .map((item) => {
+          const discountPerUnit = itemDiscountPerUnit(item.mrp, item.itemDiscountType, item.itemDiscountValue);
+          return {
+            name: item.name,
+            label:
+              item.itemDiscountType === "percent"
+                ? `-${item.itemDiscountValue}%`
+                : item.itemDiscountType === "amount"
+                ? `-₹${item.itemDiscountValue}`
+                : "-",
+            amount: discountPerUnit * item.quantity,
+          };
+        })
+        .filter((row) => row.amount > 0),
+    [replacementItems]
+  );
 
   useEffect(() => {
     if (step === 3) scannerRef.current?.focus();
@@ -117,12 +186,31 @@ export default function ReturnsPage() {
       {
         product: product._id || product.productId,
         barcode,
+        barcodes: [barcode],
         name: product.name,
         size: product.size,
+        mrp: Number(product.mrp || 0),
         quantity: 1,
-        sellingPrice: product.mrp,
+        itemDiscountType: "none",
+        itemDiscountValue: 0,
       },
     ]);
+  };
+
+  const updateReplacementItemDiscount = (
+    index: number,
+    field: "itemDiscountType" | "itemDiscountValue",
+    value: DiscountType | number
+  ) => {
+    setReplacementItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        if (field === "itemDiscountType") {
+          return { ...item, itemDiscountType: value as DiscountType };
+        }
+        return { ...item, itemDiscountValue: Math.max(0, Number(value || 0)) };
+      })
+    );
   };
 
   const updateReplacementQuantity = (index: number, delta: number) => {
@@ -136,6 +224,11 @@ export default function ReturnsPage() {
   const processReturn = async () => {
     setError("");
     try {
+      const maxAllowedDiscount = isSuperAdmin ? 100 : maxDiscount;
+      if (billDiscountType === "percent" && Number(billDiscountValue || 0) > maxAllowedDiscount) {
+        setError(`Discount cannot exceed ${maxAllowedDiscount}%`);
+        return;
+      }
       const returnedItems = selectedItems.map((item: any) => ({
         product: item.product,
         barcode: item.barcode,
@@ -149,11 +242,12 @@ export default function ReturnsPage() {
         setError("Scan at least one replacement item");
         return;
       }
+      const { apiItems } = computeReplacementTotals(replacementItems, billDiscountType, billDiscountValue);
       const response = await billingApi.returns({
         billId: bill._id,
         returnType,
         returnedItems,
-        replacementItems,
+        replacementItems: apiItems,
       });
       setResult(response);
       setReceiptData({
@@ -210,33 +304,18 @@ export default function ReturnsPage() {
                 {replacementItems.length === 0 ? (
                   <p className="text-sm text-[var(--text-secondary)]">No replacement items scanned yet.</p>
                 ) : (
-                  replacementItems.map((item, index) => {
-                    const qty = Number(item.quantity || 1);
-                    const price = Number(item.sellingPrice || 0);
-                    const total = price * qty;
-                    return (
-                      <div key={`${item.barcode}-${index}`} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center bg-[var(--surface-2)] rounded p-2 text-sm">
-                        <div className="col-span-2 md:col-span-1 text-[var(--text-secondary)] md:text-inherit">#{index + 1}</div>
-                        <div className="col-span-2 md:col-span-4">
-                          {item.name} {item.size ? `(${item.size})` : ""}
-                          <div className="text-xs text-[var(--text-secondary)] truncate">{item.barcode}</div>
-                        </div>
-                        <div className="col-span-1 md:col-span-2">₹{price.toFixed(2)}</div>
-                        <div className="col-span-1 md:col-span-2 flex items-center gap-1">
-                          <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => updateReplacementQuantity(index, -1)}>-</button>
-                          <span className="w-8 text-center">{qty}</span>
-                          <button type="button" className="h-9 w-9 rounded border border-[var(--border)]" onClick={() => updateReplacementQuantity(index, 1)}>+</button>
-                        </div>
-                        <div className="col-span-1 md:col-span-2 font-semibold">₹{total.toFixed(2)}</div>
-                        <button
-                          className="col-span-1 md:col-span-1 text-[var(--error)] justify-self-end md:justify-self-start"
-                          onClick={() => setReplacementItems((prev) => prev.filter((_, i) => i !== index))}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    );
-                  })
+                  replacementItems.map((item, index) => (
+                    <BillItemRow
+                      key={`${item.barcode}-${index}`}
+                      item={item}
+                      index={index}
+                      onDiscountType={(type) => updateReplacementItemDiscount(index, "itemDiscountType", type)}
+                      onDiscountValue={(value) => updateReplacementItemDiscount(index, "itemDiscountValue", value)}
+                      onIncrement={() => updateReplacementQuantity(index, 1)}
+                      onDecrement={() => updateReplacementQuantity(index, -1)}
+                      onRemove={() => setReplacementItems((prev) => prev.filter((_, i) => i !== index))}
+                    />
+                  ))
                 )}
               </div>
             </div>
@@ -262,7 +341,58 @@ export default function ReturnsPage() {
                 </div>
               </div>
               <div className="border-t border-[var(--border)] pt-2 text-sm space-y-1">
-                <div className="flex justify-between"><span>Replacement Value</span><span>₹{replacementTotal.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span>Replacement Subtotal (MRP)</span><span>₹{replacementTotals.subtotal.toFixed(2)}</span></div>
+                {itemDiscountRows.length > 0 ? (
+                  <div className="mt-1">
+                    <p className="text-[var(--text-secondary)]">ITEM DISCOUNTS</p>
+                    {itemDiscountRows.map((row, index) => (
+                      <div key={`${row.name}-${index}`} className="flex justify-between font-bold text-[var(--text-primary)]">
+                        <span>{row.name} {row.label}</span>
+                        <span>-₹{row.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {replacementTotals.totalItemDiscount > 0 ? (
+                      <div className="flex justify-between border-t border-[var(--border)] mt-1 pt-1 font-bold text-[var(--text-primary)]">
+                        <span>Total Item Disc</span><span>-₹{replacementTotals.totalItemDiscount.toFixed(2)}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="flex justify-between"><span>After Item Disc</span><span>₹{replacementTotals.afterItemDiscount.toFixed(2)}</span></div>
+                <p className="text-[var(--text-secondary)] mt-2">CUSTOMER DISCOUNT</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    className="h-9 w-9 rounded border border-[var(--border)] disabled:opacity-50"
+                    disabled={!can("canDiscount")}
+                    onClick={() =>
+                      setBillDiscountType((prev) => (prev === "percent" ? "amount" : "percent"))
+                    }
+                  >
+                    {billDiscountType === "percent" ? "%" : "₹"}
+                  </button>
+                  <input
+                    className={`pos-input h-9 min-h-0 flex-1 ${replacementTotals.billDiscountAmount > 0 ? "font-bold text-[var(--text-primary)]" : ""}`}
+                    type="number"
+                    inputMode="decimal"
+                    max={isSuperAdmin ? 100 : maxDiscount}
+                    disabled={!can("canDiscount")}
+                    value={billDiscountValue || 0}
+                    onChange={(e) => {
+                      const value = Number(e.target.value || 0);
+                      setBillDiscountValue(value);
+                      if (billDiscountType === "none") setBillDiscountType("percent");
+                    }}
+                  />
+                  <span className={replacementTotals.billDiscountAmount > 0 ? "font-bold text-[var(--text-primary)]" : ""}>
+                    -₹{replacementTotals.billDiscountAmount.toFixed(2)}
+                  </span>
+                </div>
+                {!isSuperAdmin && can("canDiscount") ? (
+                  <p className="text-xs text-[var(--text-secondary)]">Max allowed discount: {maxDiscount}%</p>
+                ) : null}
+                <div className="flex justify-between font-medium border-t border-[var(--border)] pt-1 mt-1">
+                  <span>Replacement Value</span><span>₹{replacementTotal.toFixed(2)}</span>
+                </div>
                 <div className="flex justify-between font-medium">
                   <span>Price Difference</span>
                   <span className={priceDifference > 0 ? "text-[var(--gold)]" : priceDifference < 0 ? "text-[var(--success)]" : ""}>
@@ -283,7 +413,16 @@ export default function ReturnsPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button className="h-11 rounded border border-[var(--border)]" onClick={() => setStep(2)}>BACK</button>
-                <button className="h-11 rounded border border-[var(--border)]" onClick={() => setReplacementItems([])}>CLEAR</button>
+                <button
+                  className="h-11 rounded border border-[var(--border)]"
+                  onClick={() => {
+                    setReplacementItems([]);
+                    setBillDiscountType("none");
+                    setBillDiscountValue(0);
+                  }}
+                >
+                  CLEAR
+                </button>
                 <button
                   className="h-11 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50"
                   disabled={replacementItems.length === 0}

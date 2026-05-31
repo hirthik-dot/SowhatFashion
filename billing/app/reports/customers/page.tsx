@@ -112,6 +112,7 @@ export default function CustomerReportsPage() {
         Phone: row.phone || "-",
         "Total Bills": row.totalBills || 0,
         "Total Spent": Number(row.totalSpent || 0),
+        Points: Number(row.points ?? row.pointsBalance ?? 0),
         "Avg Bill": Number(row.avgBillValue || 0),
         "Last Visit": formatDate(row.lastVisit),
         "Favourite Category": row.favouriteCategory || "-",
@@ -204,13 +205,14 @@ export default function CustomerReportsPage() {
         </div>
 
         <div className="pos-card p-3 overflow-auto">
-          <table className="w-full min-w-[980px] text-sm">
+          <table className="w-full min-w-[1060px] text-sm">
             <thead>
               <tr className="text-left text-[var(--text-secondary)]">
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Bills</th>
                 <th>Total Spent</th>
+                <th>Points</th>
                 <th>Avg Bill</th>
                 <th>Last Visit</th>
                 <th>Fav Category</th>
@@ -224,6 +226,7 @@ export default function CustomerReportsPage() {
                   <td>{customer.phone || "-"}</td>
                   <td>{customer.totalBills || 0}</td>
                   <td>{formatCurrency(customer.totalSpent || 0)}</td>
+                  <td>{Number(customer.points ?? customer.pointsBalance ?? 0).toLocaleString("en-IN")}</td>
                   <td>{formatCurrency(customer.avgBillValue || 0)}</td>
                   <td>{formatDate(customer.lastVisit)}</td>
                   <td>{customer.favouriteCategory || "-"}</td>
