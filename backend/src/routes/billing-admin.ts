@@ -106,7 +106,9 @@ router.put('/admins/:id', requirePermission('canManageAdmins'), async (req: Bill
           continue;
         }
         if (update.permissions[key] && !ownPermissions[key]) {
-          return res.status(403).json({ message: `Cannot assign permission you do not have: ${key}` });
+          return res.status(403).json({
+            message: `Cannot assign permission you do not have: ${String(key)}`,
+          });
         }
       }
     }

@@ -35,6 +35,7 @@ const billing_returns_1 = __importDefault(require("./routes/billing-returns"));
 const billing_reports_1 = __importDefault(require("./routes/billing-reports"));
 const billing_admin_1 = __importDefault(require("./routes/billing-admin"));
 const billing_inventory_1 = __importDefault(require("./routes/billing-inventory"));
+const billing_points_1 = __importDefault(require("./routes/billing-points"));
 const billingAuthMiddleware_1 = require("./middleware/billingAuthMiddleware");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
@@ -125,6 +126,7 @@ app.use('/api/billing/returns', billingAuthMiddleware_1.billingAuthMiddleware, b
 app.use('/api/billing/reports', billingAuthMiddleware_1.billingAuthMiddleware, billing_reports_1.default);
 app.use('/api/billing/admin', billingAuthMiddleware_1.billingAuthMiddleware, billing_admin_1.default);
 app.use('/api/billing/inventory', billingAuthMiddleware_1.billingAuthMiddleware, billing_inventory_1.default);
+app.use('/api/billing/points', billingAuthMiddleware_1.billingAuthMiddleware, billing_points_1.default);
 // Error handler
 app.use(errorHandler_1.default);
 // Global catch-all error handler

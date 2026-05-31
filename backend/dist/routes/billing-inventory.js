@@ -9,7 +9,7 @@ const StockEntry_1 = __importDefault(require("../models/StockEntry"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const router = express_1.default.Router();
-router.use(billingRoleMiddleware_1.requireAdmin);
+router.use((0, billingRoleMiddleware_1.requireAnyPermission)('canManageStock', 'canViewReports', 'canManageSuppliersCategories'));
 router.get('/summary', async (req, res) => {
     const query = { isBillingProduct: true };
     const [totals, lowStock, outOfStock] = await Promise.all([
@@ -48,8 +48,9 @@ router.get('/products', async (req, res) => {
             { subCategory: { $regex: search, $options: 'i' } },
         ];
     }
-    if (supplier)
+    if (supplier && supplier.match(/^[0-9a-fA-F]{24}$/)) {
         query.supplier = supplier;
+    }
     if (stock === 'low')
         query.stock = { $gt: 0, $lte: 2 };
     if (stock === 'out')
@@ -161,14 +162,10 @@ router.put('/products/:id', async (req, res) => {
             if (!updates.supplier) {
                 product.supplier = undefined;
             }
-            else if (updates.supplier.match(/^[0-9a-fA-F]{24}$/)) {
+            else if (String(updates.supplier).match(/^[0-9a-fA-F]{24}$/)) {
                 product.supplier = updates.supplier;
             }
-            else {
-                // If it's an invalid ObjectId (like a raw string name), we ignore it or require them to re-select
-                // Let's just unset it if it's totally invalid so the save doesn't crash
-                product.supplier = undefined;
-            }
+            // Ignore invalid supplier values (e.g. display names) so we don't clear the existing link
         }
         if (updates.notes !== undefined) {
             product.notes = String(updates.notes).trim();

@@ -7,15 +7,11 @@ const express_1 = __importDefault(require("express"));
 const Supplier_1 = __importDefault(require("../models/Supplier"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const router = express_1.default.Router();
-router.use(billingRoleMiddleware_1.requireAdmin);
 router.get('/', async (_req, res) => {
     const suppliers = await Supplier_1.default.find({ isActive: true }).sort({ createdAt: -1 });
     res.json(suppliers);
 });
-router.post('/', async (req, res) => {
-    if (req.billingAdmin?.role !== 'superadmin' && !req.billingAdmin?.permissions?.canManageSuppliersCategories) {
-        return res.status(403).json({ message: 'Permission denied' });
-    }
+router.post('/', (0, billingRoleMiddleware_1.requirePermission)('canManageSuppliersCategories'), async (req, res) => {
     const supplier = await Supplier_1.default.create(req.body || {});
     return res.status(201).json(supplier);
 });

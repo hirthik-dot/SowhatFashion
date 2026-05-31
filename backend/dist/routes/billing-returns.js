@@ -10,8 +10,10 @@ const Product_1 = __importDefault(require("../models/Product"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const revalidateFrontend_1 = require("../lib/revalidateFrontend");
+const BillingPointsAccount_1 = __importDefault(require("../models/BillingPointsAccount"));
+const BillingPointsLedger_1 = __importDefault(require("../models/BillingPointsLedger"));
+const billing_points_1 = require("../lib/billing-points");
 const router = express_1.default.Router();
-router.use(billingRoleMiddleware_1.requireAdmin);
 router.use((0, billingRoleMiddleware_1.requirePermission)('canReturn'));
 const generateReturnNumber = async () => {
     const year = new Date().getFullYear();
@@ -96,6 +98,19 @@ router.post('/', async (req, res) => {
         }
         bill.status = returnType === 'partial' ? 'partial_replaced' : 'replaced';
         await bill.save();
+        const originalPointsEarned = Number(bill.pointsEarned || 0);
+        if (originalPointsEarned > 0 && returnedTotal > 0) {
+            await (0, billing_points_1.clawbackPointsOnReturn)({
+                phone: String(bill.customer?.phone || ''),
+                refundAmount: returnedTotal,
+                originalPointsEarned,
+                billId: bill._id,
+                billNumber: String(bill.billNumber || ''),
+                createdBy: req.billingAdminId,
+                BillingPointsAccount: BillingPointsAccount_1.default,
+                BillingPointsLedger: BillingPointsLedger_1.default,
+            });
+        }
         await (0, revalidateFrontend_1.triggerRevalidate)(['/', '/products']);
         // Ensure key fields are always present in response JSON
         return res.status(201).json({ ...returnDoc.toObject(), returnNumber: returnDoc.returnNumber });

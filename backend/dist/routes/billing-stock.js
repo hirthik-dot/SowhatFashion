@@ -13,7 +13,6 @@ const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const slugify_1 = __importDefault(require("slugify"));
 const router = express_1.default.Router();
-router.use(billingRoleMiddleware_1.requireAdmin);
 const getBarcodePrefix = (date = new Date()) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -275,6 +274,45 @@ router.post('/entry/bulk', (0, billingRoleMiddleware_1.requirePermission)('canMa
         return res.status(500).json({ message: error.message || 'Bulk stock entry failed' });
     }
 });
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+router.get('/products/search', (0, billingRoleMiddleware_1.requirePermission)('canManageStock'), async (req, res) => {
+    const supplier = String(req.query.supplier || '').trim();
+    const category = String(req.query.category || '').trim();
+    const subCategory = String(req.query.subCategory || '').trim();
+    const q = String(req.query.q || '').trim();
+    if (!OBJECT_ID_RE.test(supplier)) {
+        return res.status(400).json({ message: 'Valid supplier is required' });
+    }
+    if (!OBJECT_ID_RE.test(category) || !OBJECT_ID_RE.test(subCategory)) {
+        return res.status(400).json({ message: 'Category and subcategory are required' });
+    }
+    const query = {
+        isBillingProduct: true,
+        supplier,
+        billingCategory: category,
+        billingSubCategory: subCategory,
+    };
+    if (q.length >= 1) {
+        const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escaped, 'i');
+        query.$or = [{ name: regex }, { billingName: regex }];
+    }
+    const products = await Product_1.default.find(query)
+        .select('billingName name price incomingPrice notes totalStock stock sizeStock')
+        .sort({ billingName: 1, name: 1 })
+        .limit(25)
+        .lean();
+    const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
+    return res.json(products.map((p) => ({
+        _id: String(p._id),
+        name: String(p.billingName || p.name || '').trim(),
+        incomingPrice: isSuperAdmin ? Number(p.incomingPrice ?? 0) : undefined,
+        sellingPrice: Number(p.price ?? 0),
+        notes: String(p.notes || ''),
+        totalStock: Number(p.totalStock ?? p.stock ?? 0),
+        sizeStock: Array.isArray(p.sizeStock) ? p.sizeStock : [],
+    })));
+});
 router.get('/entries', (0, billingRoleMiddleware_1.requirePermission)('canManageStock'), async (req, res) => {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 20);
@@ -295,8 +333,9 @@ router.get('/inventory', async (req, res) => {
     const supplier = String(req.query.supplier || '').trim();
     const search = String(req.query.search || '').trim();
     const query = { isBillingProduct: true };
-    if (supplier)
+    if (supplier && supplier.match(/^[0-9a-fA-F]{24}$/)) {
         query.supplier = supplier;
+    }
     if (search) {
         query.$or = [{ name: { $regex: search, $options: 'i' } }, { billingName: { $regex: search, $options: 'i' } }];
     }
@@ -304,7 +343,7 @@ router.get('/inventory', async (req, res) => {
         .populate('billingCategory', 'name')
         .populate('billingSubCategory', 'name')
         .populate('supplier', 'name')
-        .select('name billingName sizeStock totalStock price incomingPrice isActive billingCategory billingSubCategory supplier notes')
+        .select('name billingName category subCategory sizeStock totalStock price incomingPrice isActive billingCategory billingSubCategory supplier notes')
         .lean();
     // Sold = total StockItems sold (for this product). We compute per product for correctness.
     const productIds = products.map((p) => p._id);
@@ -317,9 +356,12 @@ router.get('/inventory', async (req, res) => {
     const data = products.map((p) => ({
         _id: p._id,
         name: p.billingName || p.name,
-        category: p.billingCategory?.name || '',
-        subCategory: p.billingSubCategory?.name || '',
+        category: p.billingCategory?.name || p.category || '',
+        subCategory: p.billingSubCategory?.name || p.subCategory || '',
         supplier: p.supplier?.name || '',
+        supplierId: p.supplier?._id ? String(p.supplier._id) : '',
+        billingCategory: p.billingCategory?._id ? String(p.billingCategory._id) : '',
+        billingSubCategory: p.billingSubCategory?._id ? String(p.billingSubCategory._id) : '',
         sizeStock: p.sizeStock || [],
         totalStock: Number(p.totalStock ?? p.stock ?? 0),
         sold: soldByProduct.get(String(p._id)) || 0,

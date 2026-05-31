@@ -7,7 +7,6 @@ const express_1 = __importDefault(require("express"));
 const BillingCategory_1 = __importDefault(require("../models/BillingCategory"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const router = express_1.default.Router();
-router.use(billingRoleMiddleware_1.requireAdmin);
 router.get('/', async (_req, res) => {
     const categories = await BillingCategory_1.default.find({ isActive: true }).sort({ order: 1, name: 1 }).lean();
     const mains = categories.filter((c) => !c.parentCategory);
@@ -20,16 +19,18 @@ router.get('/', async (_req, res) => {
 router.get('/flat', async (req, res) => {
     const supplier = String(req.query.supplier || '').trim();
     const query = { isActive: true };
-    if (supplier)
+    if (supplier && supplier.match(/^[0-9a-fA-F]{24}$/)) {
         query.supplier = supplier;
+    }
     const categories = await BillingCategory_1.default.find(query).sort({ order: 1, name: 1 });
     res.json(categories);
 });
 router.get('/:id/subcategories', async (req, res) => {
     const supplier = String(req.query.supplier || '').trim();
     const query = { parentCategory: req.params.id, isActive: true };
-    if (supplier)
+    if (supplier && supplier.match(/^[0-9a-fA-F]{24}$/)) {
         query.supplier = supplier;
+    }
     const categories = await BillingCategory_1.default.find(query).sort({
         order: 1,
         name: 1,

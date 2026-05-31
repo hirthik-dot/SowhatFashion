@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requirePermission = exports.requireAdmin = exports.requireSuperAdmin = void 0;
+exports.requireAnyPermission = exports.requirePermission = exports.requireAdmin = exports.requireSuperAdmin = void 0;
 const requireSuperAdmin = (req, res, next) => {
     if (req.billingAdmin?.role !== 'superadmin') {
         return res.status(403).json({ message: 'Superadmin access required' });
@@ -27,4 +27,16 @@ const requirePermission = (permission) => {
     };
 };
 exports.requirePermission = requirePermission;
+const requireAnyPermission = (...permissions) => {
+    return (req, res, next) => {
+        if (req.billingAdmin?.role === 'superadmin')
+            return next();
+        const userPermissions = req.billingAdmin?.permissions || {};
+        if (permissions.some((permission) => Boolean(userPermissions[permission]))) {
+            return next();
+        }
+        return res.status(403).json({ message: 'Permission denied' });
+    };
+};
+exports.requireAnyPermission = requireAnyPermission;
 //# sourceMappingURL=billingRoleMiddleware.js.map

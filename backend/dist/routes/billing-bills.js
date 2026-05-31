@@ -11,8 +11,13 @@ const StockItem_1 = __importDefault(require("../models/StockItem"));
 const billingAuthMiddleware_1 = require("../middleware/billingAuthMiddleware");
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const revalidateFrontend_1 = require("../lib/revalidateFrontend");
+const BillingPointsAccount_1 = __importDefault(require("../models/BillingPointsAccount"));
+const BillingPointsLedger_1 = __importDefault(require("../models/BillingPointsLedger"));
+const billing_points_1 = require("../lib/billing-points");
 const router = express_1.default.Router();
-const canEditBills = (admin) => admin?.role === 'superadmin' || (admin?.role === 'admin' && Boolean(admin?.permissions?.canEditBills));
+/** GST is added on top of MRP subtotal; shop discounts are then subtracted from (subtotal + GST). */
+const BILLING_GST_RATE = 0.05;
+const canEditBills = (admin) => admin?.role === 'superadmin' || Boolean(admin?.permissions?.canEditBills);
 const enforceDiscountLimit = (req, payload) => {
     const role = req.billingAdmin?.role;
     const permissions = req.billingAdmin?.permissions || {};
@@ -58,7 +63,7 @@ const adjustProductSizeStock = async (productId, size, delta) => {
     product.isActive = product.totalStock > 0;
     await product.save();
 };
-const calculateBillTotals = (items, billDiscountType, billDiscountValue) => {
+const calculateBillTotals = (items, billDiscountType, billDiscountValue, pointsDiscountAmount = 0) => {
     const normalizedItems = (items || []).map((item) => {
         const mrp = Number(item.mrp ?? item.price ?? 0);
         const quantity = Math.max(1, Number(item.quantity || 1));
@@ -103,12 +108,16 @@ const calculateBillTotals = (items, billDiscountType, billDiscountValue) => {
             assigned += safeShare;
         });
     }
-    const taxableAmount = Math.max(0, afterItemDiscount - effectiveBillDiscount);
-    // GST is display-only on customer bill; persisted records remain tax-free.
-    const gstAmount = 0;
-    const cgst = 0;
-    const sgst = 0;
-    const rawTotal = taxableAmount;
+    const taxableAmount = Math.max(0, subtotal);
+    const gstAmount = taxableAmount * BILLING_GST_RATE;
+    const cgst = gstAmount / 2;
+    const sgst = gstAmount / 2;
+    const grossWithGst = taxableAmount + gstAmount;
+    const totalDiscount = totalItemDiscount + effectiveBillDiscount;
+    const prePointsRaw = Math.max(0, grossWithGst - totalDiscount);
+    const prePointsTotal = Math.round(prePointsRaw);
+    const safePointsDiscount = Math.min(Math.max(0, pointsDiscountAmount), prePointsTotal);
+    const rawTotal = Math.max(0, prePointsRaw - safePointsDiscount);
     const roundOff = Math.round(rawTotal) - rawTotal;
     const totalAmount = Math.round(rawTotal);
     return {
@@ -121,7 +130,41 @@ const calculateBillTotals = (items, billDiscountType, billDiscountValue) => {
         cgst,
         sgst,
         roundOff,
+        prePointsTotal,
+        pointsDiscountAmount: safePointsDiscount,
         totalAmount,
+    };
+};
+const resolvePointsForPayload = async (payload, prePointsTotal) => {
+    const phone = String(payload?.customer?.phone || '');
+    const requestedMode = String(payload?.pointsMode || 'earn');
+    const awardPoints = payload?.awardPoints !== false;
+    const pointsToRedeem = Math.floor(Number(payload?.pointsToRedeem || payload?.pointsRedeemed || 0));
+    let balance = 0;
+    const normalized = (0, billing_points_1.normalizeBillingPhone)(phone);
+    if (normalized.length >= 10) {
+        const account = await BillingPointsAccount_1.default.findOne({ phone: normalized }).lean();
+        balance = Number(account?.balance || 0);
+    }
+    const mode = requestedMode === 'redeem' && pointsToRedeem > 0
+        ? 'redeem'
+        : requestedMode === 'earn'
+            ? 'earn'
+            : 'none';
+    const validated = (0, billing_points_1.validatePointsForBill)({
+        pointsMode: mode,
+        awardPoints,
+        pointsToRedeem,
+        prePointsTotal,
+        balance,
+        phone,
+    });
+    const storedMode = validated.pointsRedeemed > 0 ? 'redeem' : validated.pointsEarned > 0 || (mode === 'earn' && awardPoints) ? 'earn' : 'none';
+    return {
+        ...validated,
+        pointsMode: storedMode,
+        awardPoints: mode === 'earn' && awardPoints,
+        normalizedPhone: normalized,
     };
 };
 const generateBillNumber = async () => {
@@ -135,14 +178,17 @@ router.get('/next-number', async (_req, res) => {
     const billNumber = await generateBillNumber();
     return res.json({ billNumber });
 });
-router.get('/scan/:barcode', async (req, res) => {
-    const barcode = String(req.params.barcode || '').trim();
-    const stockItem = await StockItem_1.default.findOne({ barcode, status: 'available' }).populate('product', 'name category billingSubCategory');
-    if (!stockItem) {
-        return res.status(404).json({ error: 'Barcode not found or already sold' });
-    }
+const countAvailableStock = async (productId, size) => StockItem_1.default.countDocuments({
+    product: new mongoose_1.default.Types.ObjectId(productId),
+    status: 'available',
+    ...(size ? { size } : {}),
+});
+const scanStockItemResponse = async (stockItem) => {
     const product = stockItem.product;
-    return res.json({
+    const productId = String(product?._id || stockItem.product || '');
+    const size = String(stockItem.size || '');
+    const availableStock = productId ? await countAvailableStock(productId, size) : 1;
+    return {
         stockItemId: stockItem._id,
         barcode: stockItem.barcode,
         productId: product?._id,
@@ -152,8 +198,41 @@ router.get('/scan/:barcode', async (req, res) => {
         size: stockItem.size,
         mrp: stockItem.sellingPrice,
         incomingPrice: stockItem.incomingPrice,
-        stock: 1,
-    });
+        stock: availableStock,
+    };
+};
+router.get('/scan/:barcode', async (req, res) => {
+    const barcode = String(req.params.barcode || '').trim();
+    const stockItem = await StockItem_1.default.findOne({ barcode, status: 'available' }).populate('product', 'name category billingSubCategory');
+    if (!stockItem) {
+        return res.status(404).json({ error: 'Barcode not found or already sold' });
+    }
+    return res.json(await scanStockItemResponse(stockItem));
+});
+router.get('/next-barcode', async (req, res) => {
+    const productId = String(req.query.productId || '').trim();
+    const size = String(req.query.size || '').trim();
+    const exclude = String(req.query.exclude || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+    if (!productId || !mongoose_1.default.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({ message: 'Valid productId is required' });
+    }
+    const match = {
+        product: new mongoose_1.default.Types.ObjectId(productId),
+        status: 'available',
+        ...(exclude.length ? { barcode: { $nin: exclude } } : {}),
+    };
+    if (size)
+        match.size = size;
+    const stockItem = await StockItem_1.default.findOne(match)
+        .sort({ barcode: 1 })
+        .populate('product', 'name category billingSubCategory');
+    if (!stockItem) {
+        return res.status(404).json({ message: 'No more stock available for this item' });
+    }
+    return res.json(await scanStockItemResponse(stockItem));
 });
 router.get('/search', billingAuthMiddleware_1.billingAuthMiddleware, async (req, res) => {
     const q = req.query.q || '';
@@ -217,9 +296,57 @@ router.get('/search', billingAuthMiddleware_1.billingAuthMiddleware, async (req,
         subCategory: item.subCategory || '',
     })));
 });
+const CUSTOMER_BILL_STATUSES = ['completed', 'replaced', 'partial_replaced', 'returned', 'partial_return', 'held'];
+router.get('/customers/search', async (req, res) => {
+    const q = String(req.query.q || '').trim();
+    if (!q || q.length < 2)
+        return res.json([]);
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
+    const results = await Bill_1.default.aggregate([
+        {
+            $match: {
+                status: { $in: CUSTOMER_BILL_STATUSES },
+                'customer.phone': { $exists: true, $ne: '' },
+                $or: [{ 'customer.name': regex }, { 'customer.phone': regex }],
+            },
+        },
+        { $sort: { createdAt: 1 } },
+        {
+            $group: {
+                _id: '$customer.phone',
+                name: { $last: '$customer.name' },
+                phone: { $first: '$customer.phone' },
+                totalBills: { $sum: 1 },
+                lastVisit: { $max: '$createdAt' },
+            },
+        },
+        { $sort: { lastVisit: -1 } },
+        { $limit: 10 },
+    ]);
+    const rows = results || [];
+    const phones = rows.map((row) => (0, billing_points_1.normalizeBillingPhone)(String(row.phone || row._id || ''))).filter((p) => p.length >= 10);
+    const accounts = phones.length > 0
+        ? await BillingPointsAccount_1.default.find({ phone: { $in: phones } })
+            .select('phone balance')
+            .lean()
+        : [];
+    const balanceByPhone = new Map(accounts.map((a) => [a.phone, Number(a.balance || 0)]));
+    return res.json(rows.map((row) => {
+        const phone = String(row.phone || row._id || '').trim();
+        const normalized = (0, billing_points_1.normalizeBillingPhone)(phone);
+        return {
+            name: String(row.name || '').trim() || 'Customer',
+            phone,
+            totalBills: Number(row.totalBills || 0),
+            lastVisit: row.lastVisit,
+            pointsBalance: balanceByPhone.get(normalized) ?? 0,
+        };
+    }));
+});
 router.post('/calculate', async (req, res) => {
-    const { items, billDiscountType, billDiscountValue } = req.body || {};
-    const totals = calculateBillTotals(items || [], billDiscountType || 'none', Number(billDiscountValue || 0));
+    const { items, billDiscountType, billDiscountValue, pointsDiscountAmount } = req.body || {};
+    const totals = calculateBillTotals(items || [], billDiscountType || 'none', Number(billDiscountValue || 0), Number(pointsDiscountAmount || 0));
     return res.json({
         subtotal: totals.subtotal,
         itemDiscounts: totals.totalItemDiscount,
@@ -229,6 +356,8 @@ router.post('/calculate', async (req, res) => {
         cgst: totals.cgst,
         sgst: totals.sgst,
         roundOff: totals.roundOff,
+        prePointsTotal: totals.prePointsTotal,
+        pointsDiscountAmount: totals.pointsDiscountAmount,
         total: totals.totalAmount,
     });
 });
@@ -240,7 +369,18 @@ router.post('/hold', billingAuthMiddleware_1.billingAuthMiddleware, async (req, 
     catch (error) {
         return res.status(403).json({ message: error.message || 'Discount permission denied' });
     }
-    const totals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+    const baseTotals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+    let pointsResolved = { pointsEarned: 0, pointsRedeemed: 0, pointsDiscountAmount: 0, pointsMode: 'none', awardPoints: false };
+    try {
+        pointsResolved = await resolvePointsForPayload(payload, baseTotals.prePointsTotal);
+        if (pointsResolved.error) {
+            return res.status(400).json({ message: pointsResolved.error });
+        }
+    }
+    catch (error) {
+        return res.status(400).json({ message: error.message || 'Invalid points' });
+    }
+    const totals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0), pointsResolved.pointsDiscountAmount);
     const bill = await Bill_1.default.create({
         ...payload,
         items: totals.normalizedItems,
@@ -253,6 +393,11 @@ router.post('/hold', billingAuthMiddleware_1.billingAuthMiddleware, async (req, 
         sgst: totals.sgst,
         roundOff: totals.roundOff,
         totalAmount: totals.totalAmount,
+        pointsMode: pointsResolved.pointsMode,
+        awardPoints: pointsResolved.awardPoints,
+        pointsEarned: 0,
+        pointsRedeemed: pointsResolved.pointsRedeemed,
+        pointsDiscountAmount: totals.pointsDiscountAmount,
         status: 'held',
         createdBy: req.billingAdminId,
     });
@@ -278,7 +423,12 @@ router.post('/complete', billingAuthMiddleware_1.billingAuthMiddleware, async (r
     try {
         const payload = req.body || {};
         enforceDiscountLimit(req, payload);
-        const totals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+        const baseTotals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+        const pointsResolved = await resolvePointsForPayload(payload, baseTotals.prePointsTotal);
+        if (pointsResolved.error) {
+            return res.status(400).json({ message: pointsResolved.error });
+        }
+        const totals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0), pointsResolved.pointsDiscountAmount);
         const paymentBreakdown = Array.isArray(payload.paymentBreakdown)
             ? payload.paymentBreakdown
             : [
@@ -329,22 +479,57 @@ router.post('/complete', billingAuthMiddleware_1.billingAuthMiddleware, async (r
             sgst: totals.sgst,
             roundOff: totals.roundOff,
             totalAmount: totals.totalAmount,
+            pointsMode: pointsResolved.pointsMode,
+            awardPoints: pointsResolved.awardPoints,
+            pointsEarned: pointsResolved.pointsEarned,
+            pointsRedeemed: pointsResolved.pointsRedeemed,
+            pointsDiscountAmount: totals.pointsDiscountAmount,
             changeReturned: Math.max(0, Number(payload.cashReceived || 0) - cashPortion),
             status: 'completed',
             completedAt: new Date(),
             createdBy: req.billingAdminId,
         });
+        if (pointsResolved.pointsEarned > 0 ||
+            pointsResolved.pointsRedeemed > 0) {
+            const balanceAfter = await (0, billing_points_1.applyPointsLedger)({
+                phone: String(payload.customer?.phone || ''),
+                customerName: String(payload.customer?.name || ''),
+                pointsEarned: pointsResolved.pointsEarned,
+                pointsRedeemed: pointsResolved.pointsRedeemed,
+                pointsDiscountAmount: totals.pointsDiscountAmount,
+                billId: completed._id,
+                billNumber,
+                createdBy: req.billingAdminId,
+                BillingPointsAccount: BillingPointsAccount_1.default,
+                BillingPointsLedger: BillingPointsLedger_1.default,
+            });
+            completed.pointsBalanceAfter = balanceAfter;
+            await completed.save();
+        }
+        else if (pointsResolved.normalizedPhone.length >= 10) {
+            const account = await BillingPointsAccount_1.default.findOne({ phone: pointsResolved.normalizedPhone }).lean();
+            if (account) {
+                completed.pointsBalanceAfter = Number(account.balance || 0);
+                await completed.save();
+            }
+        }
         for (const item of totals.normalizedItems) {
             const productId = item.productId || item.product;
-            const barcode = String(item.barcode || '').trim();
             const size = String(item.size || '').trim();
+            const barcodes = Array.isArray(item.barcodes) && item.barcodes.length > 0
+                ? item.barcodes.map((value) => String(value || '').trim()).filter(Boolean)
+                : [String(item.barcode || '').trim()].filter(Boolean);
             const quantity = Math.max(1, Number(item.quantity || 1));
-            if (quantity !== 1) {
-                return res.status(400).json({ message: `Quantity must be 1 per barcode (${barcode})` });
+            if (barcodes.length !== quantity) {
+                return res.status(400).json({
+                    message: `Barcode count (${barcodes.length}) must match quantity (${quantity}) for ${item.name || 'item'}`,
+                });
             }
-            const updated = await StockItem_1.default.findOneAndUpdate({ barcode, status: 'available' }, { status: 'sold', soldInBill: completed._id });
-            if (!updated) {
-                return res.status(400).json({ message: `Barcode not available: ${barcode}` });
+            for (const barcode of barcodes) {
+                const updated = await StockItem_1.default.findOneAndUpdate({ barcode, status: 'available' }, { status: 'sold', soldInBill: completed._id });
+                if (!updated) {
+                    return res.status(400).json({ message: `Barcode not available: ${barcode}` });
+                }
             }
             const product = await Product_1.default.findById(productId);
             if (!product)

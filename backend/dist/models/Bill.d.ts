@@ -25,6 +25,12 @@ export interface IBill extends Document {
     }>;
     cashReceived?: number;
     changeReturned?: number;
+    pointsMode?: 'earn' | 'redeem' | 'none';
+    awardPoints?: boolean;
+    pointsEarned?: number;
+    pointsRedeemed?: number;
+    pointsDiscountAmount?: number;
+    pointsBalanceAfter?: number;
     status: 'draft' | 'held' | 'completed' | 'replaced' | 'partial_replaced';
     createdBy?: mongoose.Types.ObjectId;
     completedAt?: Date;

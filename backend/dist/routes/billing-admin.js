@@ -8,7 +8,6 @@ const BillingAdmin_1 = __importDefault(require("../models/BillingAdmin"));
 const Salesman_1 = __importDefault(require("../models/Salesman"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const router = express_1.default.Router();
-router.use(billingRoleMiddleware_1.requireAdmin);
 const normalizePermissions = (role, incoming = {}) => {
     if (role === 'superadmin') {
         return {
@@ -41,17 +40,17 @@ const normalizePermissions = (role, incoming = {}) => {
     return {
         canBill: true,
         canReturn: Boolean(incoming.canReturn ?? false),
-        canManageStock: false,
-        canViewReports: false,
-        canViewCustomerReports: false,
-        canManageSuppliersCategories: false,
-        canManageAdmins: false,
-        canEditBills: false,
+        canManageStock: Boolean(incoming.canManageStock ?? false),
+        canViewReports: Boolean(incoming.canViewReports ?? false),
+        canViewCustomerReports: Boolean(incoming.canViewCustomerReports ?? false),
+        canManageSuppliersCategories: Boolean(incoming.canManageSuppliersCategories ?? false),
+        canManageAdmins: Boolean(incoming.canManageAdmins ?? false),
+        canEditBills: Boolean(incoming.canEditBills ?? false),
         canDiscount: Boolean(incoming.canDiscount ?? true),
-        maxDiscountPercent: Math.min(10, Math.max(0, Number(incoming.maxDiscountPercent ?? 5))),
+        maxDiscountPercent: Math.min(100, Math.max(0, Number(incoming.maxDiscountPercent ?? 5))),
     };
 };
-router.get('/admins', async (_req, res) => {
+router.get('/admins', (0, billingRoleMiddleware_1.requirePermission)('canManageAdmins'), async (_req, res) => {
     const admins = await BillingAdmin_1.default.find({}).select('-password').sort({ createdAt: -1 });
     res.json(admins);
 });
@@ -90,8 +89,28 @@ router.put('/admins/:id', (0, billingRoleMiddleware_1.requirePermission)('canMan
     if (req.billingAdmin?.role !== 'superadmin' && update.role === 'superadmin') {
         return res.status(403).json({ message: 'Only superadmin can assign superadmin role' });
     }
+    const existing = await BillingAdmin_1.default.findById(req.params.id);
+    if (!existing)
+        return res.status(404).json({ message: 'Admin not found' });
     if (update.permissions) {
-        update.permissions = normalizePermissions(update.role || 'cashier', update.permissions);
+        const role = update.role || existing.role;
+        update.permissions = normalizePermissions(role, update.permissions);
+        if (req.billingAdmin?.role === 'admin') {
+            const ownPermissions = req.billingAdmin?.permissions || {};
+            for (const key of Object.keys(update.permissions)) {
+                if (key === 'maxDiscountPercent') {
+                    if (Number(update.permissions.maxDiscountPercent) > Number(ownPermissions.maxDiscountPercent || 0)) {
+                        return res.status(403).json({ message: 'Cannot assign higher discount permission than your own' });
+                    }
+                    continue;
+                }
+                if (update.permissions[key] && !ownPermissions[key]) {
+                    return res.status(403).json({
+                        message: `Cannot assign permission you do not have: ${String(key)}`,
+                    });
+                }
+            }
+        }
     }
     delete update.password;
     const admin = await BillingAdmin_1.default.findByIdAndUpdate(req.params.id, update, { new: true }).select('-password');
@@ -105,21 +124,21 @@ router.delete('/admins/:id', billingRoleMiddleware_1.requireSuperAdmin, async (r
         return res.status(404).json({ message: 'Admin not found' });
     return res.json({ message: 'Admin deactivated' });
 });
-router.get('/salesmen', async (_req, res) => {
+router.get('/salesmen', (0, billingRoleMiddleware_1.requirePermission)('canManageAdmins'), async (_req, res) => {
     const salesmen = await Salesman_1.default.find({ isActive: true }).sort({ createdAt: -1 });
     res.json(salesmen);
 });
-router.post('/salesmen', billingRoleMiddleware_1.requireAdmin, async (req, res) => {
+router.post('/salesmen', (0, billingRoleMiddleware_1.requirePermission)('canManageAdmins'), async (req, res) => {
     const salesman = await Salesman_1.default.create(req.body || {});
     res.status(201).json(salesman);
 });
-router.put('/salesmen/:id', billingRoleMiddleware_1.requireAdmin, async (req, res) => {
+router.put('/salesmen/:id', (0, billingRoleMiddleware_1.requirePermission)('canManageAdmins'), async (req, res) => {
     const salesman = await Salesman_1.default.findByIdAndUpdate(req.params.id, req.body || {}, { new: true });
     if (!salesman)
         return res.status(404).json({ message: 'Salesman not found' });
     res.json(salesman);
 });
-router.delete('/salesmen/:id', billingRoleMiddleware_1.requireAdmin, async (req, res) => {
+router.delete('/salesmen/:id', (0, billingRoleMiddleware_1.requirePermission)('canManageAdmins'), async (req, res) => {
     const salesman = await Salesman_1.default.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
     if (!salesman)
         return res.status(404).json({ message: 'Salesman not found' });

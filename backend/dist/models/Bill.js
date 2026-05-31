@@ -37,6 +37,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const ItemSchema = new mongoose_1.Schema({
     product: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Product' },
     barcode: { type: String, trim: true, default: '' },
+    barcodes: [{ type: String, trim: true }],
     name: { type: String, trim: true, default: '' },
     category: { type: String, trim: true, default: '' },
     size: { type: String, trim: true, default: '' },
@@ -80,6 +81,12 @@ const BillSchema = new mongoose_1.Schema({
     ],
     cashReceived: { type: Number, default: 0 },
     changeReturned: { type: Number, default: 0 },
+    pointsMode: { type: String, enum: ['earn', 'redeem', 'none'], default: 'none' },
+    awardPoints: { type: Boolean, default: false },
+    pointsEarned: { type: Number, default: 0, min: 0 },
+    pointsRedeemed: { type: Number, default: 0, min: 0 },
+    pointsDiscountAmount: { type: Number, default: 0, min: 0 },
+    pointsBalanceAfter: { type: Number, min: 0 },
     status: {
         type: String,
         enum: ['draft', 'held', 'completed', 'replaced', 'partial_replaced'],
