@@ -34,15 +34,32 @@ export default function ReceiptPrintModal({
               .receipt-scroll::-webkit-scrollbar-thumb { background: #888; border-radius: 8px; }
 
               #thermal-receipt {
-                width: 80mm;
+                width: 78mm;
                 margin: 0 auto;
+                transform: translateX(calc(-0.6cm + 1mm));
                 padding: 2mm 3mm;
+                box-sizing: border-box;
                 font-family: 'Courier New', Courier, monospace;
                 font-size: 12px;
-                font-weight: 500;
+                font-weight: 600;
                 color: #000000;
                 background: #ffffff;
                 line-height: 1.2;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+
+              #thermal-receipt .center,
+              #thermal-receipt .brand-subname,
+              #thermal-receipt .row-between,
+              #thermal-receipt .row-right,
+              #thermal-receipt .item-row,
+              #thermal-receipt .amount-row,
+              #thermal-receipt .points-row,
+              #thermal-receipt .terms-item,
+              #thermal-receipt .customer-value,
+              #thermal-receipt .gst-row:not(.gst-head) {
+                font-weight: 600;
               }
 
               .brand-logo-wrap {
@@ -234,15 +251,51 @@ export default function ReceiptPrintModal({
                 #thermal-receipt {
                   position: fixed;
                   top: 0;
-                  left: 0;
+                  left: calc(-0.6cm + 1mm);
                   margin: 0;
-                  width: 80mm;
+                  transform: none;
+                  width: 78mm;
                   padding: 2mm 3mm;
+                  box-sizing: border-box;
                   font-family: 'Courier New', Courier, monospace;
                   font-size: 11px;
+                  font-weight: 600;
                   line-height: 1.2;
-                  color: #000;
+                  color: #000000;
                   background: #ffffff;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+
+                /* Regular body text */
+                #thermal-receipt .center,
+                #thermal-receipt .brand-subname,
+                #thermal-receipt .row-between,
+                #thermal-receipt .row-right,
+                #thermal-receipt .item-row,
+                #thermal-receipt .amount-row,
+                #thermal-receipt .points-row,
+                #thermal-receipt .terms-item,
+                #thermal-receipt .customer-value,
+                #thermal-receipt .gst-row:not(.gst-head) {
+                  font-weight: 600;
+                }
+
+                /* Emphasis sections */
+                #thermal-receipt .title,
+                #thermal-receipt .table-head,
+                #thermal-receipt .customer-label,
+                #thermal-receipt .item-discount-tag,
+                #thermal-receipt .price-discounted,
+                #thermal-receipt .gst-head,
+                #thermal-receipt .terms-title,
+                #thermal-receipt .amount-row.discount-row {
+                  font-weight: 700;
+                }
+
+                #thermal-receipt .brand-name,
+                #thermal-receipt .you-saved {
+                  font-weight: 800;
                 }
               }
             `}</style>

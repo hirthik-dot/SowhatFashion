@@ -32,6 +32,7 @@ import billingReportsRoutes from './routes/billing-reports';
 import billingAdminRoutes from './routes/billing-admin';
 import billingInventoryRoutes from './routes/billing-inventory';
 import billingPointsRoutes from './routes/billing-points';
+import billingQzRoutes from './routes/billing-qz';
 import { billingAuthMiddleware } from './middleware/billingAuthMiddleware';
 
 const app = express();
@@ -135,6 +136,7 @@ app.use('/api/billing/reports', billingAuthMiddleware, billingReportsRoutes);
 app.use('/api/billing/admin', billingAuthMiddleware, billingAdminRoutes);
 app.use('/api/billing/inventory', billingAuthMiddleware, billingInventoryRoutes);
 app.use('/api/billing/points', billingAuthMiddleware, billingPointsRoutes);
+app.use('/api/billing/qz', billingAuthMiddleware, billingQzRoutes);
 
 // Error handler
 app.use(errorHandler);

@@ -161,4 +161,21 @@ export const billingApi = {
   reportProfit: (page = 1, sort = 'entryDate') => request(`/api/billing/reports/profit?page=${page}&sort=${sort}`),
   reportBillProfit: (query = "") => request(`/api/billing/reports/bill-profit${query ? `?${query}` : ""}`),
   reportBillProfitDetail: (id: string) => request(`/api/billing/reports/bill-profit/${id}`),
+  qzCertificate: async () => {
+    if (!API) throw new Error("NEXT_PUBLIC_API_URL is not set");
+    const res = await fetch(`${API}/api/billing/qz/certificate`, { credentials: "include" });
+    if (!res.ok) throw new Error(await res.text());
+    return res.text();
+  },
+  qzSign: async (requestStr: string) => {
+    if (!API) throw new Error("NEXT_PUBLIC_API_URL is not set");
+    const res = await fetch(`${API}/api/billing/qz/sign`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request: requestStr }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.text();
+  },
 };
