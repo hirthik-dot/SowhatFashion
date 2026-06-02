@@ -15,6 +15,7 @@ export const billingNavLinks: BillingNavLink[] = [
   { href: "/inventory", label: "Inventory", permissions: ["canManageStock", "canViewReports"] },
   { href: "/stock", label: "Stock Entry", permissions: ["canManageStock"] },
   { href: "/returns", label: "Returns", permissions: ["canReturn"] },
+  { href: "/returns/history", label: "Returns History", permissions: ["canReturn", "canViewReports"] },
   { href: "/reports", label: "📈 Reports Overview", permissions: ["canViewReports"] },
   { href: "/reports/customers", label: "📋 Customers", permissions: ["canViewCustomerReports"] },
   { href: "/reports/bill-profit", label: "💰 Bill Wise Profit", permissions: ["canViewReports"] },

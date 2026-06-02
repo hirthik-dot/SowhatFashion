@@ -7,10 +7,13 @@ import Image from 'next/image';
 interface PlaceholderEditorProps {
   settings: any;
   onUpdate: () => void;
+  activeHomepage?: 'allensolly' | 'magazine' | 'catalogue';
 }
 
-export default function PlaceholderEditor({ settings, onUpdate }: PlaceholderEditorProps) {
-  const [activeTab, setActiveTab] = useState<'allensolly' | 'magazine' | 'catalogue'>('allensolly');
+export default function PlaceholderEditor({ settings, onUpdate, activeHomepage }: PlaceholderEditorProps) {
+  const [activeTab, setActiveTab] = useState<'allensolly' | 'magazine' | 'catalogue'>(
+    activeHomepage || 'allensolly'
+  );
   const [loading, setLoading] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
 
@@ -134,31 +137,9 @@ export default function PlaceholderEditor({ settings, onUpdate }: PlaceholderEdi
         )}
 
         {activeTab === 'catalogue' && (
-          <div className="space-y-4">
-             <p className="text-sm text-[var(--text-secondary)]">Catalogue homepage generally uses solid backgrounds for the hero carousel. But you can set image backgrounds here if you want to override them.</p>
-             <div className="flex flex-wrap gap-4">
-                {[0, 1, 2].map((index) => {
-                  const url = placeholders.catalogue?.carouselImages?.[index];
-                  const isUploading = uploadingField === `catalogue-carouselImages-${index}`;
-                  return (
-                    <div key={index} className="space-y-2 flex flex-col items-center">
-                      <label className="text-xs font-bold text-gray-500 uppercase">Slide {index + 1}</label>
-                      <div className="w-48 h-24 relative bg-gray-100 border border-[var(--border)] rounded overflow-hidden flex items-center justify-center">
-                        {url ? (
-                          <Image src={url} alt={`Slide ${index}`} fill className="object-cover" />
-                        ) : (
-                          <span className="text-xs text-gray-400">No Image</span>
-                        )}
-                      </div>
-                      <label className="text-[10px] uppercase font-bold text-[var(--gold)] cursor-pointer hover:underline inline-block">
-                        {isUploading ? '...' : (url ? 'Replace' : 'Upload')}
-                        <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'catalogue', 'carouselImages', true, index)} className="hidden" disabled={isUploading} />
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-          </div>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Homepage 3 images are managed in the <strong>Homepage 3 — Image Editor</strong> section below (full slots, stock picker, and live preview).
+          </p>
         )}
       </div>
     </div>

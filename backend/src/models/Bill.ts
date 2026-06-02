@@ -18,6 +18,8 @@ const ItemSchema = new Schema(
     gstPercent: { type: Number, default: 5 },
     lineTotal: { type: Number, default: 0 },
     netLineTotal: { type: Number, default: 0 },
+    replacedOut: { type: Boolean, default: false },
+    isReplacement: { type: Boolean, default: false },
   },
   { _id: false }
 );

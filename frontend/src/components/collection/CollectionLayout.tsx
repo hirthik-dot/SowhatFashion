@@ -1,0 +1,404 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import CollectionFilterSidebar from './CollectionFilterSidebar';
+import CollectionProductCard from './CollectionProductCard';
+import { SORT_OPTIONS, SEO_SHOP_LINKS } from '@/lib/collection-filters';
+import { cn } from '@/lib/utils';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const PAGE_SIZE = 24;
+
+function parseDraftFromParams(params: URLSearchParams): Record<string, string | string[] | boolean> {
+  const draft: Record<string, string | string[] | boolean> = {};
+  if (params.get('minPrice')) draft.minPrice = params.get('minPrice')!;
+  if (params.get('maxPrice')) draft.maxPrice = params.get('maxPrice')!;
+  if (params.get('inStock') === 'true') draft.inStock = true;
+  const multiKeys = ['size', 'fit', 'collar', 'sleeves', 'neck', 'fabric', 'pattern', 'color', 'occasion'];
+  multiKeys.forEach((k) => {
+    const v = params.get(k);
+    if (v) draft[k] = v.split(',');
+  });
+  return draft;
+}
+
+function draftToQuery(draft: Record<string, string | string[] | boolean>, base: URLSearchParams) {
+  const p = new URLSearchParams(base.toString());
+  ['fit', 'collar', 'sleeves', 'neck', 'fabric', 'pattern', 'color', 'occasion', 'inStock'].forEach((k) =>
+    p.delete(k)
+  );
+  if (draft.minPrice) p.set('minPrice', String(draft.minPrice));
+  else p.delete('minPrice');
+  if (draft.maxPrice && Number(draft.maxPrice) < 15000) p.set('maxPrice', String(draft.maxPrice));
+  else p.delete('maxPrice');
+  if (draft.inStock) p.set('inStock', 'true');
+  else p.delete('inStock');
+  const sizes = draft.size as string[] | undefined;
+  if (sizes?.length) p.set('size', sizes.join(','));
+  else p.delete('size');
+  return p;
+}
+
+function CollectionLayoutInner({
+  collectionTitle,
+  breadcrumbMiddle = 'Shop',
+  initialParams,
+}: {
+  collectionTitle?: string;
+  breadcrumbMiddle?: string;
+  initialParams?: Record<string, string>;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [products, setProducts] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [seoOpen, setSeoOpen] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string | string[] | boolean>>(() =>
+    parseDraftFromParams(searchParams)
+  );
+
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  const sort = searchParams.get('sort') || '';
+  const category = searchParams.get('category') || '';
+  const search = searchParams.get('search') || searchParams.get('q') || '';
+  const newArrival = searchParams.get('newArrival') === 'true';
+  const featured = searchParams.get('featured') === 'true';
+
+  const title = useMemo(() => {
+    if (collectionTitle) return collectionTitle.toUpperCase();
+    if (search) return `SEARCH: ${search.toUpperCase()}`;
+    if (newArrival) return 'NEW ARRIVALS';
+    if (featured) return 'FEATURED';
+    if (category) {
+      const map: Record<string, string> = {
+        tshirt: 'T-SHIRTS',
+        shirt: 'SHIRTS',
+        pant: 'TROUSERS',
+      };
+      return map[category.toLowerCase()] || category.toUpperCase();
+    }
+    return 'ALL PRODUCTS';
+  }, [collectionTitle, search, newArrival, featured, category]);
+
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = new URLSearchParams(searchParams.toString());
+      p.set('limit', String(PAGE_SIZE));
+      p.set('page', String(page));
+      if (sort === 'featured') {
+        p.set('featured', 'true');
+        p.delete('sort');
+      } else if (sort === 'newest') {
+        p.set('newArrival', 'true');
+        p.delete('sort');
+      } else if (sort === 'best_selling') {
+        p.set('featured', 'true');
+        p.delete('sort');
+      } else if (sort) {
+        p.set('sort', sort);
+      }
+      const res = await fetch(`${API}/api/products?${p.toString()}`);
+      const data = await res.json();
+      let list = data.products || [];
+      if (searchParams.get('inStock') === 'true') {
+        list = list.filter((pr: any) => (pr.stock ?? 0) > 0 || (pr.totalStock ?? 0) > 0);
+      }
+      setProducts(list);
+      setTotal(data.total ?? list.length);
+    } catch {
+      setProducts([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchParams, page, sort]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  useEffect(() => {
+    if (!initialParams || Object.keys(initialParams).length === 0) return;
+    const p = new URLSearchParams(searchParams.toString());
+    let changed = false;
+    Object.entries(initialParams).forEach(([k, v]) => {
+      if (!p.get(k)) {
+        p.set(k, v);
+        changed = true;
+      }
+    });
+    if (changed) router.replace(`${pathname}?${p.toString()}`);
+  }, [initialParams, pathname, router, searchParams]);
+
+  useEffect(() => {
+    setDraft(parseDraftFromParams(searchParams));
+  }, [searchParams]);
+
+  const applyDraft = () => {
+    const p = draftToQuery(draft, searchParams);
+    p.delete('page');
+    router.push(`${pathname}?${p.toString()}`);
+    setMobileFiltersOpen(false);
+  };
+
+  const clearFilters = () => {
+    const p = new URLSearchParams();
+    if (category) p.set('category', category);
+    if (search) p.set('search', search);
+    if (newArrival) p.set('newArrival', 'true');
+    if (featured) p.set('featured', 'true');
+    setDraft({});
+    router.push(`${pathname}?${p.toString()}`);
+    setMobileFiltersOpen(false);
+  };
+
+  const setSort = (value: string) => {
+    const p = new URLSearchParams(searchParams.toString());
+    if (value) p.set('sort', value);
+    else p.delete('sort');
+    p.delete('page');
+    router.push(`${pathname}?${p.toString()}`);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const loadMore = () => {
+    const p = new URLSearchParams(searchParams.toString());
+    p.set('page', String(page + 1));
+    router.push(`${pathname}?${p.toString()}`);
+  };
+
+  return (
+    <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 md:py-12">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 pb-6 border-b border-[#E8E4DF]">
+        <div>
+          <nav className="text-[11px] uppercase tracking-[0.15em] text-[#999] mb-3">
+            <Link href="/" className="hover:text-[#111] premium-link">Home</Link>
+            <span className="mx-2">›</span>
+            <Link href="/products" className="hover:text-[#111] premium-link">{breadcrumbMiddle}</Link>
+            <span className="mx-2">›</span>
+            <span className="text-[#666]">{title}</span>
+          </nav>
+          <h1 className="font-cormorant font-light text-[28px] md:text-[32px] text-[#111]">{title}</h1>
+          <p className="text-sm text-[#999] mt-1">({total} products)</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="sort" className="text-[11px] uppercase tracking-[0.15em] text-[#666]">
+              Sort By
+            </label>
+            <select
+              id="sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="border border-[#E8E4DF] text-sm px-3 py-2 bg-white focus:outline-none focus:border-[#111]"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value || 'rel'} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex border border-[#E8E4DF]">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={cn('p-2', viewMode === 'grid' ? 'bg-[#111] text-white' : 'text-[#666]')}
+              aria-label="Grid view"
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={cn('p-2', viewMode === 'list' ? 'bg-[#111] text-white' : 'text-[#666]')}
+              aria-label="List view"
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-8 lg:gap-12">
+        {/* Desktop sidebar */}
+        <div className="hidden lg:block w-[280px] shrink-0">
+          <div className="sticky top-[120px] max-h-[calc(100vh-140px)] flex flex-col">
+            <CollectionFilterSidebar
+              draft={draft}
+              onChange={setDraft}
+              onClear={clearFilters}
+              onApply={applyDraft}
+              resultCount={total}
+            />
+          </div>
+        </div>
+
+        {/* Products */}
+        <div className="flex-1 min-w-0">
+          {loading ? (
+            <div className="py-24 text-center text-[#999] text-sm uppercase tracking-widest">Loading…</div>
+          ) : products.length === 0 ? (
+            <div className="py-24 text-center">
+              <p className="text-[#666] mb-4">No products match your filters.</p>
+              <button type="button" onClick={clearFilters} className="text-[11px] uppercase tracking-widest underline">
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                viewMode === 'grid'
+                  ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-7'
+                  : 'flex flex-col gap-4'
+              )}
+            >
+              {products.map((product) => (
+                <CollectionProductCard key={product._id} product={product} listView={viewMode === 'list'} />
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          <div className="mt-12 flex flex-col items-center gap-6">
+            <div className="flex gap-4 text-sm">
+              {Array.from({ length: Math.min(totalPages, 8) }, (_, i) => i + 1).map((n) => (
+                <Link
+                  key={n}
+                  href={`${pathname}?${(() => {
+                    const p = new URLSearchParams(searchParams.toString());
+                    p.set('page', String(n));
+                    return p.toString();
+                  })()}`}
+                  className={cn(
+                    'min-w-[28px] text-center',
+                    page === n ? 'text-[#111] underline underline-offset-4' : 'text-[#999] hover:text-[#111]'
+                  )}
+                >
+                  {n}
+                </Link>
+              ))}
+              {totalPages > 8 && <span className="text-[#999]">…</span>}
+            </div>
+            {page < totalPages && (
+              <button
+                type="button"
+                onClick={loadMore}
+                className="text-[11px] uppercase tracking-[0.2em] border border-[#111] px-10 py-3 hover:bg-[#111] hover:text-white transition-colors"
+              >
+                Load More
+              </button>
+            )}
+          </div>
+
+          {/* SEO links */}
+          <div className="mt-16 border-t border-[#E8E4DF] pt-6">
+            <button
+              type="button"
+              onClick={() => setSeoOpen(!seoOpen)}
+              className="flex items-center justify-between w-full text-left text-sm text-[#666] uppercase tracking-wider"
+            >
+              Shop For
+              <ChevronSmall open={seoOpen} />
+            </button>
+            {seoOpen && (
+              <div className="mt-4 space-y-4 text-[12px] text-[#999]">
+                {SEO_SHOP_LINKS.map((section) => (
+                  <p key={section.title}>
+                    <span className="text-[#666] font-medium">{section.title}: </span>
+                    {section.links.map((link, i) => (
+                      <span key={link.href}>
+                        {i > 0 && ' · '}
+                        <Link href={link.href} className="hover:text-[#111] premium-link">
+                          {link.label}
+                        </Link>
+                      </span>
+                    ))}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile filter bar */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E8E4DF] p-3">
+        <button
+          type="button"
+          onClick={() => setMobileFiltersOpen(true)}
+          className="w-full bg-[#111] text-white text-[11px] uppercase tracking-[0.2em] py-3.5 font-semibold"
+        >
+          Filter
+        </button>
+      </div>
+
+      {mobileFiltersOpen && (
+        <div className="lg:hidden fixed inset-0 z-[100]">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileFiltersOpen(false)} />
+          <div className="absolute bottom-0 left-0 right-0 bg-white max-h-[90vh] flex flex-col rounded-t-lg">
+            <div className="p-4 border-b flex justify-between items-center">
+              <span className="text-[11px] uppercase tracking-widest font-semibold">Filters</span>
+              <button type="button" onClick={() => setMobileFiltersOpen(false)} aria-label="Close">
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <CollectionFilterSidebar
+                draft={draft}
+                onChange={setDraft}
+                onClear={clearFilters}
+                onApply={applyDraft}
+                resultCount={total}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="h-16 lg:hidden" />
+    </div>
+  );
+}
+
+function ChevronSmall({ open }: { open: boolean }) {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" className={cn(open && 'rotate-180')}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+export default function CollectionLayout(props: {
+  collectionTitle?: string;
+  breadcrumbMiddle?: string;
+  initialParams?: Record<string, string>;
+}) {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-[#999]">Loading shop…</div>}>
+      <CollectionLayoutInner {...props} />
+    </Suspense>
+  );
+}

@@ -8,5 +8,8 @@ export declare const lineMrpTotal: (item: any) => number;
  * discount is applied to the GST portion first, then any remainder to MRP.
  */
 export declare const lineRevenueExGst: (item: any, gstRate?: number) => number;
+/** One physical unit's share of line revenue (purchase-batch profit uses per-barcode rows). */
+export declare const lineRevenueExGstPerUnit: (item: any, gstRate?: number) => number;
+export declare const unitLineDiscountTotal: (item: any) => number;
 export declare const billRevenueExGst: (bill: any, gstRate?: number) => any;
 //# sourceMappingURL=billing-revenue.d.ts.map

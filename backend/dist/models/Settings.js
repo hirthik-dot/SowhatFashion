@@ -60,7 +60,8 @@ const SettingsSchema = new mongoose_1.Schema({
             curatedStaplesImage: { type: String, default: '' },
         },
         catalogue: {
-            carouselImages: { type: [String], default: [] },
+            type: mongoose_1.Schema.Types.Mixed,
+            default: () => ({}),
         },
     },
     homepageSections: {

@@ -9,6 +9,59 @@ const StockEntry_1 = __importDefault(require("../models/StockEntry"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const router = express_1.default.Router();
+const productStockEntryFilter = (productId) => ({
+    $or: [{ productId }, { productIds: productId }],
+});
+/** Latest purchase batch for a product size (inventory edits attach new units here). */
+const findLatestStockEntryForSize = async (productId, size) => {
+    const sizeNorm = String(size).trim();
+    const entries = await StockEntry_1.default.find(productStockEntryFilter(productId))
+        .sort({ entryDate: -1, createdAt: -1 })
+        .select('_id size')
+        .lean();
+    const sized = entries.find((e) => String(e.size || '').trim() === sizeNorm);
+    return sized?._id ?? entries[0]?._id ?? null;
+};
+/** Items created from admin inventory have no batch until linked. */
+const linkOrphanItemsToBatches = async (productId) => {
+    const orphans = await StockItem_1.default.find({
+        product: productId,
+        $or: [{ stockEntry: null }, { stockEntry: { $exists: false } }],
+    })
+        .select('_id size')
+        .lean();
+    const bySize = new Map();
+    for (const item of orphans) {
+        const size = String(item.size || '').trim();
+        if (!bySize.has(size))
+            bySize.set(size, []);
+        bySize.get(size).push(item._id);
+    }
+    for (const [size, itemIds] of bySize) {
+        const entryId = await findLatestStockEntryForSize(productId, size);
+        if (!entryId || !itemIds.length)
+            continue;
+        await StockItem_1.default.updateMany({ _id: { $in: itemIds } }, { $set: { stockEntry: entryId } });
+    }
+};
+/** Keep purchase/profit batch rows in sync with live stock (qty + cost/MRP). */
+const syncProductPurchaseBatches = async (productId, priceUpdates) => {
+    await linkOrphanItemsToBatches(productId);
+    const entries = await StockEntry_1.default.find(productStockEntryFilter(productId)).select('_id').lean();
+    for (const entry of entries) {
+        const items = await StockItem_1.default.find({ stockEntry: entry._id }).select('_id barcode').lean();
+        const patch = {
+            quantity: items.length,
+            barcodes: items.map((i) => i.barcode),
+            stockItemIds: items.map((i) => i._id),
+        };
+        if (priceUpdates?.incomingPrice !== undefined)
+            patch.incomingPrice = priceUpdates.incomingPrice;
+        if (priceUpdates?.sellingPrice !== undefined)
+            patch.sellingPrice = priceUpdates.sellingPrice;
+        await StockEntry_1.default.updateOne({ _id: entry._id }, { $set: patch });
+    }
+};
 router.use((0, billingRoleMiddleware_1.requireAnyPermission)('canManageStock', 'canViewReports', 'canManageSuppliersCategories'));
 router.get('/summary', async (req, res) => {
     const query = { isBillingProduct: true };
@@ -124,13 +177,11 @@ router.put('/products/:id', async (req, res) => {
             product.billingName = String(updates.billingName).trim();
         if (updates.price !== undefined) {
             product.price = Number(updates.price);
-            // Update MRP for all available stock items
-            await StockItem_1.default.updateMany({ product: product._id, status: 'available' }, { $set: { sellingPrice: product.price } });
+            await StockItem_1.default.updateMany({ product: product._id }, { $set: { sellingPrice: product.price } });
         }
         if (updates.incomingPrice !== undefined) {
             product.incomingPrice = Number(updates.incomingPrice);
-            // Update incoming price for all available stock items
-            await StockItem_1.default.updateMany({ product: product._id, status: 'available' }, { $set: { incomingPrice: product.incomingPrice } });
+            await StockItem_1.default.updateMany({ product: product._id }, { $set: { incomingPrice: product.incomingPrice } });
         }
         // Handle billingCategory (ObjectId) → also update category name string
         if (updates.billingCategory !== undefined) {
@@ -217,8 +268,8 @@ router.put('/products/:id', async (req, res) => {
                 const currentTotalStockForSize = await StockItem_1.default.countDocuments({ product: product._id, size });
                 const diff = desiredQuantity - currentTotalStockForSize;
                 if (diff > 0) {
-                    // Generate new barcodes
                     const barcodes = await generateBarcodes(diff);
+                    const stockEntryId = await findLatestStockEntryForSize(product._id, size);
                     await StockItem_1.default.insertMany(barcodes.map((barcode) => ({
                         barcode,
                         product: product._id,
@@ -226,6 +277,7 @@ router.put('/products/:id', async (req, res) => {
                         incomingPrice: product.incomingPrice,
                         sellingPrice: product.price,
                         supplier: product.supplier,
+                        ...(stockEntryId ? { stockEntry: stockEntryId } : {}),
                         status: 'available',
                     })));
                 }
@@ -253,6 +305,17 @@ router.put('/products/:id', async (req, res) => {
             product.isActive = product.stock > 0;
         }
         await product.save();
+        const priceUpdates = {};
+        if (updates.incomingPrice !== undefined)
+            priceUpdates.incomingPrice = product.incomingPrice;
+        if (updates.price !== undefined)
+            priceUpdates.sellingPrice = product.price;
+        const shouldSyncBatches = Boolean(updates.sizeEntries) ||
+            updates.incomingPrice !== undefined ||
+            updates.price !== undefined;
+        if (shouldSyncBatches) {
+            await syncProductPurchaseBatches(product._id, Object.keys(priceUpdates).length ? priceUpdates : undefined);
+        }
         res.json(product);
     }
     catch (error) {

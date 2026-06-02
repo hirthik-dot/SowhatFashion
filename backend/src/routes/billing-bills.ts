@@ -1,6 +1,7 @@
 import express, { Response } from 'express';
 import mongoose from 'mongoose';
 import Bill from '../models/Bill';
+import BillingReturn from '../models/Return';
 import Product from '../models/Product';
 import StockItem from '../models/StockItem';
 import { BillingAuthRequest, billingAuthMiddleware } from '../middleware/billingAuthMiddleware';
@@ -69,6 +70,64 @@ const adjustProductSizeStock = async (productId: string, size: string, delta: nu
   product.stock = (product as any).totalStock;
   product.isActive = (product as any).totalStock > 0;
   await product.save();
+};
+
+/** All unit barcodes on a bill line (supports multi-qty lines). */
+const collectItemBarcodes = (item: any): string[] => {
+  if (Array.isArray(item?.barcodes) && item.barcodes.length > 0) {
+    return item.barcodes.map((value: string) => String(value || '').trim()).filter(Boolean);
+  }
+  const single = String(item?.barcode || '').trim();
+  return single ? [single] : [];
+};
+
+const barcodeSetFromItems = (items: any[]) => {
+  const set = new Set<string>();
+  for (const item of items || []) {
+    collectItemBarcodes(item).forEach((code) => set.add(code));
+  }
+  return set;
+};
+
+const findOriginalItemForBarcode = (items: any[], barcode: string) => {
+  const code = String(barcode || '').trim();
+  if (!code) return null;
+  return (
+    (items || []).find((item) => collectItemBarcodes(item).includes(code)) ||
+    (items || []).find((item) => String(item?.barcode || '').trim() === code) ||
+    null
+  );
+};
+
+/** Keep barcodes aligned with quantity when editing a bill. */
+const enrichEditedBillItems = (normalizedItems: any[], originalItems: any[], payloadItems: any[]) => {
+  return (normalizedItems || []).map((item) => {
+    const primary = String(item.barcode || '').trim();
+    const payloadItem =
+      (payloadItems || []).find((row) => collectItemBarcodes(row).includes(primary)) ||
+      (payloadItems || []).find((row) => String(row?.barcode || '').trim() === primary);
+    const originalItem = findOriginalItemForBarcode(originalItems, primary);
+    const quantity = Math.max(1, Number(item.quantity || 1));
+
+    let barcodes = collectItemBarcodes(payloadItem || item);
+    const originalBarcodes = collectItemBarcodes(originalItem);
+    if (originalBarcodes.length > 0) {
+      if (originalBarcodes.includes(primary)) {
+        barcodes = originalBarcodes.slice(0, quantity);
+      } else if (barcodes.length === 0) {
+        barcodes = originalBarcodes.slice(0, quantity);
+      }
+    }
+    if (barcodes.length > quantity) barcodes = barcodes.slice(0, quantity);
+    if (barcodes.length === 0 && primary) barcodes = [primary];
+
+    return {
+      ...item,
+      quantity,
+      barcode: barcodes[0] || primary,
+      barcodes,
+    };
+  });
 };
 
 const calculateBillTotals = (
@@ -292,6 +351,19 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
     },
     { $unwind: '$productData' },
     {
+      $lookup: {
+        from: 'suppliers',
+        localField: 'productData.supplier',
+        foreignField: '_id',
+        as: 'supplierData',
+      },
+    },
+    {
+      $addFields: {
+        supplierName: { $ifNull: [{ $arrayElemAt: ['$supplierData.name', 0] }, ''] },
+      },
+    },
+    {
       $match: {
         'productData.isBillingProduct': true,
         'productData.isActive': true,
@@ -301,6 +373,7 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
           { 'productData.tags': regex },
           { 'productData.category': regex },
           { 'productData.subCategory': regex },
+          { supplierName: regex },
         ],
       },
     },
@@ -311,6 +384,7 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
         name: { $first: { $ifNull: ['$productData.billingName', '$productData.name'] } },
         category: { $first: '$productData.category' },
         subCategory: { $first: '$productData.subCategory' },
+        supplier: { $first: '$supplierName' },
         price: { $first: '$sellingPrice' },
         discountPrice: { $first: '$productData.discountPrice' },
         stock: { $sum: 1 },
@@ -337,6 +411,7 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
       stock: Number(item.stock || 0),
       category: item.category || '',
       subCategory: item.subCategory || '',
+      supplier: item.supplier || '',
     }))
   );
 });
@@ -700,11 +775,38 @@ router.get('/history', billingAuthMiddleware, async (req: BillingAuthRequest, re
       .populate('salesman', 'name phone')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit),
+      .limit(limit)
+      .lean(),
     Bill.countDocuments(query),
   ]);
 
-  return res.json({ data, total, page, limit });
+  const billIds = data.map((row: any) => row._id);
+  const returns =
+    billIds.length > 0
+      ? await BillingReturn.find({ bill: { $in: billIds } })
+          .sort({ createdAt: -1 })
+          .populate('processedBy', 'name email')
+          .lean()
+      : [];
+  const returnsByBill = returns.reduce((acc: Map<string, any[]>, row: any) => {
+    const key = String(row.bill);
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key)!.push({
+      ...row,
+      processedByName: (row as any).processedBy?.name || '',
+    });
+    return acc;
+  }, new Map());
+
+  return res.json({
+    data: data.map((bill: any) => ({
+      ...bill,
+      returns: returnsByBill.get(String(bill._id)) || [],
+    })),
+    total,
+    page,
+    limit,
+  });
 });
 
 router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, res: Response) => {
@@ -726,7 +828,19 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
       return res.status(400).json({ message: 'Edit reason is required' });
     }
 
-    const totals = calculateBillTotals(payload.items || [], payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+    const originalItems = Array.isArray((bill as any).items) ? (bill as any).items : [];
+    const payloadItems = Array.isArray(payload.items) ? payload.items : [];
+    const baseTotals = calculateBillTotals(
+      payloadItems,
+      payload.billDiscountType || 'none',
+      Number(payload.billDiscountValue || 0)
+    );
+    const normalizedItems = enrichEditedBillItems(baseTotals.normalizedItems, originalItems, payloadItems);
+    const totals = calculateBillTotals(
+      normalizedItems,
+      payload.billDiscountType || 'none',
+      Number(payload.billDiscountValue || 0)
+    );
     const paymentBreakdown = Array.isArray(payload.paymentBreakdown)
       ? payload.paymentBreakdown
       : [
@@ -762,25 +876,14 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
         : paymentMethod === 'cash'
         ? totals.totalAmount
         : 0;
-    const originalItems = Array.isArray((bill as any).items) ? (bill as any).items : [];
     const previousTotal = Number((bill as any).totalAmount || 0);
 
-    const originalBarcodes = new Set(originalItems.map((item: any) => String(item.barcode || '').trim()).filter(Boolean));
-    const updatedBarcodes = new Set(
-      totals.normalizedItems.map((item: any) => String(item.barcode || '').trim()).filter(Boolean)
-    );
+    const originalBarcodeSet = barcodeSetFromItems(originalItems);
+    const updatedBarcodeSet = barcodeSetFromItems(totals.normalizedItems);
+    const removedBarcodes = [...originalBarcodeSet].filter((code) => !updatedBarcodeSet.has(code));
+    const addedBarcodes = [...updatedBarcodeSet].filter((code) => !originalBarcodeSet.has(code));
 
-    const removedItems = originalItems.filter((item: any) => {
-      const barcode = String(item.barcode || '').trim();
-      return barcode && !updatedBarcodes.has(barcode);
-    });
-    const addedItems = totals.normalizedItems.filter((item: any) => {
-      const barcode = String(item.barcode || '').trim();
-      return barcode && !originalBarcodes.has(barcode);
-    });
-
-    for (const item of removedItems) {
-      const barcode = String(item.barcode || '').trim();
+    for (const barcode of removedBarcodes) {
       const released = await StockItem.findOneAndUpdate(
         { barcode, soldInBill: bill._id },
         { status: 'available', soldInBill: null }
@@ -788,12 +891,12 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
       if (!released) {
         return res.status(400).json({ message: `Unable to release stock item ${barcode}` });
       }
-      const productId = String(item.product || item.productId || released.product || '');
-      await adjustProductSizeStock(productId, String(item.size || released.size || ''), 1);
+      const sourceItem = findOriginalItemForBarcode(originalItems, barcode);
+      const productId = String(sourceItem?.product || sourceItem?.productId || released.product || '');
+      await adjustProductSizeStock(productId, String(sourceItem?.size || released.size || ''), 1);
     }
 
-    for (const item of addedItems) {
-      const barcode = String(item.barcode || '').trim();
+    for (const barcode of addedBarcodes) {
       const sold = await StockItem.findOneAndUpdate(
         { barcode, status: 'available' },
         { status: 'sold', soldInBill: bill._id }
@@ -801,8 +904,11 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
       if (!sold) {
         return res.status(400).json({ message: `Barcode not available: ${barcode}` });
       }
-      const productId = String(item.product || item.productId || sold.product || '');
-      await adjustProductSizeStock(productId, String(item.size || sold.size || ''), -1);
+      const sourceItem =
+        findOriginalItemForBarcode(totals.normalizedItems, barcode) ||
+        payloadItems.find((row: any) => collectItemBarcodes(row).includes(barcode));
+      const productId = String(sourceItem?.product || sourceItem?.productId || sold.product || '');
+      await adjustProductSizeStock(productId, String(sourceItem?.size || sold.size || ''), -1);
     }
 
     (bill as any).customer = payload.customer || { name: '', phone: '' };
@@ -834,6 +940,7 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
       },
     ];
 
+    bill.markModified('items');
     await bill.save();
 
     await triggerRevalidate(['/', '/products', '/history', '/reports', '/billing']);

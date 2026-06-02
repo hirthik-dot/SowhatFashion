@@ -1,4 +1,5 @@
 import express, { Response } from 'express';
+import mongoose from 'mongoose';
 import Product from '../models/Product';
 import StockEntry from '../models/StockEntry';
 import StockItem from '../models/StockItem';
@@ -6,6 +7,65 @@ import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
 import { requireAnyPermission } from '../middleware/billingRoleMiddleware';
 
 const router = express.Router();
+
+const productStockEntryFilter = (productId: mongoose.Types.ObjectId) => ({
+  $or: [{ productId }, { productIds: productId }],
+});
+
+/** Latest purchase batch for a product size (inventory edits attach new units here). */
+const findLatestStockEntryForSize = async (productId: mongoose.Types.ObjectId, size: string) => {
+  const sizeNorm = String(size).trim();
+  const entries = await StockEntry.find(productStockEntryFilter(productId))
+    .sort({ entryDate: -1, createdAt: -1 })
+    .select('_id size')
+    .lean();
+  const sized = entries.find((e) => String(e.size || '').trim() === sizeNorm);
+  return sized?._id ?? entries[0]?._id ?? null;
+};
+
+/** Items created from admin inventory have no batch until linked. */
+const linkOrphanItemsToBatches = async (productId: mongoose.Types.ObjectId) => {
+  const orphans = await StockItem.find({
+    product: productId,
+    $or: [{ stockEntry: null }, { stockEntry: { $exists: false } }],
+  })
+    .select('_id size')
+    .lean();
+
+  const bySize = new Map<string, mongoose.Types.ObjectId[]>();
+  for (const item of orphans) {
+    const size = String(item.size || '').trim();
+    if (!bySize.has(size)) bySize.set(size, []);
+    bySize.get(size)!.push(item._id);
+  }
+
+  for (const [size, itemIds] of bySize) {
+    const entryId = await findLatestStockEntryForSize(productId, size);
+    if (!entryId || !itemIds.length) continue;
+    await StockItem.updateMany({ _id: { $in: itemIds } }, { $set: { stockEntry: entryId } });
+  }
+};
+
+/** Keep purchase/profit batch rows in sync with live stock (qty + cost/MRP). */
+const syncProductPurchaseBatches = async (
+  productId: mongoose.Types.ObjectId,
+  priceUpdates?: { incomingPrice?: number; sellingPrice?: number }
+) => {
+  await linkOrphanItemsToBatches(productId);
+
+  const entries = await StockEntry.find(productStockEntryFilter(productId)).select('_id').lean();
+  for (const entry of entries) {
+    const items = await StockItem.find({ stockEntry: entry._id }).select('_id barcode').lean();
+    const patch: Record<string, unknown> = {
+      quantity: items.length,
+      barcodes: items.map((i) => i.barcode),
+      stockItemIds: items.map((i) => i._id),
+    };
+    if (priceUpdates?.incomingPrice !== undefined) patch.incomingPrice = priceUpdates.incomingPrice;
+    if (priceUpdates?.sellingPrice !== undefined) patch.sellingPrice = priceUpdates.sellingPrice;
+    await StockEntry.updateOne({ _id: entry._id }, { $set: patch });
+  }
+};
 router.use(requireAnyPermission('canManageStock', 'canViewReports', 'canManageSuppliersCategories'));
 
 router.get('/summary', async (req: BillingAuthRequest, res: Response) => {
@@ -134,19 +194,11 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     if (updates.billingName !== undefined) product.billingName = String(updates.billingName).trim();
     if (updates.price !== undefined) {
       product.price = Number(updates.price);
-      // Update MRP for all available stock items
-      await StockItem.updateMany(
-        { product: product._id, status: 'available' },
-        { $set: { sellingPrice: product.price } }
-      );
+      await StockItem.updateMany({ product: product._id }, { $set: { sellingPrice: product.price } });
     }
     if (updates.incomingPrice !== undefined) {
       product.incomingPrice = Number(updates.incomingPrice);
-      // Update incoming price for all available stock items
-      await StockItem.updateMany(
-        { product: product._id, status: 'available' },
-        { $set: { incomingPrice: product.incomingPrice } }
-      );
+      await StockItem.updateMany({ product: product._id }, { $set: { incomingPrice: product.incomingPrice } });
     }
 
     // Handle billingCategory (ObjectId) → also update category name string
@@ -237,8 +289,8 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
         const diff = desiredQuantity - currentTotalStockForSize;
 
         if (diff > 0) {
-          // Generate new barcodes
           const barcodes = await generateBarcodes(diff);
+          const stockEntryId = await findLatestStockEntryForSize(product._id, size);
           await StockItem.insertMany(
             barcodes.map((barcode) => ({
               barcode,
@@ -247,6 +299,7 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
               incomingPrice: product.incomingPrice,
               sellingPrice: product.price,
               supplier: product.supplier,
+              ...(stockEntryId ? { stockEntry: stockEntryId } : {}),
               status: 'available',
             }))
           );
@@ -277,6 +330,20 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     }
 
     await product.save();
+
+    const priceUpdates: { incomingPrice?: number; sellingPrice?: number } = {};
+    if (updates.incomingPrice !== undefined) priceUpdates.incomingPrice = product.incomingPrice;
+    if (updates.price !== undefined) priceUpdates.sellingPrice = product.price;
+    const shouldSyncBatches =
+      Boolean(updates.sizeEntries) ||
+      updates.incomingPrice !== undefined ||
+      updates.price !== undefined;
+    if (shouldSyncBatches) {
+      await syncProductPurchaseBatches(
+        product._id,
+        Object.keys(priceUpdates).length ? priceUpdates : undefined
+      );
+    }
 
     res.json(product);
   } catch (error: any) {

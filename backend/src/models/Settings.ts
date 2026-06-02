@@ -31,9 +31,7 @@ export interface ISettings extends Document {
       heroImage: string;
       curatedStaplesImage: string;
     };
-    catalogue: {
-      carouselImages: string[];
-    };
+    catalogue: Record<string, unknown>;
   };
 }
 
@@ -64,7 +62,8 @@ const SettingsSchema = new Schema<ISettings>(
         curatedStaplesImage: { type: String, default: '' },
       },
       catalogue: {
-        carouselImages: { type: [String], default: [] },
+        type: Schema.Types.Mixed,
+        default: () => ({}),
       },
     },
     homepageSections: {

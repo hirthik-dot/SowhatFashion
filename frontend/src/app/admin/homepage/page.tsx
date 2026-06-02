@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
 import HomepageSwitcher from '@/components/admin/HomepageSwitcher';
 import PlaceholderEditor from '@/components/admin/PlaceholderEditor';
+import Homepage3ImageEditor from '@/components/admin/Homepage3ImageEditor';
 import { adminGetSettings } from '@/lib/api';
 
 export default function AdminHomepageConfigPage() {
@@ -34,7 +35,7 @@ export default function AdminHomepageConfigPage() {
 
   return (
     <div>
-      <AdminHeader title="Homepage Configuration" />
+      <AdminHeader title="Homepage Management" />
       
       <div className="p-6 md:p-8 max-w-7xl mx-auto">
         <div className="mb-8">
@@ -49,7 +50,11 @@ export default function AdminHomepageConfigPage() {
           onUpdate={(type) => setActiveHomepage(type)} 
         />
 
-        <PlaceholderEditor settings={settings} onUpdate={fetchSettings} />
+        <PlaceholderEditor settings={settings} onUpdate={fetchSettings} activeHomepage={activeHomepage} />
+
+        {activeHomepage === 'catalogue' && (
+          <Homepage3ImageEditor settings={settings} onUpdate={fetchSettings} />
+        )}
       </div>
     </div>
   );

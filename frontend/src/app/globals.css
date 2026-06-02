@@ -12,6 +12,9 @@
   --text-secondary: #6B6B6B;
   --sale-red: #C0392B;
   --success: #2E7D52;
+  --premium-bg: #FFFFFF;
+  --premium-surface: #F5F5F3;
+  --premium-text: #111111;
 }
 
 
@@ -258,4 +261,44 @@ h1, h2, h3, h4, h5, h6 {
 .carousel-dot.active {
   background: var(--gold);
   transform: scale(1.2);
+}
+
+/* Premium homepage */
+.font-cormorant {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', serif;
+}
+
+@keyframes kenBurns {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+.animate-ken-burns {
+  animation: kenBurns 12s ease-out forwards;
+}
+
+@keyframes announcementFade {
+  0%, 28% { opacity: 1; }
+  33%, 95% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.announcement-rotate > span {
+  animation: announcementFade 9s infinite;
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+.announcement-rotate > span:nth-child(2) { animation-delay: 3s; }
+.announcement-rotate > span:nth-child(3) { animation-delay: 6s; }
+
+.premium-link {
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0 1px;
+  transition: background-size 0.25s ease;
+}
+.premium-link:hover {
+  background-size: 100% 1px;
 }

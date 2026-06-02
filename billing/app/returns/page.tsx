@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BillingShell from "@/components/layout/BillingShell";
 import BarcodeScanner from "@/components/billing/BarcodeScanner";
@@ -11,6 +12,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import ReplacementReceipt, { type ReturnDocument } from "@/components/returns/ReplacementReceipt";
 import { useRole } from "@/hooks/useRole";
 import type { BillItem, DiscountType } from "@/lib/bill-store";
+import { expandSelectedToReturnedItems, returnableBillItems } from "@/lib/return-utils";
 
 const itemDiscountPerUnit = (mrp: number, type: DiscountType, value: number) => {
   if (type === "percent") return (mrp * value) / 100;
@@ -44,13 +46,21 @@ const computeReplacementTotals = (
     const share = afterItemDiscount > 0 ? (lineTotal / afterItemDiscount) * billDiscountAmount : 0;
     const netLine = lineTotal - share;
     const sellingPrice = netLine / Math.max(1, item.quantity);
+    const discountPerUnit = itemDiscountPerUnit(item.mrp, item.itemDiscountType, item.itemDiscountValue);
     return {
       product: item.product,
       barcode: item.barcode,
       name: item.name,
       size: item.size,
       quantity: item.quantity,
+      mrp: item.mrp,
+      itemDiscountType: item.itemDiscountType,
+      itemDiscountValue: item.itemDiscountValue,
+      itemDiscountAmount: discountPerUnit,
+      billDiscountShare: share,
       sellingPrice,
+      lineTotal: netLine,
+      netLineTotal: netLine,
     };
   });
   return { subtotal, totalItemDiscount, afterItemDiscount, billDiscountAmount, replacementTotal, apiItems };
@@ -87,13 +97,15 @@ export default function ReturnsPage() {
     if (!canAccess) router.push("/billing");
   }, [canAccess, router]);
 
+  const billItemsForReturn = useMemo(() => returnableBillItems(bill?.items), [bill?.items]);
+
   const selectedItems = useMemo(
     () =>
-      (bill?.items || [])
+      billItemsForReturn
         .map((item: any, index: number) => ({ item, index }))
         .filter(({ index }: any) => selected[index])
         .map(({ item, index }: any) => ({ ...item, reason: reasons[index] || "Other" })),
-    [bill, selected, reasons]
+    [billItemsForReturn, selected, reasons]
   );
 
   const findBill = async () => {
@@ -101,20 +113,37 @@ export default function ReturnsPage() {
     try {
       if (soldBarcode.trim()) {
         const value = await billingApi.returnScan(soldBarcode.trim());
-        setBill(value);
+        const eligible = returnableBillItems(value.items);
+        if (eligible.length === 0) {
+          setError("No returnable items on this bill");
+          return;
+        }
+        setBill({ ...value, items: eligible });
         setStep(2);
         return;
       }
       if (billNumber.trim()) {
         const value = await billingApi.billByNumber(billNumber.trim());
-        setBill(value);
+        const eligible = returnableBillItems(value.items);
+        if (eligible.length === 0) {
+          setError("No returnable items on this bill (all items already replaced)");
+          return;
+        }
+        setBill({ ...value, items: eligible });
         setStep(2);
         return;
       }
       if (phone.trim()) {
-        const values = await billingApi.bills(`customerPhone=${encodeURIComponent(phone.trim())}&limit=1`);
-        if (values.data?.[0]) {
-          setBill(values.data[0]);
+        const values = await billingApi.bills(`customerPhone=${encodeURIComponent(phone.trim())}&limit=10`);
+        const match =
+          (values.data || []).find((row: any) => returnableBillItems(row.items).length > 0) || values.data?.[0];
+        if (match) {
+          const eligible = returnableBillItems(match.items);
+          if (eligible.length === 0) {
+            setError("No returnable items found for this customer (all items already replaced)");
+            return;
+          }
+          setBill({ ...match, items: eligible });
           setStep(2);
           return;
         }
@@ -199,16 +228,18 @@ export default function ReturnsPage() {
 
   const updateReplacementItemDiscount = (
     index: number,
-    field: "itemDiscountType" | "itemDiscountValue",
-    value: DiscountType | number
+    updates: Partial<Pick<BillItem, "itemDiscountType" | "itemDiscountValue">>
   ) => {
     setReplacementItems((prev) =>
       prev.map((item, i) => {
         if (i !== index) return item;
-        if (field === "itemDiscountType") {
-          return { ...item, itemDiscountType: value as DiscountType };
-        }
-        return { ...item, itemDiscountValue: Math.max(0, Number(value || 0)) };
+        return {
+          ...item,
+          ...(updates.itemDiscountType !== undefined ? { itemDiscountType: updates.itemDiscountType } : {}),
+          ...(updates.itemDiscountValue !== undefined
+            ? { itemDiscountValue: Math.max(0, Number(updates.itemDiscountValue || 0)) }
+            : {}),
+        };
       })
     );
   };
@@ -229,25 +260,20 @@ export default function ReturnsPage() {
         setError(`Discount cannot exceed ${maxAllowedDiscount}%`);
         return;
       }
-      const returnedItems = selectedItems.map((item: any) => ({
-        product: item.product,
-        barcode: item.barcode,
-        name: item.name,
-        size: item.size,
-        quantity: item.quantity,
-        sellingPrice: item.sellingPrice || item.lineTotal / item.quantity || item.mrp,
-        reason: item.reason,
-      }));
+      const returnedItems = expandSelectedToReturnedItems(selectedItems);
       if (replacementItems.length === 0) {
         setError("Scan at least one replacement item");
         return;
       }
-      const { apiItems } = computeReplacementTotals(replacementItems, billDiscountType, billDiscountValue);
+      const totals = computeReplacementTotals(replacementItems, billDiscountType, billDiscountValue);
       const response = await billingApi.returns({
         billId: bill._id,
         returnType,
         returnedItems,
-        replacementItems: apiItems,
+        replacementItems: totals.apiItems,
+        replacementSubtotal: totals.subtotal,
+        replacementItemDiscount: totals.totalItemDiscount,
+        replacementBillDiscount: totals.billDiscountAmount,
       });
       setResult(response);
       setReceiptData({
@@ -309,8 +335,13 @@ export default function ReturnsPage() {
                       key={`${item.barcode}-${index}`}
                       item={item}
                       index={index}
-                      onDiscountType={(type) => updateReplacementItemDiscount(index, "itemDiscountType", type)}
-                      onDiscountValue={(value) => updateReplacementItemDiscount(index, "itemDiscountValue", value)}
+                      onDiscountType={(type) => updateReplacementItemDiscount(index, { itemDiscountType: type })}
+                      onDiscountValue={(value) =>
+                        updateReplacementItemDiscount(index, {
+                          itemDiscountType: item.itemDiscountType === "none" ? "percent" : item.itemDiscountType,
+                          itemDiscountValue: value,
+                        })
+                      }
                       onIncrement={() => updateReplacementQuantity(index, 1)}
                       onDecrement={() => updateReplacementQuantity(index, -1)}
                       onRemove={() => setReplacementItems((prev) => prev.filter((_, i) => i !== index))}
@@ -444,7 +475,12 @@ export default function ReturnsPage() {
         </div>
       ) : (
       <div className="pos-card p-4 space-y-3">
-        <h2 className="font-semibold">Return / Replacement</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Return / Replacement</h2>
+          <Link href="/returns/history" className="text-sm underline text-[var(--gold)]">
+            View returns history
+          </Link>
+        </div>
         {step === 1 ? (
           <div className="space-y-2">
             <div className="flex gap-2">
@@ -466,11 +502,14 @@ export default function ReturnsPage() {
         {step === 2 && bill ? (
           <div className="space-y-2">
             <p className="text-sm text-[var(--text-secondary)]">Bill: {bill.billNumber} · Customer: {bill.customer?.name} · Total: ₹{bill.totalAmount}</p>
-            {(bill.items || []).map((item: any, index: number) => (
+            {(billItemsForReturn || []).map((item: any, index: number) => (
               <div key={`${item.barcode}-${index}`} className="bg-[var(--surface-2)] rounded p-2 flex items-center justify-between gap-2">
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={Boolean(selected[index])} onChange={(e) => setSelected((prev) => ({ ...prev, [index]: e.target.checked }))} />
-                  <span>{item.name} ({item.size || "-"})</span>
+                  <span>
+                    {item.name} ({item.size || "-"})
+                    {Number(item.quantity || 1) > 1 ? ` ×${item.quantity}` : ""}
+                  </span>
                 </label>
                 <select className="pos-input h-9 min-h-0" value={reasons[index] || "Size Issue"} onChange={(e) => setReasons((prev) => ({ ...prev, [index]: e.target.value }))}>
                   <option>Size Issue</option><option>Color Issue</option><option>Defective</option><option>Changed Mind</option><option>Wrong Item</option><option>Other</option>

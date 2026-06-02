@@ -136,6 +136,8 @@ export const billingApi = {
   deleteAdmin: (id: string) => request(`/api/billing/admin/admins/${id}`, { method: "DELETE" }),
   returns: (payload: any) => request("/api/billing/returns", { method: "POST", body: JSON.stringify(payload) }),
   returnScan: (barcode: string) => request(`/api/billing/returns/scan/${barcode}`),
+  returnsHistory: (query = "") => request(`/api/billing/returns/history${query ? `?${query}` : ""}`),
+  returnById: (id: string) => request(`/api/billing/returns/${id}`),
   reportSummary: (startDate?: string, endDate?: string) =>
     request(`/api/billing/reports/summary${startDate || endDate ? `?startDate=${startDate || ""}&endDate=${endDate || ""}` : ""}`),
   reportBills: (query: string) => request(`/api/billing/reports/bills?${query}`),
@@ -158,7 +160,26 @@ export const billingApi = {
   },
   stockInventoryItems: (productId: string, size?: string) =>
     request(`/api/billing/stock/inventory/${productId}/items${size ? `?size=${encodeURIComponent(size)}` : ""}`),
-  reportProfit: (page = 1, sort = 'entryDate') => request(`/api/billing/reports/profit?page=${page}&sort=${sort}`),
+  reportProfit: (
+    page = 1,
+    sort = "entryDate",
+    supplier = "",
+    startDate = "",
+    endDate = ""
+  ) => {
+    const params = new URLSearchParams({ page: String(page), sort });
+    if (supplier) params.set("supplier", supplier);
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+    return request(`/api/billing/reports/profit?${params.toString()}`);
+  },
+  reportProfitSupplierSummary: (startDate = "", endDate = "") => {
+    const params = new URLSearchParams();
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+    const qs = params.toString();
+    return request(`/api/billing/reports/profit/supplier-summary${qs ? `?${qs}` : ""}`);
+  },
   reportBillProfit: (query = "") => request(`/api/billing/reports/bill-profit${query ? `?${query}` : ""}`),
   reportBillProfitDetail: (id: string) => request(`/api/billing/reports/bill-profit/${id}`),
   qzCertificate: async () => {

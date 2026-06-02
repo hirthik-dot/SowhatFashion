@@ -14,6 +14,7 @@ type SearchProduct = {
   stock?: number;
   category?: string;
   subCategory?: string;
+  supplier?: string;
 };
 
 function formatMoney(value: number) {
@@ -295,8 +296,9 @@ export default function BarcodeScanner(props: {
                             {p.name} {p.size ? <span className="text-[var(--text-secondary)]">({p.size})</span> : null}
                           </div>
                           <div className="text-xs text-[var(--text-secondary)] truncate mt-0.5 whitespace-nowrap">
-                            {p.category ? p.category : null}
-                            {p.subCategory ? (p.category ? ` · ${p.subCategory}` : p.subCategory) : null}
+                            {p.supplier ? <span>{p.supplier}</span> : null}
+                            {p.category ? (p.supplier ? ` · ${p.category}` : p.category) : null}
+                            {p.subCategory ? ` · ${p.subCategory}` : null}
                           </div>
                         </div>
 

@@ -22,7 +22,7 @@ export default function HomepageSwitcher({ currentHomepage, onUpdate }: Homepage
       const names = {
         allensolly: 'Allen Solly Style',
         magazine: 'Magazine Editorial',
-        catalogue: 'Storefront Catalogue'
+        catalogue: 'Premium Minimalist'
       };
       
       setToast(`Homepage switched to ${names[type]}!`);
@@ -53,8 +53,8 @@ export default function HomepageSwitcher({ currentHomepage, onUpdate }: Homepage
     {
       id: 'catalogue' as const,
       title: 'Homepage 3',
-      subtitle: 'Storefront Catalogue',
-      description: 'Structured, practical, catalogue-style. Highly browsable with category tab bars and quick filters.',
+      subtitle: 'Premium Minimalist',
+      description: 'Clean editorial menswear layout inspired by premium brands — hero, category tiles, new arrivals, and storytelling sections.',
       icon: 'M4 6h16 M4 12h16 M4 18h16'
     }
   ];

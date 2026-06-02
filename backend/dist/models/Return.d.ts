@@ -11,6 +11,9 @@ export interface IBillingReturn extends Document {
     replacementItems: any[];
     returnType: 'replacement' | 'partial';
     priceDifference: number;
+    replacementSubtotal?: number;
+    replacementItemDiscount?: number;
+    replacementBillDiscount?: number;
     refundAmount: number;
     refundMethod: 'none';
     processedBy?: mongoose.Types.ObjectId;

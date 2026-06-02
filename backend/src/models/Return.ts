@@ -20,7 +20,14 @@ const ReplacementItemSchema = new Schema(
     name: { type: String, trim: true, default: '' },
     size: { type: String, trim: true, default: '' },
     quantity: { type: Number, default: 1 },
+    mrp: { type: Number, default: 0 },
+    itemDiscountType: { type: String, enum: ['percent', 'amount', 'none'], default: 'none' },
+    itemDiscountValue: { type: Number, default: 0 },
+    itemDiscountAmount: { type: Number, default: 0 },
+    billDiscountShare: { type: Number, default: 0 },
     sellingPrice: { type: Number, default: 0 },
+    lineTotal: { type: Number, default: 0 },
+    netLineTotal: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -34,6 +41,9 @@ export interface IBillingReturn extends Document {
   replacementItems: any[];
   returnType: 'replacement' | 'partial';
   priceDifference: number;
+  replacementSubtotal?: number;
+  replacementItemDiscount?: number;
+  replacementBillDiscount?: number;
   refundAmount: number;
   refundMethod: 'none';
   processedBy?: mongoose.Types.ObjectId;
@@ -52,6 +62,9 @@ const ReturnSchema = new Schema<IBillingReturn>(
     replacementItems: [ReplacementItemSchema],
     returnType: { type: String, enum: ['replacement', 'partial'], required: true },
     priceDifference: { type: Number, default: 0 },
+    replacementSubtotal: { type: Number, default: 0 },
+    replacementItemDiscount: { type: Number, default: 0 },
+    replacementBillDiscount: { type: Number, default: 0 },
     refundAmount: { type: Number, default: 0 },
     refundMethod: { type: String, enum: ['none'], default: 'none' },
     processedBy: { type: Schema.Types.ObjectId, ref: 'BillingAdmin' },

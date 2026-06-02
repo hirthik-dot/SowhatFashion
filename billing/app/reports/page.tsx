@@ -31,6 +31,34 @@ export default function ReportsPage() {
   const [profitPage, setProfitPage] = useState(1);
   const [profitTotal, setProfitTotal] = useState(0);
   const [profitSort, setProfitSort] = useState<'recentSales' | 'entryDate'>('recentSales');
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [profitSupplierId, setProfitSupplierId] = useState("");
+  const [supplierPurchaseSummary, setSupplierPurchaseSummary] = useState<any[]>([]);
+  const [profitPeriod, setProfitPeriod] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [profitFrom, setProfitFrom] = useState("");
+  const [profitTo, setProfitTo] = useState("");
+
+  const getProfitDateRange = () => {
+    if (profitPeriod === "all") return { start: "", end: "" };
+    const now = new Date();
+    if (profitPeriod === "today") {
+      const day = now.toISOString().slice(0, 10);
+      return { start: day, end: day };
+    }
+    if (profitPeriod === "week") {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - 6);
+      return { start: weekStart.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) };
+    }
+    if (profitPeriod === "month") {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start: monthStart.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) };
+    }
+    return { start: profitFrom, end: profitTo };
+  };
+
+  const profitDateRange = getProfitDateRange();
+  const profitDateFilterActive = Boolean(profitDateRange.start || profitDateRange.end);
 
   const loadSales = async (currentPage = 1) => {
     const now = new Date();
@@ -66,9 +94,15 @@ export default function ReportsPage() {
     }
   };
 
-  const loadProfit = async (currentPage = 1, sort: string = profitSort) => {
+  const loadProfit = async (
+    currentPage = 1,
+    sort: string = profitSort,
+    supplierId: string = profitSupplierId,
+    startDate: string = profitDateRange.start,
+    endDate: string = profitDateRange.end
+  ) => {
     try {
-      const res = await billingApi.reportProfit(currentPage, sort);
+      const res = await billingApi.reportProfit(currentPage, sort, supplierId, startDate, endDate);
       setProfitData(res.data || []);
       setProfitSummary(res.summary || null);
       setProfitTotal(res.total || 0);
@@ -78,17 +112,47 @@ export default function ReportsPage() {
     }
   };
 
+  const loadSupplierPurchaseSummary = async (
+    startDate: string = profitDateRange.start,
+    endDate: string = profitDateRange.end
+  ) => {
+    try {
+      const res = await billingApi.reportProfitSupplierSummary(startDate, endDate);
+      setSupplierPurchaseSummary(res.data || []);
+    } catch {
+      setSupplierPurchaseSummary([]);
+    }
+  };
+
   useEffect(() => {
     if (!canAccess) router.push("/billing");
   }, [canAccess, router]);
 
   useEffect(() => {
+    if (activeTab !== "profit") return;
+    billingApi.suppliers().then(setSuppliers).catch(() => setSuppliers([]));
+  }, [activeTab]);
+
+  useEffect(() => {
     if (activeTab === "sales") {
       loadSales(salesPage);
     } else {
-      loadProfit(profitPage, profitSort);
+      loadSupplierPurchaseSummary(profitDateRange.start, profitDateRange.end);
+      loadProfit(profitPage, profitSort, profitSupplierId, profitDateRange.start, profitDateRange.end);
     }
-  }, [activeTab, period, from, to, salesPage, profitPage, profitSort]);
+  }, [
+    activeTab,
+    period,
+    from,
+    to,
+    salesPage,
+    profitPage,
+    profitSort,
+    profitSupplierId,
+    profitPeriod,
+    profitFrom,
+    profitTo,
+  ]);
 
   const exportSalesExcel = () => {
     const workbook = XLSX.utils.book_new();
@@ -155,7 +219,12 @@ export default function ReportsPage() {
 
   const exportProfitExcel = async () => {
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL || ""}/api/billing/reports/profit/export`;
+      const params = new URLSearchParams();
+      if (profitSupplierId) params.set("supplier", profitSupplierId);
+      if (profitDateRange.start) params.set("startDate", profitDateRange.start);
+      if (profitDateRange.end) params.set("endDate", profitDateRange.end);
+      const qs = params.toString();
+      const url = `${process.env.NEXT_PUBLIC_API_URL || ""}/api/billing/reports/profit/export${qs ? `?${qs}` : ""}`;
       const res = await fetch(url, { credentials: "include" });
       const blob = await res.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
@@ -207,6 +276,8 @@ export default function ReportsPage() {
       return acc;
     }, {})
   ).map((row: any) => ({ ...row, avg: row.bills ? row.revenue / row.bills : 0 }));
+
+  const selectedProfitSupplier = suppliers.find((s) => String(s._id) === profitSupplierId);
 
   const getBatchLabel = (batch: any) => {
     const rawId = String(batch?._id || "").toUpperCase();
@@ -394,10 +465,95 @@ export default function ReportsPage() {
                     💰 Bill Wise Profit
                   </Link>
                 </div>
-                <h3 className="font-bold text-lg text-white">Stock Batch & Profit Margin</h3>
-                <p className="text-sm text-[var(--text-secondary)]">Revenue and profit use MRP after discounts only — GST is excluded (see Tax Overview on Sales tab).</p>
+                <h3 className="font-bold text-lg text-white">
+                  {profitSupplierId && selectedProfitSupplier
+                    ? `Purchases from ${selectedProfitSupplier.name}`
+                    : "Stock Batch & Profit Margin"}
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {profitSupplierId
+                    ? "Showing purchase batches and sales performance for this supplier only."
+                    : "Revenue and profit use MRP after discounts only — GST is excluded (see Tax Overview on Sales tab)."}
+                  {profitDateFilterActive && (
+                    <>
+                      {" "}
+                      Purchase entry dates:{" "}
+                      <span className="text-white">
+                        {profitDateRange.start || "…"} — {profitDateRange.end || "…"}
+                      </span>
+                    </>
+                  )}
+                </p>
               </div>
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex flex-wrap items-end gap-2 ml-auto">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {[
+                    { id: "all", label: "All time" },
+                    { id: "today", label: "Today" },
+                    { id: "week", label: "This week" },
+                    { id: "month", label: "This month" },
+                    { id: "custom", label: "Custom" },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setProfitPeriod(p.id as typeof profitPeriod);
+                        setProfitPage(1);
+                      }}
+                      className={`h-10 px-3 rounded border text-sm whitespace-nowrap ${
+                        profitPeriod === p.id
+                          ? "border-[var(--gold)] text-[var(--gold)]"
+                          : "border-[var(--border)] text-[var(--text-secondary)]"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  <input
+                    className="pos-input h-10 min-h-0 w-[140px]"
+                    type="date"
+                    value={profitFrom}
+                    onChange={(e) => {
+                      setProfitFrom(e.target.value);
+                      setProfitPeriod("custom");
+                      setProfitPage(1);
+                    }}
+                    disabled={profitPeriod !== "custom"}
+                    aria-label="Purchase from date"
+                  />
+                  <span className="text-[var(--text-secondary)] text-sm self-center">to</span>
+                  <input
+                    className="pos-input h-10 min-h-0 w-[140px]"
+                    type="date"
+                    value={profitTo}
+                    onChange={(e) => {
+                      setProfitTo(e.target.value);
+                      setProfitPeriod("custom");
+                      setProfitPage(1);
+                    }}
+                    disabled={profitPeriod !== "custom"}
+                    aria-label="Purchase to date"
+                  />
+                </div>
+                <label className="flex flex-col gap-1 text-xs text-[var(--text-secondary)]">
+                  Supplier
+                  <select
+                    className="pos-input h-10 min-h-0 min-w-[200px] text-sm text-white"
+                    value={profitSupplierId}
+                    onChange={(e) => {
+                      setProfitSupplierId(e.target.value);
+                      setProfitPage(1);
+                    }}
+                  >
+                    <option value="">All suppliers</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier._id} value={supplier._id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div className="flex rounded border border-[var(--border)] overflow-hidden text-sm">
                   <button
                     onClick={() => { setProfitSort('recentSales'); setProfitPage(1); }}
@@ -419,14 +575,85 @@ export default function ReportsPage() {
               </div>
             </div>
 
+            {!profitSupplierId && supplierPurchaseSummary.length > 0 && (
+              <div className="pos-card p-4 overflow-x-auto">
+                <h4 className="font-bold mb-1 text-white">
+                  Purchases by Supplier
+                  {profitDateFilterActive ? " (selected period)" : ""}
+                </h4>
+                <p className="text-sm text-[var(--text-secondary)] mb-4">
+                  {profitDateFilterActive
+                    ? "Totals for stock brought in during the selected entry-date range. Tap a row to drill down."
+                    : "Tap a row or use the filter above to see that supplier's full purchase batch list."}
+                </p>
+                <table className="w-full min-w-[900px] text-sm text-left">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] text-[var(--text-secondary)] text-xs uppercase bg-[var(--surface-2)]">
+                      <th className="p-3 font-semibold rounded-tl-lg">Supplier</th>
+                      <th className="p-3 font-semibold text-right">Batches</th>
+                      <th className="p-3 font-semibold text-right">Qty Purchased</th>
+                      <th className="p-3 font-semibold text-right">Capital Invested</th>
+                      <th className="p-3 font-semibold text-right">Qty Sold</th>
+                      <th className="p-3 font-semibold text-right">Revenue (ex-GST)</th>
+                      <th className="p-3 font-semibold text-right rounded-tr-lg">Realized Profit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {supplierPurchaseSummary.map((row: any) => (
+                      <tr
+                        key={String(row.supplierId)}
+                        className="hover:bg-[var(--surface-2)] cursor-pointer transition-colors"
+                        onClick={() => {
+                          setProfitSupplierId(String(row.supplierId));
+                          setProfitPage(1);
+                        }}
+                      >
+                        <td className="p-3 font-semibold text-white">{row.supplierName}</td>
+                        <td className="p-3 text-right">{row.batchCount}</td>
+                        <td className="p-3 text-right">{row.unitsPurchased}</td>
+                        <td className="p-3 text-right text-[var(--warning)]">
+                          ₹{Number(row.totalInvestment || 0).toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          {row.unitsSold}{" "}
+                          <span className="text-[10px] text-gray-500">/ {row.unitsPurchased}</span>
+                        </td>
+                        <td className="p-3 text-right text-blue-400">
+                          ₹{Number(row.soldRevenue || 0).toLocaleString()}
+                        </td>
+                        <td
+                          className={`p-3 text-right font-bold ${
+                            row.realizedProfit > 0
+                              ? "text-[var(--success)]"
+                              : row.realizedProfit < 0
+                                ? "text-red-400"
+                                : "text-[var(--text-secondary)]"
+                          }`}
+                        >
+                          ₹{Number(row.realizedProfit || 0).toLocaleString()}
+                          <span className="block text-[10px] font-normal text-gray-500">
+                            {Number(row.profitMargin || 0).toFixed(1)}% margin
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {/* Profit Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="pos-card p-4 border-l-4 border-l-[var(--info)]">
-                <p className="text-xs font-bold text-[var(--text-secondary)] uppercase">Total Inventory Sourced</p>
+                <p className="text-xs font-bold text-[var(--text-secondary)] uppercase">
+                  {profitDateFilterActive ? "Inventory Sourced (period)" : "Total Inventory Sourced"}
+                </p>
                 <p className="text-2xl font-black mt-1 text-white">{profitSummary?.overallPurchased || 0} <span className="text-sm font-normal text-gray-400">units</span></p>
               </div>
               <div className="pos-card p-4 border-l-4 border-l-[var(--warning)]">
-                <p className="text-xs font-bold text-[var(--text-secondary)] uppercase">Total Capital Invested</p>
+                <p className="text-xs font-bold text-[var(--text-secondary)] uppercase">
+                  {profitDateFilterActive ? "Capital Invested (period)" : "Total Capital Invested"}
+                </p>
                 <p className="text-2xl font-black mt-1 text-white">₹{(profitSummary?.totalInvestment || 0).toLocaleString()}</p>
               </div>
                <div className="pos-card p-4 border-l-4 border-l-blue-400">
@@ -443,7 +670,25 @@ export default function ReportsPage() {
 
             {/* Detailed Batch Table */}
             <div className="pos-card p-4 overflow-x-auto">
-              <h4 className="font-bold mb-4 text-white">Batch-wise Purchasing & Sales Data</h4>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h4 className="font-bold text-white">
+                  {profitSupplierId && selectedProfitSupplier
+                    ? `${selectedProfitSupplier.name} — Purchase Batches`
+                    : "Batch-wise Purchasing & Sales Data"}
+                </h4>
+                {profitSupplierId ? (
+                  <button
+                    type="button"
+                    className="text-sm text-[var(--gold)] underline"
+                    onClick={() => {
+                      setProfitSupplierId("");
+                      setProfitPage(1);
+                    }}
+                  >
+                    ← Show all suppliers
+                  </button>
+                ) : null}
+              </div>
               <table className="w-full min-w-[1200px] text-sm text-left">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[var(--text-secondary)] text-xs uppercase bg-[var(--surface-2)]">
@@ -504,7 +749,11 @@ export default function ReportsPage() {
               </table>
 
               <div className="flex flex-col sm:flex-row sm:justify-between gap-2 mt-4 text-sm px-2 border-t border-[var(--border)] pt-4">
-                 <div className="text-[var(--text-secondary)]">Total: {profitTotal} batches recorded</div>
+                 <div className="text-[var(--text-secondary)]">
+                   {profitDateFilterActive
+                     ? `${profitTotal} batch${profitTotal === 1 ? "" : "es"} in selected period`
+                     : `Total: ${profitTotal} batches recorded`}
+                 </div>
                  <div className="flex gap-2">
                    <button 
                      disabled={profitPage === 1}

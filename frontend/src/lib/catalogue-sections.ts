@@ -7,10 +7,10 @@ export type CatalogueHomeSection = {
 };
 
 export const DEFAULT_CATALOGUE_HOME_SECTIONS: CatalogueHomeSection[] = [
-  { id: 'offer-carousel', label: 'Offer Carousel', isVisible: true, order: 0, canDelete: false },
+  { id: 'offer-carousel', label: 'Hero Carousel', isVisible: true, order: 0, canDelete: false },
   { id: 'new-arrivals', label: 'New Arrivals', isVisible: true, order: 1, canDelete: true },
-  { id: 'products-grid', label: 'Products Grid', isVisible: true, order: 2, canDelete: false },
-  { id: 'combo-offers', label: 'Combo Offers', isVisible: true, order: 3, canDelete: true },
+  { id: 'products-grid', label: 'Products Grid (legacy)', isVisible: false, order: 2, canDelete: false },
+  { id: 'combo-offers', label: 'Sale Banner', isVisible: true, order: 3, canDelete: true },
 ];
 
 export function mergeCatalogueHomeSections(stored?: CatalogueHomeSection[] | null): CatalogueHomeSection[] {

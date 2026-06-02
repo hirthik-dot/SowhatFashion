@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import BillingShell from "@/components/layout/BillingShell";
+import ReplacementSwapSummary from "@/components/returns/ReplacementSwapSummary";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 
@@ -366,6 +367,13 @@ export default function BillWiseProfitPage() {
                   </p>
                 </div>
 
+                {(detail.returns || []).length > 0 ? (
+                  <div className="mb-4">
+                    <h4 className="font-semibold mb-2 text-[var(--gold)]">Replacements on this bill</h4>
+                    <ReplacementSwapSummary records={detail.returns} />
+                  </div>
+                ) : null}
+
                 <div className="flex-1 overflow-auto">
                   <table className="w-full min-w-[900px] text-sm">
                     <thead>
@@ -384,10 +392,24 @@ export default function BillWiseProfitPage() {
                       {(detail.lines || []).map((line: any, index: number) => (
                         <tr key={`${line.barcode}-${index}`} className="border-b border-[var(--border)]/50">
                           <td className="py-2">
-                            <div className="font-medium text-white">{line.name}</div>
+                            <div className="font-medium text-white">
+                              {line.name}
+                              {line.isReplacement ? (
+                                <span className="ml-2 text-xs text-green-300">Replacement</span>
+                              ) : null}
+                            </div>
                             <div className="text-xs text-[var(--text-secondary)]">
                               {line.category || "-"} • Size {line.size || "-"}
                             </div>
+                            {Number(line.itemDiscountAmount || 0) > 0 || Number(line.billDiscountShare || 0) > 0 ? (
+                              <div className="text-xs text-red-300 mt-0.5">
+                                Disc: ₹
+                                {(
+                                  Number(line.itemDiscountAmount || 0) * Number(line.quantity || 1) +
+                                  Number(line.billDiscountShare || 0)
+                                ).toFixed(2)}
+                              </div>
+                            ) : null}
                           </td>
                           <td className="text-xs">
                             {(line.barcodes?.length ? line.barcodes : [line.barcode]).filter(Boolean).join(", ") ||

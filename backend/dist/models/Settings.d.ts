@@ -29,9 +29,7 @@ export interface ISettings extends Document {
             heroImage: string;
             curatedStaplesImage: string;
         };
-        catalogue: {
-            carouselImages: string[];
-        };
+        catalogue: Record<string, unknown>;
     };
 }
 declare const _default: mongoose.Model<ISettings, {}, {}, {}, mongoose.Document<unknown, {}, ISettings, {}, {}> & ISettings & Required<{

@@ -13,8 +13,8 @@ const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const BillingPointsAccount_1 = __importDefault(require("../models/BillingPointsAccount"));
 const BillingPointsLedger_1 = __importDefault(require("../models/BillingPointsLedger"));
 const billing_points_1 = require("../lib/billing-points");
+const billing_replacements_1 = require("../lib/billing-replacements");
 const router = express_1.default.Router();
-router.use((0, billingRoleMiddleware_1.requirePermission)('canReturn'));
 const generateReturnNumber = async () => {
     const year = new Date().getFullYear();
     const prefix = `SW-RET-${year}-`;
@@ -22,19 +22,19 @@ const generateReturnNumber = async () => {
     const current = latest?.returnNumber ? Number(latest.returnNumber.split('-')[3]) : 0;
     return `${prefix}${String(current + 1).padStart(4, '0')}`;
 };
-router.get('/next-number', async (_req, res) => {
+router.get('/next-number', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), async (_req, res) => {
     const returnNumber = await generateReturnNumber();
     return res.json({ returnNumber });
 });
-router.get('/scan/:barcode', async (req, res) => {
+router.get('/scan/:barcode', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), async (req, res) => {
     const bill = await Bill_1.default.findOne({ 'items.barcode': req.params.barcode, status: 'completed' });
     if (!bill)
         return res.status(404).json({ message: 'Sale record not found for this barcode' });
     return res.json(bill);
 });
-router.post('/', async (req, res) => {
+router.post('/', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), async (req, res) => {
     try {
-        const { billId, returnedItems = [], replacementItems = [], returnType } = req.body || {};
+        const { billId, returnedItems = [], replacementItems = [], returnType, replacementSubtotal, replacementItemDiscount, replacementBillDiscount, } = req.body || {};
         const bill = await Bill_1.default.findById(billId);
         if (!bill)
             return res.status(404).json({ message: 'Original bill not found' });
@@ -59,10 +59,14 @@ router.post('/', async (req, res) => {
             replacementItems,
             returnType,
             priceDifference,
+            replacementSubtotal: Number(replacementSubtotal || replacementTotal),
+            replacementItemDiscount: Number(replacementItemDiscount || 0),
+            replacementBillDiscount: Number(replacementBillDiscount || 0),
             refundAmount: 0,
             refundMethod: 'none',
             processedBy: req.billingAdminId,
         });
+        (0, billing_replacements_1.applyReplacementToBill)(bill, returnedItems, replacementItems);
         // Returned items: mark StockItem as returned (manual inspection before restock)
         for (const item of returnedItems) {
             const barcode = String(item.barcode || '').trim();
@@ -119,21 +123,49 @@ router.post('/', async (req, res) => {
         return res.status(500).json({ message: error.message || 'Return processing failed' });
     }
 });
-router.get('/', async (req, res) => {
-    const page = Number(req.query.page || 1);
-    const limit = Number(req.query.limit || 20);
+router.get('/history', (0, billingRoleMiddleware_1.requireAnyPermission)('canReturn', 'canViewReports'), async (req, res) => {
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
     const skip = (page - 1) * limit;
+    const search = String(req.query.search || '').trim();
+    const startDate = String(req.query.startDate || '').trim();
+    const endDate = String(req.query.endDate || '').trim();
+    const query = {};
+    if (search) {
+        const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        query.$or = [{ returnNumber: regex }, { billNumber: regex }, { 'customer.name': regex }, { 'customer.phone': regex }];
+    }
+    if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate)
+            query.createdAt.$gte = new Date(`${startDate}T00:00:00.000Z`);
+        if (endDate)
+            query.createdAt.$lte = new Date(`${endDate}T23:59:59.999Z`);
+    }
     const [data, total] = await Promise.all([
-        Return_1.default.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit),
-        Return_1.default.countDocuments({}),
+        Return_1.default.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .populate('processedBy', 'name email')
+            .lean(),
+        Return_1.default.countDocuments(query),
     ]);
-    res.json({ data, total, page, limit });
+    res.json({
+        data: data.map((row) => ({
+            ...row,
+            processedByName: row.processedBy?.name || '',
+        })),
+        total,
+        page,
+        limit,
+    });
 });
-router.get('/:id', async (req, res) => {
-    const item = await Return_1.default.findById(req.params.id);
+router.get('/:id', (0, billingRoleMiddleware_1.requireAnyPermission)('canReturn', 'canViewReports'), async (req, res) => {
+    const item = await Return_1.default.findById(req.params.id).populate('processedBy', 'name email').lean();
     if (!item)
         return res.status(404).json({ message: 'Return not found' });
-    res.json(item);
+    res.json({ ...item, processedByName: item.processedBy?.name || '' });
 });
 exports.default = router;
 //# sourceMappingURL=billing-returns.js.map

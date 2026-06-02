@@ -24,6 +24,19 @@ export const lineRevenueExGst = (item: any, gstRate = BILLING_GST_RATE) => {
   return Math.max(0, lineMrp - mrpDiscount);
 };
 
+/** One physical unit's share of line revenue (purchase-batch profit uses per-barcode rows). */
+export const lineRevenueExGstPerUnit = (item: any, gstRate = BILLING_GST_RATE) => {
+  const qty = Math.max(1, Number(item?.quantity || 1));
+  return lineRevenueExGst(item, gstRate) / qty;
+};
+
+export const unitLineDiscountTotal = (item: any) => {
+  const qty = Math.max(1, Number(item?.quantity || 1));
+  return (
+    Number(item?.itemDiscountAmount || 0) + Number(item?.billDiscountShare || 0) / qty
+  );
+};
+
 export const billRevenueExGst = (bill: any, gstRate = BILLING_GST_RATE) => {
   const items = bill?.items || [];
   if (items.length) {

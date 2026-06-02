@@ -5,11 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const exceljs_1 = __importDefault(require("exceljs"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const Bill_1 = __importDefault(require("../models/Bill"));
 const Return_1 = __importDefault(require("../models/Return"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const billing_revenue_1 = require("../lib/billing-revenue");
+const billing_replacements_1 = require("../lib/billing-replacements");
 const BillingPointsAccount_1 = __importDefault(require("../models/BillingPointsAccount"));
 const BillingPointsLedger_1 = __importDefault(require("../models/BillingPointsLedger"));
 const billing_points_1 = require("../lib/billing-points");
@@ -59,25 +61,90 @@ const billExGstMongoExpr = {
         },
     },
 };
-/** Profit batch: MRP minus discount remainder after GST portion is absorbed. */
+/** Bill revenue from line items (stays correct after bill edits). */
+const billRevenueFromItemsMongoExpr = {
+    $let: {
+        vars: {
+            fromItems: {
+                $sum: {
+                    $map: {
+                        input: {
+                            $filter: {
+                                input: { $ifNull: ['$items', []] },
+                                as: 'item',
+                                cond: { $ne: [{ $ifNull: ['$$item.replacedOut', false] }, true] },
+                            },
+                        },
+                        as: 'item',
+                        in: {
+                            $let: {
+                                vars: {
+                                    lineMrp: {
+                                        $multiply: [
+                                            { $ifNull: ['$$item.mrp', 0] },
+                                            { $max: [1, { $ifNull: ['$$item.quantity', 1] }] },
+                                        ],
+                                    },
+                                    lineDiscount: {
+                                        $add: [
+                                            {
+                                                $multiply: [
+                                                    { $ifNull: ['$$item.itemDiscountAmount', 0] },
+                                                    { $max: [1, { $ifNull: ['$$item.quantity', 1] }] },
+                                                ],
+                                            },
+                                            { $ifNull: ['$$item.billDiscountShare', 0] },
+                                        ],
+                                    },
+                                },
+                                in: {
+                                    $let: {
+                                        vars: {
+                                            mrpDiscount: {
+                                                $max: [
+                                                    0,
+                                                    {
+                                                        $subtract: [
+                                                            '$$lineDiscount',
+                                                            { $multiply: ['$$lineMrp', billing_revenue_1.BILLING_GST_RATE] },
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                        in: { $max: [0, { $subtract: ['$$lineMrp', '$$mrpDiscount'] }] },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        in: {
+            $cond: [
+                { $gt: [{ $size: { $ifNull: ['$items', []] } }, 0] },
+                '$$fromItems',
+                billExGstMongoExpr,
+            ],
+        },
+    },
+};
+/** Profit batch: per sold stock unit (not full bill line qty). */
 const profitLineRevenueExpr = {
     $let: {
         vars: {
-            lineMrp: {
-                $multiply: [
-                    { $ifNull: ['$$matchedBillItem.mrp', '$$soldItem.sellingPrice'] },
-                    { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
-                ],
-            },
+            lineQty: { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+            lineMrp: { $ifNull: ['$$matchedBillItem.mrp', '$$soldItem.sellingPrice'] },
             lineDiscount: {
                 $add: [
+                    { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
                     {
-                        $multiply: [
-                            { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                        $divide: [
+                            { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
                             { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
                         ],
                     },
-                    { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
                 ],
             },
         },
@@ -257,7 +324,7 @@ const billProfitSortFields = {
     profit: 'profit',
     margin: 'margin',
 };
-const buildBillProfitLines = (bill, stockItems) => {
+const buildBillProfitLines = (bill, stockItems, returns = []) => {
     const itemsByBarcode = (stockItems || []).reduce((acc, row) => {
         const key = String(row.barcode || '').trim();
         if (!key)
@@ -267,7 +334,8 @@ const buildBillProfitLines = (bill, stockItems) => {
         acc[key].push(row);
         return acc;
     }, {});
-    const lines = (bill.items || []).map((item) => {
+    const billItems = (0, billing_replacements_1.activeBillItems)(bill, returns);
+    const lines = billItems.map((item) => {
         const barcodes = Array.isArray(item.barcodes) && item.barcodes.length > 0
             ? item.barcodes.map((value) => String(value || '').trim()).filter(Boolean)
             : [String(item.barcode || '').trim()].filter(Boolean);
@@ -282,6 +350,8 @@ const buildBillProfitLines = (bill, stockItems) => {
             size: item.size,
             category: item.category,
             quantity: item.quantity,
+            isReplacement: Boolean(item.isReplacement),
+            replacedOut: Boolean(item.replacedOut),
             mrp: item.mrp,
             sellingPrice: item.sellingPrice,
             itemDiscountAmount: item.itemDiscountAmount,
@@ -298,7 +368,7 @@ const buildBillProfitLines = (bill, stockItems) => {
             })),
         };
     });
-    const revenue = (0, billing_revenue_1.billRevenueExGst)(bill);
+    const revenue = billItems.reduce((sum, item) => sum + (0, billing_revenue_1.lineRevenueExGst)(item), 0);
     const cost = (stockItems || []).reduce((sum, row) => sum + Number(row.incomingPrice || 0), 0);
     const profit = revenue - cost;
     return {
@@ -352,7 +422,7 @@ router.get('/bill-profit', async (req, res) => {
                 },
                 {
                     $addFields: {
-                        revenue: billExGstMongoExpr,
+                        revenue: billRevenueFromItemsMongoExpr,
                         cost: { $ifNull: [{ $arrayElemAt: ['$costDoc.cost', 0] }, 0] },
                         stockUnits: { $ifNull: [{ $arrayElemAt: ['$costDoc.stockUnits', 0] }, 0] },
                         itemCount: { $size: { $ifNull: ['$items', []] } },
@@ -431,7 +501,7 @@ router.get('/bill-profit', async (req, res) => {
                 },
                 {
                     $addFields: {
-                        revenue: billExGstMongoExpr,
+                        revenue: billRevenueFromItemsMongoExpr,
                         cost: { $ifNull: [{ $arrayElemAt: ['$costDoc.cost', 0] }, 0] },
                     },
                 },
@@ -496,12 +566,13 @@ router.get('/bill-profit/:id', async (req, res) => {
         if (!FINALIZED_STATUSES.includes(String(bill.status || ''))) {
             return res.status(400).json({ message: 'Bill is not finalized' });
         }
-        const stockItems = await StockItem_1.default.find({
-            soldInBill: bill._id,
-            status: 'sold',
-        }).lean();
-        const metrics = buildBillProfitLines(bill, stockItems);
+        const [stockItems, returns] = await Promise.all([
+            StockItem_1.default.find({ soldInBill: bill._id, status: 'sold' }).lean(),
+            Return_1.default.find({ bill: bill._id }).sort({ createdAt: -1 }).lean(),
+        ]);
+        const metrics = buildBillProfitLines(bill, stockItems, returns);
         res.json({
+            returns,
             bill: {
                 _id: bill._id,
                 billNumber: bill.billNumber,
@@ -673,8 +744,22 @@ router.get('/customers', (0, billingRoleMiddleware_1.requirePermission)('canView
         Bill_1.default.aggregate(statsPipeline),
     ]);
     const stats = statsRows?.[0] || {};
+    const phones = (data || [])
+        .map((row) => (0, billing_points_1.normalizeBillingPhone)(String(row.phone || row._id || '')))
+        .filter((p) => p.length >= 10);
+    const pointsAccounts = phones.length > 0
+        ? await BillingPointsAccount_1.default.find({ phone: { $in: phones } })
+            .select('phone balance')
+            .lean()
+        : [];
+    const pointsByPhone = new Map(pointsAccounts.map((a) => [a.phone, Number(a.balance || 0)]));
+    const enrichedData = (data || []).map((row) => {
+        const normalized = (0, billing_points_1.normalizeBillingPhone)(String(row.phone || row._id || ''));
+        const points = pointsByPhone.get(normalized) ?? 0;
+        return { ...row, points, pointsBalance: points };
+    });
     res.json({
-        data,
+        data: enrichedData,
         total: Number(countRows?.[0]?.total || 0),
         summary: {
             totalCustomers: Number(stats.totalCustomers || 0),
@@ -848,13 +933,242 @@ router.get('/export', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename=billing-report-${Date.now()}.xlsx`);
     return res.send(Buffer.from(buffer));
 });
+const parseSupplierFilter = (supplierRaw) => {
+    const supplierId = String(supplierRaw || '').trim();
+    if (!supplierId)
+        return {};
+    if (!mongoose_1.default.Types.ObjectId.isValid(supplierId))
+        return null;
+    return { supplier: new mongoose_1.default.Types.ObjectId(supplierId) };
+};
+/** Stock entry filters for purchase batch reports (entryDate = when stock was brought in). */
+const buildStockEntryMatch = (supplierRaw, startDate, endDate) => {
+    const supplierPart = parseSupplierFilter(supplierRaw);
+    if (supplierPart === null)
+        return null;
+    const match = { ...supplierPart };
+    const entryDateRange = getDateRange(startDate, endDate);
+    if (entryDateRange)
+        match.entryDate = entryDateRange;
+    return match;
+};
+/** Shared stages: stock items + sold bills + per-entry sold metrics (after projectStage fields exist). */
+const profitSoldMetricsStages = [
+    {
+        $addFields: {
+            soldItems: {
+                $filter: {
+                    input: '$items',
+                    as: 'item',
+                    cond: { $eq: ['$$item.status', 'sold'] },
+                },
+            },
+            billItemRows: {
+                $reduce: {
+                    input: '$soldBills',
+                    initialValue: [],
+                    in: {
+                        $concatArrays: [
+                            '$$value',
+                            {
+                                $map: {
+                                    input: { $ifNull: ['$$this.items', []] },
+                                    as: 'billItem',
+                                    in: billItemRowFields,
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        },
+    },
+    {
+        $addFields: {
+            qtySold: {
+                $size: {
+                    $filter: {
+                        input: '$items',
+                        as: 'item',
+                        cond: { $eq: ['$$item.status', 'sold'] },
+                    },
+                },
+            },
+            soldRevenue: {
+                $sum: {
+                    $map: {
+                        input: '$soldItems',
+                        as: 'soldItem',
+                        in: {
+                            $let: {
+                                vars: {
+                                    matchedBillItem: {
+                                        $arrayElemAt: [
+                                            {
+                                                $filter: {
+                                                    input: '$billItemRows',
+                                                    as: 'billItem',
+                                                    cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] },
+                                                },
+                                            },
+                                            0,
+                                        ],
+                                    },
+                                },
+                                in: profitLineRevenueExpr,
+                            },
+                        },
+                    },
+                },
+            },
+            soldDiscount: {
+                $sum: {
+                    $map: {
+                        input: '$soldItems',
+                        as: 'soldItem',
+                        in: {
+                            $let: {
+                                vars: {
+                                    matchedBillItem: {
+                                        $arrayElemAt: [
+                                            {
+                                                $filter: {
+                                                    input: '$billItemRows',
+                                                    as: 'billItem',
+                                                    cond: { $eq: ['$$billItem.barcode', '$$soldItem.barcode'] },
+                                                },
+                                            },
+                                            0,
+                                        ],
+                                    },
+                                },
+                                in: {
+                                    $add: [
+                                        { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
+                                        {
+                                            $divide: [
+                                                { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
+                                                { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+                                            ],
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            soldCost: { $multiply: ['$qtySold', '$incomingPrice'] },
+            totalInvestment: { $multiply: ['$quantity', '$incomingPrice'] },
+            qtyPurchased: '$quantity',
+        },
+    },
+    {
+        $addFields: {
+            realizedProfit: { $subtract: ['$soldRevenue', '$soldCost'] },
+        },
+    },
+];
+router.get('/profit/supplier-summary', (0, billingRoleMiddleware_1.requirePermission)('canViewReports'), async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const entryMatch = buildStockEntryMatch(undefined, startDate, endDate);
+        if (entryMatch === null) {
+            return res.status(400).json({ message: 'Invalid supplier id' });
+        }
+        const entryMatchStage = Object.keys(entryMatch).length ? [{ $match: entryMatch }] : [];
+        const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
+        const rows = await StockEntry.aggregate([
+            ...entryMatchStage,
+            {
+                $lookup: {
+                    from: 'stockitems',
+                    localField: '_id',
+                    foreignField: 'stockEntry',
+                    as: 'items',
+                },
+            },
+            {
+                $lookup: {
+                    from: 'bills',
+                    localField: 'items.soldInBill',
+                    foreignField: '_id',
+                    as: 'soldBills',
+                },
+            },
+            {
+                $project: {
+                    supplier: 1,
+                    quantity: 1,
+                    incomingPrice: 1,
+                    items: 1,
+                    soldBills: 1,
+                },
+            },
+            ...profitSoldMetricsStages,
+            {
+                $group: {
+                    _id: '$supplier',
+                    batchCount: { $sum: 1 },
+                    unitsPurchased: { $sum: '$qtyPurchased' },
+                    unitsSold: { $sum: '$qtySold' },
+                    totalInvestment: { $sum: '$totalInvestment' },
+                    soldRevenue: { $sum: '$soldRevenue' },
+                    soldDiscount: { $sum: '$soldDiscount' },
+                    soldCost: { $sum: '$soldCost' },
+                    realizedProfit: { $sum: '$realizedProfit' },
+                },
+            },
+            {
+                $lookup: {
+                    from: 'suppliers',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'supplierDoc',
+                },
+            },
+            {
+                $project: {
+                    supplierId: '$_id',
+                    supplierName: { $ifNull: [{ $arrayElemAt: ['$supplierDoc.name', 0] }, 'Unknown'] },
+                    batchCount: 1,
+                    unitsPurchased: 1,
+                    unitsSold: 1,
+                    totalInvestment: 1,
+                    soldRevenue: 1,
+                    soldDiscount: 1,
+                    realizedProfit: 1,
+                    profitMargin: {
+                        $cond: [
+                            { $gt: ['$soldRevenue', 0] },
+                            { $multiply: [{ $divide: ['$realizedProfit', '$soldRevenue'] }, 100] },
+                            0,
+                        ],
+                    },
+                },
+            },
+            { $sort: { totalInvestment: -1, supplierName: 1 } },
+        ]);
+        res.json({ data: rows });
+    }
+    catch (err) {
+        console.error('❌ /profit/supplier-summary error:', err?.message || err);
+        res.status(500).json({ message: 'Failed to load supplier purchase summary', error: err?.message });
+    }
+});
 router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewReports'), async (req, res) => {
     try {
         const page = Math.max(1, Number(req.query.page || 1));
         const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
         const skip = (page - 1) * limit;
         const sortMode = String(req.query.sort || 'entryDate');
+        const { supplier: supplierQuery, startDate, endDate } = req.query;
+        const entryMatch = buildStockEntryMatch(supplierQuery, startDate, endDate);
+        if (entryMatch === null) {
+            return res.status(400).json({ message: 'Invalid supplier id' });
+        }
         const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
+        const entryMatchStage = Object.keys(entryMatch).length ? [{ $match: entryMatch }] : [];
         // Common lookup stages
         const lookupStages = [
             {
@@ -999,7 +1313,12 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
                                         in: {
                                             $add: [
                                                 { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
-                                                { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                                                {
+                                                    $divide: [
+                                                        { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
+                                                        { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+                                                    ],
+                                                },
                                             ]
                                         }
                                     }
@@ -1020,6 +1339,7 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
         if (sortMode === 'recentSales') {
             // For recent sales sort: lookup first, then sort by lastSoldDate, then paginate
             pipeline = [
+                ...entryMatchStage,
                 ...lookupStages,
                 projectStage,
                 { $sort: { lastSoldDate: -1, entryDate: -1, createdAt: -1 } },
@@ -1031,6 +1351,7 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
         else {
             // Default: sort by entry date first (efficient — paginate before lookups)
             pipeline = [
+                ...entryMatchStage,
                 { $sort: { entryDate: -1, createdAt: -1 } },
                 { $skip: skip },
                 { $limit: limit },
@@ -1040,8 +1361,9 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
             ];
         }
         const data = await StockEntry.aggregate(pipeline);
-        const total = await StockEntry.countDocuments();
+        const total = await StockEntry.countDocuments(entryMatch);
         const overallPipeline = [
+            ...entryMatchStage,
             {
                 $lookup: {
                     from: 'stockitems',
@@ -1180,7 +1502,12 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
                                                 in: {
                                                     $add: [
                                                         { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
-                                                        { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                                                        {
+                                                            $divide: [
+                                                                { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
+                                                                { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+                                                            ],
+                                                        },
                                                     ]
                                                 }
                                             }
@@ -1231,8 +1558,15 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
     }
 });
 router.get('/profit/export', (0, billingRoleMiddleware_1.requirePermission)('canViewReports'), async (req, res) => {
+    const { supplier: supplierQuery, startDate, endDate } = req.query;
+    const entryMatch = buildStockEntryMatch(supplierQuery, startDate, endDate);
+    if (entryMatch === null) {
+        return res.status(400).json({ message: 'Invalid supplier id' });
+    }
+    const entryMatchStage = Object.keys(entryMatch).length ? [{ $match: entryMatch }] : [];
     const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
     const data = await StockEntry.aggregate([
+        ...entryMatchStage,
         { $sort: { entryDate: -1, createdAt: -1 } },
         { $lookup: { from: 'stockitems', localField: '_id', foreignField: 'stockEntry', as: 'items' } },
         { $lookup: { from: 'bills', localField: 'items.soldInBill', foreignField: '_id', as: 'soldBills' } },
@@ -1355,7 +1689,12 @@ router.get('/profit/export', (0, billingRoleMiddleware_1.requirePermission)('can
                                             in: {
                                                 $add: [
                                                     { $ifNull: ['$$matchedBillItem.itemDiscountAmount', 0] },
-                                                    { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] }
+                                                    {
+                                                        $divide: [
+                                                            { $ifNull: ['$$matchedBillItem.billDiscountShare', 0] },
+                                                            { $max: [1, { $ifNull: ['$$matchedBillItem.quantity', 1] }] },
+                                                        ],
+                                                    },
                                                 ]
                                             }
                                         }

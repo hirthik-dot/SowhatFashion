@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.billRevenueExGst = exports.lineRevenueExGst = exports.lineMrpTotal = exports.lineDiscountTotal = exports.BILLING_GST_RATE = void 0;
+exports.billRevenueExGst = exports.unitLineDiscountTotal = exports.lineRevenueExGstPerUnit = exports.lineRevenueExGst = exports.lineMrpTotal = exports.lineDiscountTotal = exports.BILLING_GST_RATE = void 0;
 /** GST rate shown on customer bills (5% on MRP subtotal). */
 exports.BILLING_GST_RATE = 0.05;
 const lineDiscountTotal = (item) => {
@@ -26,6 +26,17 @@ const lineRevenueExGst = (item, gstRate = exports.BILLING_GST_RATE) => {
     return Math.max(0, lineMrp - mrpDiscount);
 };
 exports.lineRevenueExGst = lineRevenueExGst;
+/** One physical unit's share of line revenue (purchase-batch profit uses per-barcode rows). */
+const lineRevenueExGstPerUnit = (item, gstRate = exports.BILLING_GST_RATE) => {
+    const qty = Math.max(1, Number(item?.quantity || 1));
+    return (0, exports.lineRevenueExGst)(item, gstRate) / qty;
+};
+exports.lineRevenueExGstPerUnit = lineRevenueExGstPerUnit;
+const unitLineDiscountTotal = (item) => {
+    const qty = Math.max(1, Number(item?.quantity || 1));
+    return (Number(item?.itemDiscountAmount || 0) + Number(item?.billDiscountShare || 0) / qty);
+};
+exports.unitLineDiscountTotal = unitLineDiscountTotal;
 const billRevenueExGst = (bill, gstRate = exports.BILLING_GST_RATE) => {
     const items = bill?.items || [];
     if (items.length) {
