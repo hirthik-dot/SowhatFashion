@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 /** Units physically in the shop (sellable, returned awaiting restock, or damaged). */
 export declare const IN_SHOP_STATUSES: readonly ["available", "returned", "damaged"];
+/** Units that can be scanned and sold at billing (returned items are resellable). */
+export declare const BILLABLE_STATUSES: readonly ["available", "returned"];
 export declare const compareSizes: (a: string, b: string) => number;
 export type SizeStockInShopRow = {
     size: string;

@@ -4,6 +4,9 @@ import StockItem from '../models/StockItem';
 /** Units physically in the shop (sellable, returned awaiting restock, or damaged). */
 export const IN_SHOP_STATUSES = ['available', 'returned', 'damaged'] as const;
 
+/** Units that can be scanned and sold at billing (returned items are resellable). */
+export const BILLABLE_STATUSES = ['available', 'returned'] as const;
+
 const SIZE_RANK = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '2XL', '3XL', '4XL', '5XL'];
 
 const sizeSortKey = (size: string) => {

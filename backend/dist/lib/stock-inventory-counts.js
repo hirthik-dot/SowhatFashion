@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.breakdownToProductCounts = exports.buildBreakdownFromAggregateRows = exports.compareSizes = exports.IN_SHOP_STATUSES = void 0;
+exports.breakdownToProductCounts = exports.buildBreakdownFromAggregateRows = exports.compareSizes = exports.BILLABLE_STATUSES = exports.IN_SHOP_STATUSES = void 0;
 exports.getProductStockBreakdown = getProductStockBreakdown;
 exports.getInShopCountsByProducts = getInShopCountsByProducts;
 exports.getBillingInShopSummary = getBillingInShopSummary;
@@ -11,6 +11,8 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 /** Units physically in the shop (sellable, returned awaiting restock, or damaged). */
 exports.IN_SHOP_STATUSES = ['available', 'returned', 'damaged'];
+/** Units that can be scanned and sold at billing (returned items are resellable). */
+exports.BILLABLE_STATUSES = ['available', 'returned'];
 const SIZE_RANK = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '2XL', '3XL', '4XL', '5XL'];
 const sizeSortKey = (size) => {
     const normalized = String(size || '').trim().toUpperCase();
@@ -130,7 +132,7 @@ async function getInShopCountsByProducts(productIds) {
         const key = String(id);
         const sizeMap = byProduct.get(key);
         const sizeStockInShop = sizeMap
-            ? [...sizeMap.values()].sort((a, b) => a.size.localeCompare(b.size))
+            ? [...sizeMap.values()].sort((a, b) => (0, exports.compareSizes)(a.size, b.size))
             : [];
         const stockInShop = sizeStockInShop.reduce((sum, row) => sum + row.stock, 0);
         result.set(key, { stockInShop, sizeStockInShop });

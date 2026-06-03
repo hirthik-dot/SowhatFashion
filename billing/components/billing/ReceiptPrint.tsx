@@ -124,6 +124,7 @@ export const ReceiptPrint = forwardRef<
       <div className="row-right">{`Time: ${formatBillTime(createdAt)}`}</div>
 
       <div className="line" />
+      <div className="receipt-body-inset">
       <div className="customer-row">
         <span className="customer-label">Customer:</span>
         <span className="customer-value">{bill.customer?.name || "Walk-in"}</span>
@@ -257,7 +258,7 @@ export const ReceiptPrint = forwardRef<
         </div>
       )}
 
-      <div className="amount-row" style={{ fontWeight: 'bold' }}>
+      <div className="amount-row net-total-row">
         <span>Net Total</span>
         <span>:</span>
         <span>{money(billGrandTotal)}</span>
@@ -297,6 +298,7 @@ export const ReceiptPrint = forwardRef<
       <div className="terms-item">* Exchange allowed only with original bill and tag.</div>
       <div className="terms-item">* No exchange on offer items.</div>
       <div className="terms-item">* Exchange accepted within 7 days from the date of purchase.</div>
+      </div>
       <div className="center">Thank you for doing business with us.</div>
     </div>
   );

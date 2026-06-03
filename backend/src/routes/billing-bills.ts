@@ -16,6 +16,7 @@ import {
   type PointsMode,
 } from '../lib/billing-points';
 import { activeBillItems } from '../lib/billing-replacements';
+import { BILLABLE_STATUSES } from '../lib/stock-inventory-counts';
 
 const router = express.Router();
 
@@ -266,10 +267,10 @@ router.get('/next-number', async (_req, res: Response) => {
   return res.json({ billNumber });
 });
 
-const countAvailableStock = async (productId: string, size: string) =>
+const countBillableStock = async (productId: string, size: string) =>
   StockItem.countDocuments({
     product: new mongoose.Types.ObjectId(productId),
-    status: 'available',
+    status: { $in: [...BILLABLE_STATUSES] },
     ...(size ? { size } : {}),
   });
 
@@ -277,7 +278,7 @@ const scanStockItemResponse = async (stockItem: any) => {
   const product: any = stockItem.product;
   const productId = String(product?._id || stockItem.product || '');
   const size = String(stockItem.size || '');
-  const availableStock = productId ? await countAvailableStock(productId, size) : 1;
+  const availableStock = productId ? await countBillableStock(productId, size) : 1;
   return {
     stockItemId: stockItem._id,
     barcode: stockItem.barcode,
@@ -294,7 +295,7 @@ const scanStockItemResponse = async (stockItem: any) => {
 
 router.get('/scan/:barcode', async (req, res: Response) => {
   const barcode = String(req.params.barcode || '').trim();
-  const stockItem = await StockItem.findOne({ barcode, status: 'available' }).populate(
+  const stockItem = await StockItem.findOne({ barcode, status: { $in: [...BILLABLE_STATUSES] } }).populate(
     'product',
     'name category billingSubCategory'
   );
@@ -319,7 +320,7 @@ router.get('/next-barcode', async (req, res: Response) => {
 
   const match: any = {
     product: new mongoose.Types.ObjectId(productId),
-    status: 'available',
+    status: { $in: [...BILLABLE_STATUSES] },
     ...(exclude.length ? { barcode: { $nin: exclude } } : {}),
   };
   if (size) match.size = size;
@@ -341,7 +342,7 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
 
   const regex = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   const results = await StockItem.aggregate([
-    { $match: { status: 'available' } },
+    { $match: { status: { $in: [...BILLABLE_STATUSES] } } },
     {
       $lookup: {
         from: 'products',
@@ -687,8 +688,8 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
 
       for (const barcode of barcodes) {
         const updated = await StockItem.findOneAndUpdate(
-          { barcode, status: 'available' },
-          { status: 'sold', soldInBill: completed._id }
+          { barcode, status: { $in: [...BILLABLE_STATUSES] } },
+          { status: 'sold', soldInBill: completed._id, returnedInReturn: null }
         );
         if (!updated) {
           return res.status(400).json({ message: `Barcode not available: ${barcode}` });
@@ -906,8 +907,8 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
 
     for (const barcode of addedBarcodes) {
       const sold = await StockItem.findOneAndUpdate(
-        { barcode, status: 'available' },
-        { status: 'sold', soldInBill: bill._id }
+        { barcode, status: { $in: [...BILLABLE_STATUSES] } },
+        { status: 'sold', soldInBill: bill._id, returnedInReturn: null }
       );
       if (!sold) {
         return res.status(400).json({ message: `Barcode not available: ${barcode}` });

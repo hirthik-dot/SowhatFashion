@@ -36,7 +36,7 @@ export default function ReceiptPrintModal({
               #thermal-receipt {
                 width: 78mm;
                 margin: 0 auto;
-                transform: translateX(calc(-0.6cm + 1mm));
+                transform: translateX(-0.35cm);
                 padding: 2mm 3mm;
                 box-sizing: border-box;
                 font-family: 'Courier New', Courier, monospace;
@@ -161,6 +161,14 @@ export default function ReceiptPrintModal({
                 padding: 1px 0;
                 margin: 0;
               }
+              .amount-row.net-total-row {
+                font-size: 16px;
+                font-weight: 800;
+                margin: 3px 0;
+              }
+              .amount-row.net-total-row > span:last-child {
+                font-size: 17px;
+              }
               .you-saved {
                 text-align: center;
                 font-weight: 800;
@@ -238,6 +246,13 @@ export default function ReceiptPrintModal({
                 text-align: left;
               }
 
+              /* Inset left-aligned body so labels are not clipped on thermal print */
+              #thermal-receipt .receipt-body-inset {
+                padding-left: 3mm;
+                padding-right: 1mm;
+                box-sizing: border-box;
+              }
+
               @media print {
                 body * { visibility: hidden; }
                 #thermal-receipt,
@@ -251,11 +266,11 @@ export default function ReceiptPrintModal({
                 #thermal-receipt {
                   position: fixed;
                   top: 0;
-                  left: calc(-0.6cm + 1mm);
+                  left: -0.35cm;
                   margin: 0;
-                  transform: none;
                   width: 78mm;
                   padding: 2mm 3mm;
+                  transform: none;
                   box-sizing: border-box;
                   font-family: 'Courier New', Courier, monospace;
                   font-size: 11px;
@@ -291,6 +306,14 @@ export default function ReceiptPrintModal({
                 #thermal-receipt .terms-title,
                 #thermal-receipt .amount-row.discount-row {
                   font-weight: 700;
+                }
+
+                #thermal-receipt .amount-row.net-total-row {
+                  font-size: 15px;
+                  font-weight: 800;
+                }
+                #thermal-receipt .amount-row.net-total-row > span:last-child {
+                  font-size: 16px;
                 }
 
                 #thermal-receipt .brand-name,

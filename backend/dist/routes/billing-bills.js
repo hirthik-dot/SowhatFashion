@@ -16,6 +16,7 @@ const BillingPointsAccount_1 = __importDefault(require("../models/BillingPointsA
 const BillingPointsLedger_1 = __importDefault(require("../models/BillingPointsLedger"));
 const billing_points_1 = require("../lib/billing-points");
 const billing_replacements_1 = require("../lib/billing-replacements");
+const stock_inventory_counts_1 = require("../lib/stock-inventory-counts");
 const router = express_1.default.Router();
 /** GST is added on top of MRP subtotal; shop discounts are then subtracted from (subtotal + GST). */
 const BILLING_GST_RATE = 0.05;
@@ -233,16 +234,16 @@ router.get('/next-number', async (_req, res) => {
     const billNumber = await generateBillNumber();
     return res.json({ billNumber });
 });
-const countAvailableStock = async (productId, size) => StockItem_1.default.countDocuments({
+const countBillableStock = async (productId, size) => StockItem_1.default.countDocuments({
     product: new mongoose_1.default.Types.ObjectId(productId),
-    status: 'available',
+    status: { $in: [...stock_inventory_counts_1.BILLABLE_STATUSES] },
     ...(size ? { size } : {}),
 });
 const scanStockItemResponse = async (stockItem) => {
     const product = stockItem.product;
     const productId = String(product?._id || stockItem.product || '');
     const size = String(stockItem.size || '');
-    const availableStock = productId ? await countAvailableStock(productId, size) : 1;
+    const availableStock = productId ? await countBillableStock(productId, size) : 1;
     return {
         stockItemId: stockItem._id,
         barcode: stockItem.barcode,
@@ -258,7 +259,7 @@ const scanStockItemResponse = async (stockItem) => {
 };
 router.get('/scan/:barcode', async (req, res) => {
     const barcode = String(req.params.barcode || '').trim();
-    const stockItem = await StockItem_1.default.findOne({ barcode, status: 'available' }).populate('product', 'name category billingSubCategory');
+    const stockItem = await StockItem_1.default.findOne({ barcode, status: { $in: [...stock_inventory_counts_1.BILLABLE_STATUSES] } }).populate('product', 'name category billingSubCategory');
     if (!stockItem) {
         return res.status(404).json({ error: 'Barcode not found or already sold' });
     }
@@ -276,7 +277,7 @@ router.get('/next-barcode', async (req, res) => {
     }
     const match = {
         product: new mongoose_1.default.Types.ObjectId(productId),
-        status: 'available',
+        status: { $in: [...stock_inventory_counts_1.BILLABLE_STATUSES] },
         ...(exclude.length ? { barcode: { $nin: exclude } } : {}),
     };
     if (size)
