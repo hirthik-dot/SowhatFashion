@@ -66,7 +66,7 @@ export const ReceiptPrint = forwardRef<
   ref
 ) {
   const createdAt = new Date(bill.createdAt || Date.now());
-  const items = bill.items || [];
+  const items = (bill.items || []).filter((item: any) => !item.replacedOut);
   const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
   const totalItemDiscount = Number(bill.totalItemDiscount || 0);

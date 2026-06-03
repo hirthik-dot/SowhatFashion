@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.billWithActiveItems = exports.activeBillItems = exports.applyReplacementToBill = void 0;
+exports.billWithActiveItems = exports.activeBillItems = exports.applyReplacementToBill = exports.billForReturn = exports.expandReturnedLineItems = exports.returnableBillItems = exports.itemBarcodes = void 0;
 const returnedBarcodeSet = (returnedItems) => new Set(returnedItems
     .map((item) => String(item.barcode || '').trim())
     .filter(Boolean));
@@ -11,16 +11,85 @@ const itemBarcodes = (item) => {
     const single = String(item.barcode || '').trim();
     return single ? [single] : [];
 };
+exports.itemBarcodes = itemBarcodes;
+/** Bill lines still eligible for return (excludes swapped-out originals and replacement lines). */
+const returnableBillItems = (bill) => {
+    const items = Array.isArray(bill?.items) ? bill.items : [];
+    return items.filter((item) => !item.replacedOut && !item.isReplacement);
+};
+exports.returnableBillItems = returnableBillItems;
+/** One returned row per physical barcode (fixes multi-qty lines and inventory). */
+const expandReturnedLineItems = (items) => {
+    const expanded = [];
+    for (const item of items || []) {
+        const qty = Math.max(1, Number(item.quantity || 1));
+        const codes = (0, exports.itemBarcodes)(item).slice(0, qty);
+        const unitPrice = Number(item.sellingPrice || 0) > 0
+            ? Number(item.sellingPrice)
+            : Number(item.lineTotal || 0) / qty || Number(item.mrp || 0);
+        if (codes.length === 0) {
+            const barcode = String(item.barcode || '').trim();
+            if (barcode)
+                expanded.push({ ...item, barcode, quantity: 1, sellingPrice: unitPrice });
+            continue;
+        }
+        for (const barcode of codes) {
+            expanded.push({
+                ...item,
+                barcode,
+                quantity: 1,
+                sellingPrice: unitPrice,
+            });
+        }
+    }
+    return expanded;
+};
+exports.expandReturnedLineItems = expandReturnedLineItems;
+const billForReturn = (bill) => ({
+    ...(typeof bill?.toObject === 'function' ? bill.toObject() : bill),
+    items: (0, exports.returnableBillItems)(bill),
+});
+exports.billForReturn = billForReturn;
 /** Mark returned lines and append replacement lines on the bill (for profit & discounts). */
 const applyReplacementToBill = (bill, returnedItems, replacementItems) => {
     const returned = returnedBarcodeSet(returnedItems);
     const items = Array.isArray(bill.items) ? [...bill.items] : [];
-    const updated = items.map((item) => {
-        const barcodes = itemBarcodes(item);
-        if (barcodes.some((code) => returned.has(code))) {
-            return { ...item, replacedOut: true };
+    const updated = items.flatMap((item) => {
+        const barcodes = (0, exports.itemBarcodes)(item);
+        const returnedOnLine = barcodes.filter((code) => returned.has(code));
+        if (returnedOnLine.length === 0)
+            return [item];
+        if (returnedOnLine.length >= barcodes.length) {
+            return [{ ...item, replacedOut: true }];
         }
-        return item;
+        const remaining = barcodes.filter((code) => !returned.has(code));
+        const qty = Math.max(1, Number(item.quantity || 1));
+        const unitSelling = Number(item.sellingPrice || 0) > 0
+            ? Number(item.sellingPrice)
+            : Number(item.lineTotal || 0) / qty || Number(item.mrp || 0);
+        const unitLine = Number(item.lineTotal || 0) / qty || unitSelling;
+        return [
+            {
+                ...item,
+                quantity: returnedOnLine.length,
+                barcodes: returnedOnLine,
+                barcode: returnedOnLine[0],
+                sellingPrice: unitSelling,
+                lineTotal: unitLine * returnedOnLine.length,
+                netLineTotal: unitLine * returnedOnLine.length,
+                replacedOut: true,
+            },
+            {
+                ...item,
+                quantity: remaining.length,
+                barcodes: remaining,
+                barcode: remaining[0],
+                sellingPrice: unitSelling,
+                lineTotal: unitLine * remaining.length,
+                netLineTotal: unitLine * remaining.length,
+                replacedOut: false,
+            },
+        ];
     });
     for (const rep of replacementItems) {
         const barcode = String(rep.barcode || '').trim();
@@ -97,7 +166,7 @@ const activeBillItems = (bill, returns = []) => {
             }
         }
         items = items.map((item) => {
-            const barcodes = itemBarcodes(item);
+            const barcodes = (0, exports.itemBarcodes)(item);
             if (barcodes.some((code) => returned.has(code))) {
                 return { ...item, replacedOut: true };
             }

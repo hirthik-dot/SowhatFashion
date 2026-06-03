@@ -144,12 +144,22 @@ export default function InventoryPage() {
                   <td>{product.category || "-"}</td>
                   <td>{product.billingSubCategory?.name || product.subCategory || "-"}</td>
                   <td>{product.supplier?.name || "-"}</td>
-                  <td>{(product.sizeStock || []).map((s: any) => `${s.size}:${s.stock}`).join(" ") || "-"}</td>
+                  <td>
+                    {(product.sizeStockInShop?.length ? product.sizeStockInShop : product.sizeStock || [])
+                      .map((s: any) => `${s.size}:${s.stock}`)
+                      .join(" ") || "-"}
+                  </td>
                   {isSuperAdmin ? <td>₹{Number(product.incomingPrice || 0).toFixed(2)}</td> : null}
                   <td>₹{Number(product.price || 0).toFixed(2)}</td>
-                  <td>{product.stock}</td>
+                  <td>{product.stockInShop ?? product.stock ?? 0}</td>
                   <td>{Number(product.sold || 0)}</td>
-                  <td>{product.stock <= 0 ? "Out" : product.stock <= 2 ? "Low" : "In"}</td>
+                  <td>
+                    {(product.stockInShop ?? product.stock ?? 0) <= 0
+                      ? "Out"
+                      : (product.stockInShop ?? product.stock ?? 0) <= 2
+                        ? "Low"
+                        : "In"}
+                  </td>
                   <td>{new Date(product.createdAt).toLocaleString()}</td>
                 </tr>
               ))}

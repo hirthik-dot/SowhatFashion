@@ -160,6 +160,8 @@ export const billingApi = {
   },
   stockInventoryItems: (productId: string, size?: string) =>
     request(`/api/billing/stock/inventory/${productId}/items${size ? `?size=${encodeURIComponent(size)}` : ""}`),
+  stockInventoryBreakdown: (productId: string) =>
+    request(`/api/billing/stock/inventory/${productId}/stock-breakdown`),
   reportProfit: (
     page = 1,
     sort = "entryDate",

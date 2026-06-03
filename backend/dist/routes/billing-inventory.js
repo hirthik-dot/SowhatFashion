@@ -8,6 +8,7 @@ const Product_1 = __importDefault(require("../models/Product"));
 const StockEntry_1 = __importDefault(require("../models/StockEntry"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
+const stock_inventory_counts_1 = require("../lib/stock-inventory-counts");
 const router = express_1.default.Router();
 const productStockEntryFilter = (productId) => ({
     $or: [{ productId }, { productIds: productId }],
@@ -64,25 +65,16 @@ const syncProductPurchaseBatches = async (productId, priceUpdates) => {
 };
 router.use((0, billingRoleMiddleware_1.requireAnyPermission)('canManageStock', 'canViewReports', 'canManageSuppliersCategories'));
 router.get('/summary', async (req, res) => {
-    const query = { isBillingProduct: true };
-    const [totals, lowStock, outOfStock] = await Promise.all([
-        Product_1.default.find(query).select('stock price incomingPrice').lean(),
-        Product_1.default.countDocuments({ ...query, stock: { $gt: 0, $lte: 2 } }),
-        Product_1.default.countDocuments({ ...query, stock: { $lte: 0 } }),
-    ]);
-    const totalProducts = totals.length;
-    const totalUnits = totals.reduce((sum, product) => sum + Number(product.stock || 0), 0);
-    const totalRetailValue = totals.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.price || 0), 0);
-    const totalCostValue = totals.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.incomingPrice || 0), 0);
+    const inShop = await (0, stock_inventory_counts_1.getBillingInShopSummary)();
     const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
     return res.json({
-        totalProducts,
-        totalUnits,
-        totalRetailValue,
-        totalCostValue: isSuperAdmin ? totalCostValue : undefined,
-        expectedProfit: isSuperAdmin ? totalRetailValue - totalCostValue : undefined,
-        lowStock,
-        outOfStock,
+        totalProducts: inShop.totalProducts,
+        totalUnits: inShop.totalUnits,
+        totalRetailValue: inShop.totalRetailValue,
+        totalCostValue: isSuperAdmin ? inShop.totalCostValue : undefined,
+        expectedProfit: isSuperAdmin ? inShop.totalRetailValue - inShop.totalCostValue : undefined,
+        lowStock: inShop.lowStock,
+        outOfStock: inShop.outOfStock,
     });
 });
 router.get('/products', async (req, res) => {
@@ -125,13 +117,18 @@ router.get('/products', async (req, res) => {
         { $group: { _id: '$product', count: { $sum: 1 } } },
     ]);
     const soldMap = new Map(soldCounts.map((s) => [String(s._id), Number(s.count || 0)]));
+    const inShopByProduct = await (0, stock_inventory_counts_1.getInShopCountsByProducts)(data.map((d) => d._id));
     const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
     return res.json({
         data: data.map((product) => {
+            const inShop = inShopByProduct.get(String(product._id)) || { stockInShop: 0, sizeStockInShop: [] };
             const row = {
                 ...product,
                 name: product.billingName || product.name,
                 sold: soldMap.get(String(product._id)) || 0,
+                stockInShop: inShop.stockInShop,
+                sizeStockInShop: inShop.sizeStockInShop,
+                stock: inShop.stockInShop,
             };
             if (!isSuperAdmin) {
                 delete row.incomingPrice;

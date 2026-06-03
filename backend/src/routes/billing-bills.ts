@@ -15,6 +15,7 @@ import {
   validatePointsForBill,
   type PointsMode,
 } from '../lib/billing-points';
+import { activeBillItems } from '../lib/billing-replacements';
 
 const router = express.Router();
 
@@ -829,13 +830,20 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
     }
 
     const originalItems = Array.isArray((bill as any).items) ? (bill as any).items : [];
-    const payloadItems = Array.isArray(payload.items) ? payload.items : [];
+    const historicalLines = originalItems.filter((item: any) => item.replacedOut);
+    const activeOriginal = activeBillItems(bill);
+    const payloadItems = (Array.isArray(payload.items) ? payload.items : []).filter(
+      (item: any) => !item.replacedOut
+    );
+    if (payloadItems.length === 0) {
+      return res.status(400).json({ message: 'At least one active bill item is required' });
+    }
     const baseTotals = calculateBillTotals(
       payloadItems,
       payload.billDiscountType || 'none',
       Number(payload.billDiscountValue || 0)
     );
-    const normalizedItems = enrichEditedBillItems(baseTotals.normalizedItems, originalItems, payloadItems);
+    const normalizedItems = enrichEditedBillItems(baseTotals.normalizedItems, activeOriginal, payloadItems);
     const totals = calculateBillTotals(
       normalizedItems,
       payload.billDiscountType || 'none',
@@ -878,7 +886,7 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
         : 0;
     const previousTotal = Number((bill as any).totalAmount || 0);
 
-    const originalBarcodeSet = barcodeSetFromItems(originalItems);
+    const originalBarcodeSet = barcodeSetFromItems(activeOriginal);
     const updatedBarcodeSet = barcodeSetFromItems(totals.normalizedItems);
     const removedBarcodes = [...originalBarcodeSet].filter((code) => !updatedBarcodeSet.has(code));
     const addedBarcodes = [...updatedBarcodeSet].filter((code) => !originalBarcodeSet.has(code));
@@ -915,7 +923,7 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
     (bill as any).salesman = payload.salesmanId || null;
     (bill as any).paymentMethod = paymentMethod;
     (bill as any).paymentBreakdown = paymentBreakdown;
-    (bill as any).items = totals.normalizedItems;
+    (bill as any).items = [...historicalLines, ...totals.normalizedItems];
     (bill as any).billDiscountType = payload.billDiscountType || 'none';
     (bill as any).billDiscountValue = Number(payload.billDiscountValue || 0);
     (bill as any).subtotal = totals.subtotal;

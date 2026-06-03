@@ -12,6 +12,7 @@ const Supplier_1 = __importDefault(require("../models/Supplier"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const slugify_1 = __importDefault(require("slugify"));
+const stock_inventory_counts_1 = require("../lib/stock-inventory-counts");
 const router = express_1.default.Router();
 const getBarcodePrefix = (date = new Date()) => {
     const y = date.getFullYear();
@@ -352,38 +353,51 @@ router.get('/inventory', async (req, res) => {
         { $group: { _id: '$product', count: { $sum: 1 } } },
     ]);
     const soldByProduct = new Map(soldCounts.map((d) => [String(d._id), Number(d.count || 0)]));
+    const inShopByProduct = await (0, stock_inventory_counts_1.getInShopCountsByProducts)(productIds);
     const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
-    const data = products.map((p) => ({
-        _id: p._id,
-        name: p.billingName || p.name,
-        category: p.billingCategory?.name || p.category || '',
-        subCategory: p.billingSubCategory?.name || p.subCategory || '',
-        supplier: p.supplier?.name || '',
-        supplierId: p.supplier?._id ? String(p.supplier._id) : '',
-        billingCategory: p.billingCategory?._id ? String(p.billingCategory._id) : '',
-        billingSubCategory: p.billingSubCategory?._id ? String(p.billingSubCategory._id) : '',
-        sizeStock: p.sizeStock || [],
-        totalStock: Number(p.totalStock ?? p.stock ?? 0),
-        sold: soldByProduct.get(String(p._id)) || 0,
-        mrp: Number(p.price || 0),
-        status: p.isActive ? 'active' : 'inactive',
-        notes: p.notes || '',
-        incomingPrice: isSuperAdmin ? Number(p.incomingPrice || 0) : undefined,
-        expectedProfit: isSuperAdmin
-            ? Number((Number(p.price || 0) - Number(p.incomingPrice || 0)) * Number(p.totalStock ?? p.stock ?? 0))
-            : undefined,
-    }));
+    const data = products.map((p) => {
+        const inShop = inShopByProduct.get(String(p._id)) || { stockInShop: 0, sizeStockInShop: [] };
+        return {
+            _id: p._id,
+            name: p.billingName || p.name,
+            category: p.billingCategory?.name || p.category || '',
+            subCategory: p.billingSubCategory?.name || p.subCategory || '',
+            supplier: p.supplier?.name || '',
+            supplierId: p.supplier?._id ? String(p.supplier._id) : '',
+            billingCategory: p.billingCategory?._id ? String(p.billingCategory._id) : '',
+            billingSubCategory: p.billingSubCategory?._id ? String(p.billingSubCategory._id) : '',
+            sizeStock: p.sizeStock || [],
+            sizeStockInShop: inShop.sizeStockInShop,
+            totalStock: Number(p.totalStock ?? p.stock ?? 0),
+            stockInShop: inShop.stockInShop,
+            sold: soldByProduct.get(String(p._id)) || 0,
+            mrp: Number(p.price || 0),
+            status: p.isActive ? 'active' : 'inactive',
+            notes: p.notes || '',
+            incomingPrice: isSuperAdmin ? Number(p.incomingPrice || 0) : undefined,
+            expectedProfit: isSuperAdmin
+                ? Number((Number(p.price || 0) - Number(p.incomingPrice || 0)) * Number(inShop.stockInShop ?? p.totalStock ?? p.stock ?? 0))
+                : undefined,
+        };
+    });
     const summary = data.reduce((acc, row) => {
         acc.totalProducts += 1;
-        acc.totalUnits += Number(row.totalStock || 0);
+        acc.totalUnits += Number(row.stockInShop ?? row.totalStock ?? 0);
         acc.totalSold += Number(row.sold || 0);
-        acc.totalRetailValue += Number(row.totalStock || 0) * Number(row.mrp || 0);
-        acc.totalCostValue += Number(row.totalStock || 0) * Number(row.incomingPrice || 0);
-        if (Number(row.totalStock || 0) <= 0)
+        acc.totalRetailValue += Number(row.stockInShop ?? row.totalStock ?? 0) * Number(row.mrp || 0);
+        acc.totalCostValue += Number(row.stockInShop ?? row.totalStock ?? 0) * Number(row.incomingPrice || 0);
+        if (Number(row.stockInShop ?? row.totalStock ?? 0) <= 0)
             acc.outOfStock += 1;
         return acc;
     }, { totalProducts: 0, totalUnits: 0, totalSold: 0, totalRetailValue: 0, totalCostValue: 0, outOfStock: 0 });
     res.json({ summary, data });
+});
+router.get('/inventory/:productId/stock-breakdown', async (req, res) => {
+    const productId = req.params.productId;
+    const product = await Product_1.default.findById(productId).select('_id').lean();
+    if (!product)
+        return res.status(404).json({ message: 'Product not found' });
+    res.json(await (0, stock_inventory_counts_1.getProductStockBreakdown)(product._id));
 });
 router.get('/inventory/:productId/items', async (req, res) => {
     const productId = req.params.productId;

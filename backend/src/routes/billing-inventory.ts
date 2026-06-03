@@ -5,6 +5,7 @@ import StockEntry from '../models/StockEntry';
 import StockItem from '../models/StockItem';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
 import { requireAnyPermission } from '../middleware/billingRoleMiddleware';
+import { getBillingInShopSummary, getInShopCountsByProducts } from '../lib/stock-inventory-counts';
 
 const router = express.Router();
 
@@ -69,30 +70,16 @@ const syncProductPurchaseBatches = async (
 router.use(requireAnyPermission('canManageStock', 'canViewReports', 'canManageSuppliersCategories'));
 
 router.get('/summary', async (req: BillingAuthRequest, res: Response) => {
-  const query = { isBillingProduct: true } as any;
-  const [totals, lowStock, outOfStock] = await Promise.all([
-    Product.find(query).select('stock price incomingPrice').lean(),
-    Product.countDocuments({ ...query, stock: { $gt: 0, $lte: 2 } }),
-    Product.countDocuments({ ...query, stock: { $lte: 0 } }),
-  ]);
-
-  const totalProducts = totals.length;
-  const totalUnits = totals.reduce((sum, product) => sum + Number(product.stock || 0), 0);
-  const totalRetailValue = totals.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.price || 0), 0);
-  const totalCostValue = totals.reduce(
-    (sum, product) => sum + Number(product.stock || 0) * Number(product.incomingPrice || 0),
-    0
-  );
-
+  const inShop = await getBillingInShopSummary();
   const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
   return res.json({
-    totalProducts,
-    totalUnits,
-    totalRetailValue,
-    totalCostValue: isSuperAdmin ? totalCostValue : undefined,
-    expectedProfit: isSuperAdmin ? totalRetailValue - totalCostValue : undefined,
-    lowStock,
-    outOfStock,
+    totalProducts: inShop.totalProducts,
+    totalUnits: inShop.totalUnits,
+    totalRetailValue: inShop.totalRetailValue,
+    totalCostValue: isSuperAdmin ? inShop.totalCostValue : undefined,
+    expectedProfit: isSuperAdmin ? inShop.totalRetailValue - inShop.totalCostValue : undefined,
+    lowStock: inShop.lowStock,
+    outOfStock: inShop.outOfStock,
   });
 });
 
@@ -136,14 +123,19 @@ router.get('/products', async (req: BillingAuthRequest, res: Response) => {
     { $group: { _id: '$product', count: { $sum: 1 } } },
   ]);
   const soldMap = new Map<string, number>(soldCounts.map((s: any) => [String(s._id), Number(s.count || 0)]));
+  const inShopByProduct = await getInShopCountsByProducts(data.map((d: any) => d._id));
 
   const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
   return res.json({
     data: data.map((product: any) => {
+      const inShop = inShopByProduct.get(String(product._id)) || { stockInShop: 0, sizeStockInShop: [] };
       const row = {
         ...product,
         name: product.billingName || product.name,
         sold: soldMap.get(String(product._id)) || 0,
+        stockInShop: inShop.stockInShop,
+        sizeStockInShop: inShop.sizeStockInShop,
+        stock: inShop.stockInShop,
       };
       if (!isSuperAdmin) {
         delete (row as any).incomingPrice;

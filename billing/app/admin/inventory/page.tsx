@@ -20,6 +20,10 @@ export default function AdminInventoryPage() {
   const [supplier, setSupplier] = useState("");
   const [status, setStatus] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [productStockBreakdown, setProductStockBreakdown] = useState<{
+    totalInShop: number;
+    sizes: { size: string; inShop: number; available: number; returned: number }[];
+  } | null>(null);
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [productItems, setProductItems] = useState<any[]>([]);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -80,8 +84,8 @@ export default function AdminInventoryPage() {
 
   const filtered = useMemo(() => {
     return data.filter((row) => {
-      const left = Number(row.totalStock || 0);
-      const ratio = (Number(row.totalStock || 0) + Number(row.sold || 0)) ? left / (Number(row.totalStock || 0) + Number(row.sold || 0)) : 0;
+      const left = Number(row.stockInShop ?? row.totalStock ?? 0);
+      const ratio = (left + Number(row.sold || 0)) ? left / (left + Number(row.sold || 0)) : 0;
       const stockStatus = left <= 0 ? "out" : ratio <= 0.2 ? "low" : "ok";
       if (!status) return true;
       return status === stockStatus;
@@ -89,11 +93,23 @@ export default function AdminInventoryPage() {
   }, [data, status]);
 
   const getProductStatus = (row: any) => {
-    const left = Number(row.totalStock || 0);
-    const ratio = (Number(row.totalStock || 0) + Number(row.sold || 0)) ? left / (Number(row.totalStock || 0) + Number(row.sold || 0)) : 0;
+    const left = Number(row.stockInShop ?? row.totalStock ?? 0);
+    const ratio = (left + Number(row.sold || 0)) ? left / (left + Number(row.sold || 0)) : 0;
     if (left <= 0) return { label: "Out of Stock", icon: "🔴" };
     if (ratio <= 0.2) return { label: "Low Stock", icon: "🟡" };
     return { label: "In Stock", icon: "🟢" };
+  };
+
+  const loadProductBreakdown = async (productId: string) => {
+    try {
+      const breakdown = await billingApi.stockInventoryBreakdown(productId);
+      setProductStockBreakdown({
+        totalInShop: Number(breakdown?.totalInShop || 0),
+        sizes: Array.isArray(breakdown?.sizes) ? breakdown.sizes : [],
+      });
+    } catch {
+      setProductStockBreakdown(null);
+    }
   };
 
   const openProduct = async (row: any) => {
@@ -103,6 +119,8 @@ export default function AdminInventoryPage() {
     setSelectedBatchBarcodes([]);
     setBatchReprint(null);
     setBatchCurrentPage(1);
+    setProductStockBreakdown(null);
+    await loadProductBreakdown(String(row._id));
   };
 
   const loadSizeItems = async (size: string) => {
@@ -254,7 +272,9 @@ export default function AdminInventoryPage() {
             <tbody>
               {filtered.map((row) => {
                 const statusData = getProductStatus(row);
-                const sizes = (row.sizeStock || []).map((s: any) => `${s.size}:${s.stock}`).join(" ");
+                const sizes = (row.sizeStockInShop?.length ? row.sizeStockInShop : row.sizeStock || [])
+                  .map((s: any) => `${s.size}:${s.stock}`)
+                  .join(" ");
                 return (
                   <tr key={row._id} className="border-t border-[var(--border)]">
                     <td>{row.name || "-"}</td>
@@ -262,7 +282,7 @@ export default function AdminInventoryPage() {
                     <td>{row.subCategory || "-"}</td>
                     <td>{row.supplier || "-"}</td>
                     <td className="whitespace-nowrap">{sizes || "-"}</td>
-                    <td>{row.totalStock || 0}</td>
+                    <td>{row.stockInShop ?? row.totalStock ?? 0}</td>
                     <td>{row.sold || 0}</td>
                     <td>₹{Number(row.mrp || row.price || 0).toFixed(2)}</td>
                     <td>{statusData.icon} {statusData.label}</td>
@@ -297,22 +317,48 @@ export default function AdminInventoryPage() {
           <div className="pos-card p-4 w-full max-w-4xl">
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-semibold">
-                Product Detail: {selectedProduct.name} · Total {selectedProduct.totalStock || 0}
+                Product Detail: {selectedProduct.name} · Total{" "}
+                {productStockBreakdown?.totalInShop ?? selectedProduct.totalStock ?? 0}
               </h3>
-              <button onClick={() => { setSelectedProduct(null); setSelectedSize(""); setProductItems([]); setSelectedBatchBarcodes([]); }}>Close</button>
+              <button
+                onClick={() => {
+                  setSelectedProduct(null);
+                  setProductStockBreakdown(null);
+                  setSelectedSize("");
+                  setProductItems([]);
+                  setSelectedBatchBarcodes([]);
+                }}
+              >
+                Close
+              </button>
             </div>
             <div className="pos-card p-3 mb-3">
-              <p className="text-sm text-[var(--text-secondary)] mb-2">Size breakdown</p>
+              <p className="text-sm text-[var(--text-secondary)] mb-2">
+                Size breakdown (available + returned in shop)
+              </p>
               <div className="flex flex-wrap gap-2">
-                {(selectedProduct.sizeStock || []).map((s: any) => (
-                  <button
-                    key={s.size}
-                    className={`h-10 px-3 rounded border ${selectedSize === s.size ? "border-[var(--gold)]" : "border-[var(--border)]"}`}
-                    onClick={() => loadSizeItems(s.size)}
-                  >
-                    {s.size}:{s.stock}
-                  </button>
-                ))}
+                {(productStockBreakdown?.sizes?.length
+                  ? productStockBreakdown.sizes
+                  : selectedProduct.sizeStock || []
+                ).map((s: any) => {
+                  const count = Number(s.inShop ?? s.stock ?? 0);
+                  const returned = Number(s.returned || 0);
+                  const available = Number(s.available ?? count);
+                  return (
+                    <button
+                      key={s.size}
+                      className={`h-10 px-3 rounded border ${selectedSize === s.size ? "border-[var(--gold)]" : "border-[var(--border)]"}`}
+                      onClick={() => loadSizeItems(s.size)}
+                      title={
+                        returned > 0
+                          ? `${available} available, ${returned} returned`
+                          : `${available} available`
+                      }
+                    >
+                      {s.size}:{count}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {productItems.length > 0 ? (

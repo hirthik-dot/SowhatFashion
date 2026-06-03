@@ -27,10 +27,19 @@ router.get('/next-number', (0, billingRoleMiddleware_1.requirePermission)('canRe
     return res.json({ returnNumber });
 });
 router.get('/scan/:barcode', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), async (req, res) => {
-    const bill = await Bill_1.default.findOne({ 'items.barcode': req.params.barcode, status: 'completed' });
+    const barcode = String(req.params.barcode || '').trim();
+    const bill = await Bill_1.default.findOne({
+        $or: [{ 'items.barcode': barcode }, { 'items.barcodes': barcode }],
+        status: { $in: ['completed', 'partial_replaced'] },
+    });
     if (!bill)
         return res.status(404).json({ message: 'Sale record not found for this barcode' });
-    return res.json(bill);
+    const eligible = (0, billing_replacements_1.returnableBillItems)(bill);
+    const onReturnableLine = eligible.some((item) => (0, billing_replacements_1.itemBarcodes)(item).includes(barcode));
+    if (!onReturnableLine) {
+        return res.status(404).json({ message: 'This item was already returned or replaced' });
+    }
+    return res.json((0, billing_replacements_1.billForReturn)(bill));
 });
 router.post('/', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), async (req, res) => {
     try {
@@ -47,7 +56,22 @@ router.post('/', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), as
         if (!Array.isArray(replacementItems) || replacementItems.length === 0) {
             return res.status(400).json({ message: 'Scan at least one replacement item' });
         }
-        const returnedTotal = returnedItems.reduce((sum, item) => sum + Number(item.sellingPrice || 0) * Number(item.quantity || 1), 0);
+        const normalizedReturned = (0, billing_replacements_1.expandReturnedLineItems)(returnedItems);
+        if (normalizedReturned.length === 0) {
+            return res.status(400).json({ message: 'Select at least one returned item' });
+        }
+        const eligible = (0, billing_replacements_1.returnableBillItems)(bill);
+        const eligibleBarcodes = new Set();
+        for (const line of eligible) {
+            (0, billing_replacements_1.itemBarcodes)(line).forEach((code) => eligibleBarcodes.add(code));
+        }
+        for (const row of normalizedReturned) {
+            const code = String(row.barcode || '').trim();
+            if (!code || !eligibleBarcodes.has(code)) {
+                return res.status(400).json({ message: `Item is not eligible for return: ${code || 'unknown'}` });
+            }
+        }
+        const returnedTotal = normalizedReturned.reduce((sum, item) => sum + Number(item.sellingPrice || 0) * Number(item.quantity || 1), 0);
         const replacementTotal = replacementItems.reduce((sum, item) => sum + Number(item.sellingPrice || 0) * Number(item.quantity || 1), 0);
         const priceDifference = replacementTotal - returnedTotal;
         const returnDoc = await Return_1.default.create({
@@ -55,7 +79,7 @@ router.post('/', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), as
             billNumber: bill.billNumber,
             returnNumber: await generateReturnNumber(),
             customer: bill.customer,
-            returnedItems,
+            returnedItems: normalizedReturned,
             replacementItems,
             returnType,
             priceDifference,
@@ -66,9 +90,9 @@ router.post('/', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), as
             refundMethod: 'none',
             processedBy: req.billingAdminId,
         });
-        (0, billing_replacements_1.applyReplacementToBill)(bill, returnedItems, replacementItems);
+        (0, billing_replacements_1.applyReplacementToBill)(bill, normalizedReturned, replacementItems);
         // Returned items: mark StockItem as returned (manual inspection before restock)
-        for (const item of returnedItems) {
+        for (const item of normalizedReturned) {
             const barcode = String(item.barcode || '').trim();
             if (!barcode)
                 continue;

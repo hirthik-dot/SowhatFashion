@@ -207,7 +207,7 @@ export const activeBillItems = (bill: any, returns: any[] = []) => {
     items.push(...replacementLines);
   }
 
-  return items.filter((item: any) => !item.replacedOut && !item.isReplacement);
+  return items.filter((item: any) => !item.replacedOut);
 };
 
 export const billWithActiveItems = (bill: any, returns: any[] = []) => ({

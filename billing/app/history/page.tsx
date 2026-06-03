@@ -6,6 +6,7 @@ import BillingShell from "@/components/layout/BillingShell";
 import ReceiptPrintModal from "@/components/billing/ReceiptPrintModal";
 import EditBillModal from "@/components/history/EditBillModal";
 import ReplacementSwapSummary from "@/components/returns/ReplacementSwapSummary";
+import { activeBillItemCount, activeBillItems } from "@/lib/return-utils";
 import { billingApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -123,7 +124,7 @@ export default function HistoryPage() {
       Customer: bill.customer?.name || "Walk-in",
       Phone: bill.customer?.phone || "",
       Salesman: bill.salesman?.name || "-",
-      Items: (bill.items || []).length,
+      Items: activeBillItemCount(bill.items, bill.returns),
       Total: bill.totalAmount,
       PaymentMethod: bill.paymentMethod,
       Status: formatStatusLabel(bill),
@@ -209,7 +210,7 @@ export default function HistoryPage() {
                   <td>{new Date(bill.createdAt).toLocaleString()}</td>
                   <td>{bill.customer?.name || "Walk-in"}</td>
                   <td>{bill.salesman?.name || "-"}</td>
-                  <td>{(bill.items || []).length}</td>
+                  <td>{activeBillItemCount(bill.items, bill.returns)}</td>
                   <td>₹{Number(bill.totalAmount || 0).toLocaleString("en-IN")}</td>
                   <td>{String(bill.paymentMethod || "").toUpperCase()}</td>
                   <td>
@@ -279,23 +280,12 @@ export default function HistoryPage() {
               </div>
             ) : null}
             <div className="space-y-2">
-              <h4 className="font-semibold">Bill line items</h4>
-              {(viewBill.items || []).map((item: any, index: number) => (
-                <div
-                  key={`${item.barcode}-${index}`}
-                  className={`border rounded p-2 ${
-                    item.replacedOut
-                      ? "border-red-500/40 bg-red-950/10 opacity-70"
-                      : item.isReplacement
-                        ? "border-green-500/40 bg-green-950/10"
-                        : "border-[var(--border)]"
-                  }`}
-                >
+              <h4 className="font-semibold">Current items on bill</h4>
+              {activeBillItems(viewBill.items, viewBill.returns).map((item: any, index: number) => (
+                <div key={`${item.barcode}-${index}`} className="border border-[var(--border)] rounded p-2">
                   <p className="font-medium">
                     {item.name} ({item.size || "-"})
-                    {item.replacedOut ? (
-                      <span className="ml-2 text-xs text-red-300">Returned out</span>
-                    ) : item.isReplacement ? (
+                    {item.isReplacement ? (
                       <span className="ml-2 text-xs text-green-300">Replacement</span>
                     ) : null}
                   </p>
@@ -308,6 +298,30 @@ export default function HistoryPage() {
                 </div>
               ))}
             </div>
+            {(viewBill.items || []).some((item: any) => item.replacedOut) ? (
+              <div className="space-y-2 mt-4">
+                <h4 className="font-semibold text-[var(--text-secondary)]">Returned out (not on bill total)</h4>
+                {(viewBill.items || [])
+                  .filter((item: any) => item.replacedOut)
+                  .map((item: any, index: number) => (
+                    <div
+                      key={`returned-${item.barcode}-${index}`}
+                      className="border border-red-500/40 bg-red-950/10 opacity-70 rounded p-2"
+                    >
+                      <p className="font-medium">
+                        {item.name} ({item.size || "-"})
+                        <span className="ml-2 text-xs text-red-300">Returned out</span>
+                      </p>
+                      <p className="text-sm text-[var(--text-secondary)]">Barcode: {item.barcode || "-"}</p>
+                      <p className="text-sm">
+                        MRP ₹{item.mrp} · Qty {item.quantity}
+                        {Number(item.itemDiscountAmount || 0) > 0 ? ` · Disc ₹${item.itemDiscountAmount}` : ""}
+                        · Line Total ₹{item.lineTotal}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            ) : null}
             <div className="mt-4 p-3 bg-[var(--surface)] border border-[var(--border)] rounded flex flex-col items-end gap-1 text-sm">
               <div>Total MRP: ₹{viewBill.subtotal}</div>
               {Number(viewBill.totalItemDiscount || 0) > 0 && (

@@ -15,6 +15,7 @@ const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const BillingPointsAccount_1 = __importDefault(require("../models/BillingPointsAccount"));
 const BillingPointsLedger_1 = __importDefault(require("../models/BillingPointsLedger"));
 const billing_points_1 = require("../lib/billing-points");
+const billing_replacements_1 = require("../lib/billing-replacements");
 const router = express_1.default.Router();
 /** GST is added on top of MRP subtotal; shop discounts are then subtracted from (subtotal + GST). */
 const BILLING_GST_RATE = 0.05;
@@ -728,9 +729,14 @@ router.put('/:id/edit', billingAuthMiddleware_1.billingAuthMiddleware, async (re
             return res.status(400).json({ message: 'Edit reason is required' });
         }
         const originalItems = Array.isArray(bill.items) ? bill.items : [];
-        const payloadItems = Array.isArray(payload.items) ? payload.items : [];
+        const historicalLines = originalItems.filter((item) => item.replacedOut);
+        const activeOriginal = (0, billing_replacements_1.activeBillItems)(bill);
+        const payloadItems = (Array.isArray(payload.items) ? payload.items : []).filter((item) => !item.replacedOut);
+        if (payloadItems.length === 0) {
+            return res.status(400).json({ message: 'At least one active bill item is required' });
+        }
         const baseTotals = calculateBillTotals(payloadItems, payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
-        const normalizedItems = enrichEditedBillItems(baseTotals.normalizedItems, originalItems, payloadItems);
+        const normalizedItems = enrichEditedBillItems(baseTotals.normalizedItems, activeOriginal, payloadItems);
         const totals = calculateBillTotals(normalizedItems, payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
         const paymentBreakdown = Array.isArray(payload.paymentBreakdown)
             ? payload.paymentBreakdown
@@ -767,7 +773,7 @@ router.put('/:id/edit', billingAuthMiddleware_1.billingAuthMiddleware, async (re
                 ? totals.totalAmount
                 : 0;
         const previousTotal = Number(bill.totalAmount || 0);
-        const originalBarcodeSet = barcodeSetFromItems(originalItems);
+        const originalBarcodeSet = barcodeSetFromItems(activeOriginal);
         const updatedBarcodeSet = barcodeSetFromItems(totals.normalizedItems);
         const removedBarcodes = [...originalBarcodeSet].filter((code) => !updatedBarcodeSet.has(code));
         const addedBarcodes = [...updatedBarcodeSet].filter((code) => !originalBarcodeSet.has(code));
@@ -794,7 +800,7 @@ router.put('/:id/edit', billingAuthMiddleware_1.billingAuthMiddleware, async (re
         bill.salesman = payload.salesmanId || null;
         bill.paymentMethod = paymentMethod;
         bill.paymentBreakdown = paymentBreakdown;
-        bill.items = totals.normalizedItems;
+        bill.items = [...historicalLines, ...totals.normalizedItems];
         bill.billDiscountType = payload.billDiscountType || 'none';
         bill.billDiscountValue = Number(payload.billDiscountValue || 0);
         bill.subtotal = totals.subtotal;

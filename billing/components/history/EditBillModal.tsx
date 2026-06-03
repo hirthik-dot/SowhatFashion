@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { billingApi, searchProducts } from "@/lib/api";
+import { activeBillItems } from "@/lib/return-utils";
 
 type DiscountType = "percent" | "amount" | "none";
 type PaymentMethod = "cash" | "gpay" | "upi" | "card" | "partial";
@@ -198,7 +199,7 @@ export default function EditBillModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const applyBillToForm = (source: any) => {
+  const applyBillToForm = (source: any, returns?: any[]) => {
     const billDiscount = deriveBillDiscount(source);
     setCustomerName(source.customer?.name || "");
     setCustomerPhone(source.customer?.phone || "");
@@ -218,7 +219,7 @@ export default function EditBillModal({
           .reduce((sum: number, entry: any) => sum + Number(entry?.amount || 0), 0)
       )
     );
-    setItems((source.items || []).map((item: any) => normalizeItem(item)));
+    setItems(activeBillItems(source.items, returns ?? source.returns).map((item: any) => normalizeItem(item)));
     setBillDiscountType(billDiscount.billDiscountType);
     setBillDiscountValue(billDiscount.billDiscountValue);
     setCashReceived(deriveCashReceived(source));
@@ -232,14 +233,14 @@ export default function EditBillModal({
 
   useEffect(() => {
     if (!open || !bill?._id) return;
-    applyBillToForm(bill);
+    applyBillToForm(bill, bill.returns);
 
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
         const fullBill = await billingApi.billById(String(bill._id));
-        if (!cancelled) applyBillToForm(fullBill);
+        if (!cancelled) applyBillToForm(fullBill, bill.returns);
       } catch {
         // Keep values from list row if full fetch fails
       } finally {
