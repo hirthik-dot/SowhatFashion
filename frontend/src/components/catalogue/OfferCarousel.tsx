@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatPrice } from '@/lib/utils';
+import { IconClock, IconSparkle } from '@/components/icons/PremiumIcons';
 
 type Offer = {
   _id: string;
@@ -118,7 +119,9 @@ function TemplateFullBleed({ offer }: { offer: Offer }) {
         {offer.subtitle && <p className="text-sm md:text-lg text-white/80 max-w-md mt-1">{offer.subtitle}</p>}
         {offer.hasCountdown && offer.endTime && (
           <div className="rounded-lg border border-white/20 bg-white/15 backdrop-blur-sm px-4 py-3 inline-flex flex-col gap-2 mt-4 md:mt-6">
-            <span className="text-[10px] uppercase tracking-widest text-white/70">🕐 Ends in</span>
+            <span className="text-[10px] uppercase tracking-widest text-white/70 inline-flex items-center gap-1">
+              <IconClock size={12} /> Ends in
+            </span>
             <CountdownDark endTime={offer.endTime} hasCountdown={offer.hasCountdown} />
           </div>
         )}
@@ -151,7 +154,7 @@ function CountdownSplit({ endTime, hasCountdown }: { endTime?: string | null; ha
   const s = Math.floor((ms % 60000) / 1000);
   return (
     <div className="flex items-end gap-2 font-sans">
-      <span className="text-lg mr-1">🕐</span>
+      <IconClock size={18} className="mr-1 text-[var(--gold)] shrink-0" />
       <div>
         <span className="text-[#C9A84C] font-bold text-xl md:text-[28px] tabular-nums">{pad(h)}</span>
         <div className="text-[10px] uppercase text-[var(--text-secondary)] text-center">Hrs</div>
@@ -218,7 +221,11 @@ function TemplateSpotlight({ offer }: { offer: Offer }) {
       <div className="absolute inset-0 bg-black/55" />
       <div className="relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-2xl px-6 py-8 md:px-10 md:py-8 mx-auto">
         <p className="text-center text-xs uppercase tracking-[0.25em] text-[var(--text-secondary)]">
-          ✦ {offer.type === 'combo' ? 'COMBO OFFER' : 'SPECIAL OFFER'} ✦
+          <span className="inline-flex items-center gap-2">
+            <IconSparkle size={12} />
+            {offer.type === 'combo' ? 'COMBO OFFER' : 'SPECIAL OFFER'}
+            <IconSparkle size={12} />
+          </span>
         </p>
         <div className="h-px bg-[var(--border)] my-3" />
         <h2 className="font-playfair font-bold text-[28px] md:text-[38px] text-center text-[var(--text-primary)] leading-tight">
@@ -243,7 +250,9 @@ function TemplateSpotlight({ offer }: { offer: Offer }) {
         </div>
         {offer.hasCountdown && offer.endTime && (
           <div className="flex flex-col items-center gap-1 mt-5">
-            <span className="text-xs text-[var(--text-secondary)] uppercase tracking-wider">🕐 Ends in</span>
+            <span className="text-xs text-[var(--text-secondary)] uppercase tracking-wider inline-flex items-center gap-1 justify-center">
+              <IconClock size={14} /> Ends in
+            </span>
             <CountdownGold endTime={offer.endTime} hasCountdown={offer.hasCountdown} />
           </div>
         )}

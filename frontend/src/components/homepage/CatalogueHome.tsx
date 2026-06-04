@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import RotatingAnnouncementBar from '@/components/homepage/premium/RotatingAnnouncementBar';
 import PremiumNavbar from '@/components/homepage/premium/PremiumNavbar';
 import PremiumProductCard from '@/components/homepage/premium/PremiumProductCard';
 import PremiumFooter from '@/components/homepage/premium/PremiumFooter';
+import CatalogueHero from '@/components/homepage/CatalogueHero';
 import { mergeCatalogueHomeSections, type CatalogueHomeSection } from '@/lib/catalogue-sections';
 import {
   mergeHomepage3Placeholders,
@@ -84,7 +85,6 @@ export default function CatalogueHome({
   const row1 = categoryTiles.slice(0, 3);
   const row2 = categoryTiles.slice(3, 5);
 
-  const [heroIndex, setHeroIndex] = useState(0);
   const [bestsellerTab, setBestsellerTab] = useState<BestsellerTab>('week');
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
@@ -129,14 +129,6 @@ export default function CatalogueHome({
     [p]
   );
 
-  useEffect(() => {
-    if (heroSlides.length <= 1) return;
-    const t = setInterval(() => {
-      setHeroIndex((i) => (i + 1) % heroSlides.length);
-    }, 6000);
-    return () => clearInterval(t);
-  }, [heroSlides.length]);
-
   const handleNewsletter = (e: React.FormEvent) => {
     e.preventDefault();
     if (email.trim()) setSubscribed(true);
@@ -147,66 +139,13 @@ export default function CatalogueHome({
       <RotatingAnnouncementBar customText={settings?.announcementText} />
       <PremiumNavbar overHero />
 
-      {/* Hero — full viewport */}
-      <section className="relative h-[100svh] min-h-[560px] w-full overflow-hidden -mt-0">
-        {heroSlides.map((src, i) => (
-          <div
-            key={src + i}
-            className={cn(
-              'absolute inset-0 transition-opacity duration-1000',
-              i === heroIndex ? 'opacity-100 z-0' : 'opacity-0 z-0'
-            )}
-          >
-            <Image
-              src={i === 0 ? heroMobileSrc : src}
-              alt={p.heroMobileAlt || p.heroDesktopAlt || 'Hero'}
-              fill
-              priority={i === 0}
-              className={cn(
-                'object-cover md:hidden',
-                i === heroIndex && 'animate-ken-burns'
-              )}
-              sizes="100vw"
-            />
-            <Image
-              src={src}
-              alt={p.heroDesktopAlt || 'Hero'}
-              fill
-              priority={i === 0}
-              className={cn(
-                'object-cover hidden md:block',
-                i === heroIndex && 'animate-ken-burns'
-              )}
-              sizes="100vw"
-            />
-          </div>
-        ))}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent z-10" />
-
-        <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 md:px-12 pb-16 md:pb-24 max-w-7xl mx-auto w-full text-center md:text-left">
-          <p className="text-[11px] uppercase tracking-[0.25em] text-white/80 mb-3 md:mb-4">NEW SEASON</p>
-          <h1 className="font-cormorant font-light text-white text-[40px] md:text-[72px] leading-[1.05] tracking-wide mb-4 md:mb-6 max-w-3xl mx-auto md:mx-0">
-            CRAFTED FOR THE MODERN MAN
-          </h1>
-          <p className="text-white/75 text-sm md:text-base max-w-md mb-8 md:mb-10 mx-auto md:mx-0 leading-relaxed">
-            Minimalist silhouettes. Premium fabrics. Timeless style.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center md:justify-start">
-            <Link
-              href="/products"
-              className="bg-white text-[#111] text-[11px] uppercase tracking-[0.2em] px-8 py-4 text-center font-semibold hover:bg-white/90 transition-colors"
-            >
-              SHOP NOW
-            </Link>
-            <Link
-              href="/products?newArrival=true"
-              className="border border-white text-white text-[11px] uppercase tracking-[0.2em] px-8 py-4 text-center font-semibold hover:bg-white/10 transition-colors"
-            >
-              EXPLORE COLLECTION
-            </Link>
-          </div>
-        </div>
-      </section>
+      <CatalogueHero
+        settings={settings}
+        products={products}
+        heroSlides={heroSlides.length ? heroSlides : [DEFAULT_HOMEPAGE3_PLACEHOLDERS.heroDesktop!].filter(Boolean)}
+        heroMobileSrc={heroMobileSrc || DEFAULT_HOMEPAGE3_PLACEHOLDERS.heroDesktop!}
+        heroAlt={p.heroMobileAlt || p.heroDesktopAlt || 'Hero'}
+      />
 
       {/* Category tiles */}
       <section className="py-16 md:py-24 px-4 md:px-6 max-w-7xl mx-auto">

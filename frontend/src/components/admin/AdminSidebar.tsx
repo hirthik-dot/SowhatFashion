@@ -24,7 +24,7 @@ export default function AdminSidebar() {
     <aside className="admin-sidebar fixed left-0 top-0 bottom-0 z-40 hidden md:block border-r border-[#333]">
       <div className="p-6">
         <Link href="/" className="flex items-center gap-3">
-          <Image src="/sowaatlogo.jpeg" alt="SoWhat Admin" width={40} height={40} className="object-contain rounded-sm" />
+          <Image src="/sowaatlogo.jpeg" alt="Sowaat Admin" width={40} height={40} className="object-contain rounded-sm" />
           <span className="text-sm font-sans tracking-normal opacity-70 text-white font-bold">ADMIN</span>
         </Link>
       </div>

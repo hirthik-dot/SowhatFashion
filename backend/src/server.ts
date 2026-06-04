@@ -96,7 +96,7 @@ app.use(passport.initialize());
 app.get('/', (req, res) => {
   res.json({
     status: "ok",
-    message: "SoWhat Fashion API is running",
+    message: "Sowaat Fashion API is running",
     dbConnected: mongoose.connection.readyState === 1,
   });
 });
@@ -155,7 +155,7 @@ export const startServer = async () => {
   }
 
   app.listen(PORT, () => {
-    console.log(`🚀 So What Menswear API running on port ${PORT}`);
+    console.log(`🚀 Sowaat Menswear API running on port ${PORT}`);
     console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
   });
 };

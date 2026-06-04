@@ -12,7 +12,7 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: 'So What Menswear | Premium Men\'s Clothing',
+  title: 'Sowaat Menswear | Premium Men\'s Clothing',
   description: 'Premium menswear designed for the modern gentleman. Elevate your style with our curated collections of t-shirts, shirts, and pants.',
   icons: {
     icon: '/sowaatlogo.jpeg',

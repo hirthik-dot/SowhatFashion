@@ -9,7 +9,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-1 md:col-span-1">
             <Link href="/" className="inline-block mb-4">
-              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={80} height={50} className="object-contain h-12 w-auto" />
+              <Image src="/sowaatlogo.jpeg" alt="Sowaat Menswear Logo" width={80} height={50} className="object-contain h-12 w-auto" />
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed mb-6">
               Premium menswear designed for the modern gentleman. Elevate your style with our curated collections.
@@ -33,7 +33,7 @@ export default function Footer() {
               <li><Link href="/" className="text-gray-400 hover:text-white text-sm transition-colors">Home</Link></li>
               <li><Link href="/products" className="text-gray-400 hover:text-white text-sm transition-colors">Shop All</Link></li>
               <li><Link href="/offers" className="text-gray-400 hover:text-white text-sm transition-colors">Special Offers</Link></li>
-              <li><Link href="/orders" className="text-gray-400 hover:text-white text-sm transition-colors">My Orders</Link></li>
+              <li><Link href="/account?tab=orders" className="text-gray-400 hover:text-white text-sm transition-colors">My Orders</Link></li>
               <li><Link href="/cart" className="text-gray-400 hover:text-white text-sm transition-colors">My Cart</Link></li>
             </ul>
           </div>
@@ -61,7 +61,7 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
-          <p>&copy; {new Date().getFullYear()} So What Menswear. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Sowaat Menswear. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link href="#" className="hover:text-white transition-colors">Terms of Service</Link>

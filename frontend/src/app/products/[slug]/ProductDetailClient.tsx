@@ -53,7 +53,6 @@ export default function ProductDetailClient({ product }: { product: any }) {
       },
       quantity
     );
-    // Optional: show toast
   };
 
   const handleBuyNow = () => {

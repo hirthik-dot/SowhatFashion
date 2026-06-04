@@ -5,6 +5,7 @@ import AdminHeader from '@/components/admin/AdminHeader';
 import HomepageSwitcher from '@/components/admin/HomepageSwitcher';
 import PlaceholderEditor from '@/components/admin/PlaceholderEditor';
 import Homepage3ImageEditor from '@/components/admin/Homepage3ImageEditor';
+import HeroVideoProductEditor from '@/components/admin/HeroVideoProductEditor';
 import { adminGetSettings } from '@/lib/api';
 
 export default function AdminHomepageConfigPage() {
@@ -53,7 +54,10 @@ export default function AdminHomepageConfigPage() {
         <PlaceholderEditor settings={settings} onUpdate={fetchSettings} activeHomepage={activeHomepage} />
 
         {activeHomepage === 'catalogue' && (
-          <Homepage3ImageEditor settings={settings} onUpdate={fetchSettings} />
+          <>
+            <HeroVideoProductEditor settings={settings} onUpdate={fetchSettings} />
+            <Homepage3ImageEditor settings={settings} onUpdate={fetchSettings} />
+          </>
         )}
       </div>
     </div>

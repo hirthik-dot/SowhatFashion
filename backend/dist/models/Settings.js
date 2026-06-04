@@ -47,6 +47,14 @@ const SettingsSchema = new mongoose_1.Schema({
     instagramHandle: { type: String, default: '@sowaatmenswear' },
     freeDeliveryAbove: { type: Number, default: 999 },
     whatsappNumber: { type: String, default: '+919876543210' },
+    heroMediaType: {
+        type: String,
+        enum: ['video', 'image'],
+        default: 'image',
+    },
+    heroVideoUrl: { type: String, default: '' },
+    heroLinkedProductId: { type: String, default: '' },
+    heroLinkedProductSlug: { type: String, default: '' },
     placeholders: {
         allensolly: {
             heroImage: { type: String, default: '' },

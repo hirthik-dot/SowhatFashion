@@ -1,7 +1,7 @@
 'use client';
 
 export default function AnnouncementBar({ text }: { text?: string }) {
-  const defaultText = 'FREE DELIVERY ABOVE ₹999 • SALE UP TO 50% OFF • NEW ARRIVALS EVERY WEEK • PREMIUM MENSWEAR • 📦 MY ORDERS → /orders • ';
+  const defaultText = 'FREE DELIVERY ABOVE ₹999 • SALE UP TO 50% OFF • NEW ARRIVALS EVERY WEEK • PREMIUM MENSWEAR • MY ORDERS → /orders • ';
   const displayText = text || defaultText;
 
   return (

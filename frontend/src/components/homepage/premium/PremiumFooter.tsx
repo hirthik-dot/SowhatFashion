@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-const BRAND = 'So What Menswear';
+const BRAND = 'Sowaat Menswear';
 
 export default function PremiumFooter({ instagramHandle }: { instagramHandle?: string }) {
   const handle = instagramHandle || '@SOWAATMENSWEAR';
@@ -11,7 +11,7 @@ export default function PremiumFooter({ instagramHandle }: { instagramHandle?: s
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 border-b border-white/10 pb-12 mb-8">
           <div>
             <Link href="/" className="text-[22px] font-bold uppercase tracking-[0.15em] text-white block mb-4">
-              SOWHAT
+              SOWAAT
             </Link>
             <p className="text-sm text-white/60 leading-relaxed mb-6">
               Premium menswear for the modern man. Minimal silhouettes, timeless style.

@@ -151,15 +151,34 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
   }
 });
 
+// Helper: build the Google OAuth callback URL from the current request
+function getGoogleCallbackURL(req: Request): string {
+  // Prefer explicit env var if set and not the old Render URL
+  const envUrl = process.env.GOOGLE_CALLBACK_URL;
+  if (envUrl && !envUrl.includes('onrender.com')) {
+    return envUrl;
+  }
+  // Dynamically derive from request headers (works on Vercel, localhost, etc.)
+  const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+  const host = (req.headers['x-forwarded-host'] as string) || req.get('host') || 'localhost:5000';
+  return `${protocol}://${host}/api/auth/google/callback`;
+}
+
 // GET /api/auth/google (Init OAuth)
-router.get('/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+router.get('/google', (req: Request, res: Response, next) => {
+  const callbackURL = getGoogleCallbackURL(req);
+  passport.authenticate('google', { scope: ['profile', 'email'], callbackURL } as any)(req, res, next);
+});
 
 // GET /api/auth/google/callback
-router.get('/google/callback', 
-  passport.authenticate('google', { failureRedirect: `${process.env.CLIENT_URL}/?error=google_failed`, session: false }),
-  (req: Request, res: Response) => {
+router.get('/google/callback', (req: Request, res: Response, next) => {
+  const callbackURL = getGoogleCallbackURL(req);
+  passport.authenticate('google', {
+    failureRedirect: `${process.env.CLIENT_URL}/?error=google_failed`,
+    session: false,
+    callbackURL,
+  } as any)(req, res, next);
+}, (req: Request, res: Response) => {
     const user = req.user as any;
     const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
     const token = jwt.sign(

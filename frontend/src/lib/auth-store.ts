@@ -14,12 +14,15 @@ interface User {
 interface AuthState {
   user: User | null;
   isLoggedIn: boolean;
+  /** True after the initial /api/auth/me check on app load */
+  authChecked: boolean;
   isAuthModalOpen: boolean;
   redirectUrl: string | null;
   wishlist: string[];
   /** Short-lived message shown after OTP / Google sign-in */
   signInToast: string | null;
   setUser: (user: User | null) => void;
+  setAuthChecked: (checked: boolean) => void;
   logout: () => void;
   openAuthModal: (redirectUrl?: string) => void;
   closeAuthModal: () => void;
@@ -33,12 +36,14 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoggedIn: false,
+  authChecked: false,
   isAuthModalOpen: false,
   redirectUrl: null,
   wishlist: [],
   signInToast: null,
 
   setUser: (user) => set({ user, isLoggedIn: !!user }),
+  setAuthChecked: (checked) => set({ authChecked: checked }),
   logout: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token');

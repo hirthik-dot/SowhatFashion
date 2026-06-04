@@ -386,6 +386,21 @@ export const adminUploadImage = async (file: File) => {
   return res.json();
 };
 
+export const adminUploadVideo = async (file: File) => {
+  const formData = new FormData();
+  formData.append('video', file);
+  const res = await fetch(`${API}/api/upload/video`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Video upload failed');
+  }
+  return res.json();
+};
+
 // ============ CATALOGUE LAYOUT ============
 
 // Public — Mega Dropdown

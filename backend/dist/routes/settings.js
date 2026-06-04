@@ -32,7 +32,12 @@ router.put('/', authMiddleware_1.default, async (req, res) => {
             Object.assign(settings, req.body);
             await settings.save();
         }
-        if (req.body?.homepageSections || req.body?.placeholders) {
+        if (req.body?.homepageSections ||
+            req.body?.placeholders ||
+            'heroVideoUrl' in req.body ||
+            'heroLinkedProductId' in req.body ||
+            'heroLinkedProductSlug' in req.body ||
+            'heroMediaType' in req.body) {
             await (0, revalidateFrontend_1.triggerRevalidate)(['/']);
         }
         res.json(settings);

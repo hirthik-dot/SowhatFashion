@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import { normalizeAuthUser } from '@/lib/auth-user';
-import { X, ArrowLeft } from 'lucide-react';
+import { X, ArrowLeft, Mail } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
@@ -210,7 +210,8 @@ export default function AuthModal() {
           ) : (
             <div className="flex flex-col items-center">
               <p className="text-gray-600 mb-6 flex items-center gap-2">
-                ✉ OTP sent to {email.replace(/(.{3})(.*)(?=@)/, '$1***')}
+                <Mail size={18} className="text-[var(--gold)] shrink-0" />
+                OTP sent to {email.replace(/(.{3})(.*)(?=@)/, '$1***')}
               </p>
 
               <div className="flex justify-between w-full gap-2 mb-6" onPaste={handlePaste}>

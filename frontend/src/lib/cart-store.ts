@@ -15,10 +15,12 @@ export interface CartItem {
 
 interface CartStore {
   items: CartItem[];
+  cartToast: string | null;
   addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => void;
   removeItem: (productId: string, size: string) => void;
   updateQuantity: (productId: string, size: string, quantity: number) => void;
   clearCart: () => void;
+  clearCartToast: () => void;
   getTotalAmount: () => number;
   getTotalItems: () => number;
 }
@@ -27,6 +29,7 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      cartToast: null,
 
       addItem: (item, quantity = 1) => {
         set((state) => {
@@ -37,14 +40,17 @@ export const useCartStore = create<CartStore>()(
           if (existingIndex > -1) {
             const newItems = [...state.items];
             newItems[existingIndex].quantity += quantity;
-            return { items: newItems };
+            return { items: newItems, cartToast: 'Added to cart' };
           }
 
           return {
             items: [...state.items, { ...item, quantity }],
+            cartToast: 'Added to cart',
           };
         });
       },
+
+      clearCartToast: () => set({ cartToast: null }),
 
       removeItem: (productId, size) => {
         set((state) => ({
@@ -83,6 +89,7 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: 'sowaat-cart',
+      partialize: (state) => ({ items: state.items }),
     }
   )
 );

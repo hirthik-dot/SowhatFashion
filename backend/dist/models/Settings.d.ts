@@ -6,12 +6,17 @@ export interface HomepageSectionRow {
     order: number;
     canDelete: boolean;
 }
+export type HeroMediaType = 'video' | 'image';
 export interface ISettings extends Document {
     activeHomepage: 'allensolly' | 'magazine' | 'catalogue';
     announcementText: string;
     instagramHandle: string;
     freeDeliveryAbove: number;
     whatsappNumber: string;
+    heroMediaType: HeroMediaType;
+    heroVideoUrl: string;
+    heroLinkedProductId: string;
+    heroLinkedProductSlug: string;
     homepageSections?: {
         catalogue?: HomepageSectionRow[];
         allensolly?: HomepageSectionRow[];

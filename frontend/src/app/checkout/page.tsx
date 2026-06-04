@@ -8,6 +8,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { createOrder } from '@/lib/api';
 import { buildWhatsAppOrderLink } from '@/lib/whatsapp';
 import Navbar from '@/components/layout/Navbar';
+import { IconHome } from '@/components/icons/PremiumIcons';
 import Image from 'next/image';
 
 export default function CheckoutPage() {
@@ -16,6 +17,7 @@ export default function CheckoutPage() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [orderPlaced, setOrderPlaced] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -34,10 +36,10 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    if (mounted && items.length === 0) {
+    if (mounted && items.length === 0 && !orderPlaced) {
       router.push('/cart');
     }
-  }, [mounted, items.length, router]);
+  }, [mounted, items.length, router, orderPlaced]);
 
   useEffect(() => {
     if (user && formData.name === '') {
@@ -126,8 +128,9 @@ export default function CheckoutPage() {
         }
       }
 
+      setOrderPlaced(true);
+      router.replace(`/order/${order._id}`);
       clearCart();
-      router.push(`/order/${order._id}`);
     } catch (error) {
       console.error('Error placing order:', error);
       alert('Error placing order. Please try again later.');
@@ -277,8 +280,9 @@ export default function CheckoutPage() {
                           }`}
                         >
                           <div className="font-bold text-sm flex justify-between">
-                            <span>
-                              🏠 {addr.label} {addr.isDefault && '(Default)'}
+                            <span className="flex items-center gap-1.5">
+                              <IconHome size={14} className="text-[var(--gold)] shrink-0" />
+                              {addr.label} {addr.isDefault && '(Default)'}
                             </span>
                             {formData.line1 === addr.line1 && formData.pincode === addr.pincode && (
                               <span className="text-[var(--gold)]">✓</span>

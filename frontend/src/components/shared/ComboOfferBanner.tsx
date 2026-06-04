@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { IconShoppingBag } from '@/components/icons/PremiumIcons';
 
 interface ComboOfferBannerProps {
   title: string;
@@ -50,7 +51,7 @@ export default function ComboOfferBanner({
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <div className="text-6xl mb-2">🛍️</div>
+                <IconShoppingBag size={48} className="mx-auto mb-2 text-[var(--navbar-bg)] opacity-50" strokeWidth={1.25} />
                 <p className="text-sm font-semibold text-[var(--navbar-bg)] opacity-60">Combo Offer</p>
               </div>
             </div>

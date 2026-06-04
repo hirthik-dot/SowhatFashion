@@ -19,15 +19,15 @@ export function buildWhatsAppOrderMessage(params: {
     .join('\n');
 
   return [
-    '🛍️ New Order!',
+    '*New Order — Sowaat Menswear*',
     '',
-    `👤 Name: ${customerName}`,
-    '📦 Items:',
+    `Name: ${customerName}`,
+    'Items:',
     itemLines,
     '',
-    `💰 Total: ₹${totalAmount}`,
+    `Total: ₹${totalAmount}`,
     '',
-    `📍 Address: ${address}`,
+    `Address: ${address}`,
   ].join('\n');
 }
 

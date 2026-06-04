@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatPrice, getOrderStatusLabel } from '@/lib/utils';
 import { confirmOrder } from '@/lib/api';
 import { buildWhatsAppOrderLink } from '@/lib/whatsapp';
+import { IconCheckCircle, IconSmartphone } from '@/components/icons/PremiumIcons';
 
 interface OrderConfirmationClientProps {
   order: any;
@@ -15,7 +16,6 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
   const [order, setOrder] = useState(initialOrder);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
-
   const isConfirmed = order.orderStatus === 'confirmed';
   const isPending = order.orderStatus === 'pending';
 
@@ -41,7 +41,7 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
     }
   };
 
-  const handleOpenWhatsApp = () => {
+  const handleOpenWhatsApp = useCallback(() => {
     const url = buildWhatsAppOrderLink({
       customerName: order.customer?.name || '',
       items: (order.items || []).map((item: any) => ({
@@ -54,7 +54,7 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
       address,
     });
     window.open(url, '_blank');
-  };
+  }, [order, address]);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-[var(--border)] overflow-hidden">
@@ -65,13 +65,13 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <h1 className="text-4xl font-playfair font-bold mb-2">🎉 Order Placed Successfully!</h1>
-          <p className="opacity-90 text-lg">Thank you for shopping with So What Menswear.</p>
+          <h1 className="text-4xl font-playfair font-bold mb-2">Order Placed Successfully</h1>
+          <p className="opacity-90 text-lg">Thank you for shopping with Sowaat Menswear.</p>
         </div>
       ) : (
         <div className="bg-[#FEF3C7] text-[#92400E] p-10 text-center">
-          <div className="w-20 h-20 rounded-full bg-white/40 mx-auto flex items-center justify-center mb-6 text-3xl">
-            📱
+          <div className="w-20 h-20 rounded-full bg-white/40 mx-auto flex items-center justify-center mb-6">
+            <IconSmartphone size={40} strokeWidth={1.5} />
           </div>
           <h1 className="text-3xl font-playfair font-bold mb-2">Complete Your Order</h1>
           <p className="opacity-90 text-base max-w-lg mx-auto">
@@ -192,7 +192,10 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
               {confirming ? (
                 <span className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full" />
               ) : (
-                "✅ I've Sent the Message"
+                <>
+                  <IconCheckCircle size={20} />
+                  I&apos;ve Sent the Message
+                </>
               )}
             </button>
           </div>
@@ -200,7 +203,7 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
 
         {isConfirmed && (
           <div className="mt-12 text-center pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/orders">
+            <Link href="/account?tab=orders">
               <button className="btn-gold-outline rounded px-10 py-3 text-base">View My Orders</button>
             </Link>
             <Link href="/products">

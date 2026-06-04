@@ -8,12 +8,18 @@ export interface HomepageSectionRow {
   canDelete: boolean;
 }
 
+export type HeroMediaType = 'video' | 'image';
+
 export interface ISettings extends Document {
   activeHomepage: 'allensolly' | 'magazine' | 'catalogue';
   announcementText: string;
   instagramHandle: string;
   freeDeliveryAbove: number;
   whatsappNumber: string;
+  heroMediaType: HeroMediaType;
+  heroVideoUrl: string;
+  heroLinkedProductId: string;
+  heroLinkedProductSlug: string;
   homepageSections?: {
     catalogue?: HomepageSectionRow[];
     allensolly?: HomepageSectionRow[];
@@ -49,6 +55,14 @@ const SettingsSchema = new Schema<ISettings>(
     instagramHandle: { type: String, default: '@sowaatmenswear' },
     freeDeliveryAbove: { type: Number, default: 999 },
     whatsappNumber: { type: String, default: '+919876543210' },
+    heroMediaType: {
+      type: String,
+      enum: ['video', 'image'],
+      default: 'image',
+    },
+    heroVideoUrl: { type: String, default: '' },
+    heroLinkedProductId: { type: String, default: '' },
+    heroLinkedProductSlug: { type: String, default: '' },
     placeholders: {
       allensolly: {
         heroImage: { type: String, default: '' },

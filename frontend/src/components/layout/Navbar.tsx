@@ -36,6 +36,13 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
     router.push('/');
   };
 
+  const handleMyOrdersClick = (e: React.MouseEvent) => {
+    if (!isLoggedIn) {
+      e.preventDefault();
+      openAuthModal('/account?tab=orders');
+    }
+  };
+
   useEffect(() => {
     if (!dropdownOpen) return;
     const close = (e: MouseEvent) => {
@@ -65,11 +72,11 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
               </button>
               <Link href="/" className="flex-shrink-0">
-                <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={50} height={50} className="object-contain" />
+                <Image src="/sowaatlogo.jpeg" alt="Sowaat Menswear Logo" width={50} height={50} className="object-contain" />
               </Link>
             </div>
             <div className="flex items-center gap-5">
-              <Link href="/account?tab=orders" className="hidden md:block text-xs font-bold uppercase tracking-widest hover:text-[var(--gold)] transition-colors">My Orders</Link>
+              <Link href="/account?tab=orders" onClick={handleMyOrdersClick} className="hidden md:block text-xs font-bold uppercase tracking-widest hover:text-[var(--gold)] transition-colors">My Orders</Link>
               <button onClick={() => setSearchOpen(!searchOpen)} className="hover:text-[var(--gold)] transition-colors">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
               </button>
@@ -112,7 +119,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
                     <Link href="/account" onClick={() => setDropdownOpen(false)} className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)]">
                       My Account
                     </Link>
-                    <Link href="/account?tab=orders" onClick={() => setDropdownOpen(false)} className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)]">
+                    <Link href="/account?tab=orders" onClick={(e) => { handleMyOrdersClick(e); setDropdownOpen(false); }} className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)]">
                       My Orders
                     </Link>
                     <button type="button" onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)] border-t border-[var(--border)]">
@@ -138,7 +145,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMenuOpen(false)} />
           <div className={`absolute top-0 left-0 w-[80%] max-w-[300px] h-full bg-white transform transition-transform duration-300 ease-in-out flex flex-col ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={40} height={40} className="object-contain" />
+              <Image src="/sowaatlogo.jpeg" alt="Sowaat Menswear Logo" width={40} height={40} className="object-contain" />
               <button onClick={() => setMenuOpen(false)} className="p-2">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
@@ -147,7 +154,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
               <Link href="/products" className="flex items-center justify-between text-base font-medium" onClick={() => setMenuOpen(false)}>Shop All <span>→</span></Link>
               <hr className="border-[var(--border)] my-6" />
               <Link href="/account" className="block text-base text-[var(--text-secondary)]" onClick={() => setMenuOpen(false)}>My Account</Link>
-              <Link href="/account?tab=orders" className="block text-base text-[var(--text-secondary)]" onClick={() => setMenuOpen(false)}>My Orders</Link>
+              <Link href="/account?tab=orders" className="block text-base text-[var(--text-secondary)]" onClick={(e) => { handleMyOrdersClick(e); setMenuOpen(false); }}>My Orders</Link>
             </div>
           </div>
         </div>
@@ -184,7 +191,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
 
             {/* Logo - Center */}
             <Link href="/" className="absolute left-1/2 -translate-x-1/2 text-center w-full max-w-[200px] md:max-w-none flex justify-center">
-              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={80} height={50} className="object-contain h-10 w-auto md:h-12" />
+              <Image src="/sowaatlogo.jpeg" alt="Sowaat Menswear Logo" width={80} height={50} className="object-contain h-10 w-auto md:h-12" />
             </Link>
 
             {/* Right icons */}
@@ -235,7 +242,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
                     <Link href="/account" onClick={() => setDropdownOpen(false)} className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)]">
                       My Account
                     </Link>
-                    <Link href="/account?tab=orders" onClick={() => setDropdownOpen(false)} className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)]">
+                    <Link href="/account?tab=orders" onClick={(e) => { handleMyOrdersClick(e); setDropdownOpen(false); }} className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)]">
                       My Orders
                     </Link>
                     <button type="button" onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[#C9A84C]/15 hover:text-[var(--gold)] border-t border-[var(--border)]">
@@ -283,7 +290,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
           {/* Drawer Content */}
           <div className={`absolute top-0 left-0 w-[80%] max-w-[300px] h-full bg-white transform transition-transform duration-300 ease-in-out flex flex-col ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-              <Image src="/sowaatlogo.jpeg" alt="SoWhat Menswear Logo" width={40} height={40} className="object-contain" />
+              <Image src="/sowaatlogo.jpeg" alt="Sowaat Menswear Logo" width={40} height={40} className="object-contain" />
               <button onClick={() => setMenuOpen(false)} className="p-2">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
@@ -308,7 +315,7 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
               <Link href="/account" className="block text-base text-[var(--text-secondary)] hover:text-[var(--gold)] transition-colors" onClick={() => setMenuOpen(false)}>
                 My Account
               </Link>
-              <Link href="/account?tab=orders" className="block text-base text-[var(--text-secondary)] hover:text-[var(--gold)] transition-colors" onClick={() => setMenuOpen(false)}>
+              <Link href="/account?tab=orders" className="block text-base text-[var(--text-secondary)] hover:text-[var(--gold)] transition-colors" onClick={(e) => { handleMyOrdersClick(e); setMenuOpen(false); }}>
                 My Orders
               </Link>
               <Link href="/contact" className="block text-base text-[var(--text-secondary)] hover:text-[var(--gold)] transition-colors" onClick={() => setMenuOpen(false)}>

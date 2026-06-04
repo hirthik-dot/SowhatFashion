@@ -203,7 +203,7 @@ export default function PremiumNavbar({ overHero = true }: { overHero?: boolean 
                 textClass
               )}
             >
-              SOWHAT
+              SOWAAT
             </Link>
           </div>
 

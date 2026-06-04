@@ -7,6 +7,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { normalizeAuthUser, userInitials } from '@/lib/auth-user';
 import { getOrderStatusLabel } from '@/lib/utils';
+import { IconUser, IconPackage, IconHeart, IconMapPin } from '@/components/icons/PremiumIcons';
 
 type AccountTab = 'profile' | 'orders' | 'wishlist' | 'addresses';
 
@@ -16,7 +17,7 @@ function parseTabParam(raw: string | null): AccountTab {
 }
 
 function AccountContent() {
-  const { user, isLoggedIn, openAuthModal, logout } = useAuthStore();
+  const { user, isLoggedIn, authChecked, openAuthModal, logout } = useAuthStore();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<AccountTab>(() => parseTabParam(searchParams.get('tab')));
@@ -107,9 +108,9 @@ function AccountContent() {
   };
 
   useEffect(() => {
+    if (!authChecked) return;
+
     if (!isLoggedIn) {
-      router.push('/');
-      setTimeout(() => openAuthModal(), 100);
       return;
     }
 
@@ -145,14 +146,51 @@ function AccountContent() {
       }
     };
     fetchData();
-  }, [activeTab, isLoggedIn, router, openAuthModal, apiUrl]);
+  }, [activeTab, isLoggedIn, authChecked, apiUrl]);
 
-  if (!isLoggedIn || !user) {
+  if (!authChecked) {
     return (
       <>
         <Navbar />
         <div className="min-h-screen pt-24 pb-20 text-center text-[var(--text-secondary)] bg-[var(--bg)]">
-          Redirecting…
+          Loading…
+        </div>
+        <Footer />
+      </>
+    );
+  }
+
+  if (!isLoggedIn || !user) {
+    const tabLabel =
+      activeTab === 'orders'
+        ? 'orders'
+        : activeTab === 'wishlist'
+          ? 'wishlist'
+          : activeTab === 'addresses'
+            ? 'addresses'
+            : 'account';
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen pt-24 pb-20 px-4 text-center bg-[var(--bg)]">
+          <div className="max-w-md mx-auto">
+            <h1 className="text-2xl font-bold font-['Playfair_Display'] mb-3">Sign in required</h1>
+            <p className="text-[var(--text-secondary)] mb-8">
+              Please sign in with your email to view your {tabLabel}.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const tab = searchParams.get('tab');
+                const redirect =
+                  tab && tab !== 'profile' ? `/account?tab=${tab}` : '/account';
+                openAuthModal(redirect);
+              }}
+              className="bg-[#C9A84C] hover:bg-[#B59640] text-black font-bold py-3 px-8 rounded-lg tracking-wide transition-colors"
+            >
+              Sign in to continue
+            </button>
+          </div>
         </div>
         <Footer />
       </>
@@ -169,17 +207,17 @@ function AccountContent() {
 
       <div className="flex flex-col md:flex-row gap-8">
         <div className="w-full md:w-64 flex flex-col gap-2">
-           <button onClick={() => handleTabChange('profile')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'profile' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-             👤 Profile
+           <button onClick={() => handleTabChange('profile')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'profile' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+             <IconUser size={18} /> Profile
            </button>
-           <button onClick={() => handleTabChange('orders')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'orders' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-             📦 My Orders
+           <button onClick={() => handleTabChange('orders')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'orders' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+             <IconPackage size={18} /> My Orders
            </button>
-           <button onClick={() => handleTabChange('wishlist')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'wishlist' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-             ❤ Wishlist
+           <button onClick={() => handleTabChange('wishlist')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'wishlist' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+             <IconHeart size={18} /> Wishlist
            </button>
-           <button onClick={() => handleTabChange('addresses')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'addresses' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-             📍 Addresses
+           <button onClick={() => handleTabChange('addresses')} className={`text-left px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'addresses' ? 'bg-[#C9A84C] text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+             <IconMapPin size={18} /> Addresses
            </button>
            <button type="button" onClick={handleAccountLogout} className="text-left px-4 py-3 rounded-lg font-medium text-red-700 hover:bg-red-50 transition-colors mt-4 border border-red-200">
              Logout

@@ -3,10 +3,11 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import AuthModal from '@/components/shared/AuthModal';
 import SignInToast from '@/components/shared/SignInToast';
+import CartToast from '@/components/shared/CartToast';
 import { normalizeAuthUser } from '@/lib/auth-user';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { setUser, setWishlist } = useAuthStore();
+  const { setUser, setWishlist, setAuthChecked } = useAuthStore();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -35,15 +36,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         }
       } catch (err) {
         console.error('Failed to restore session:', err);
+      } finally {
+        setAuthChecked(true);
       }
     };
     checkAuth();
-  }, [setUser, setWishlist]);
+  }, [setUser, setWishlist, setAuthChecked]);
 
   return (
     <>
       {children}
       <SignInToast />
+      <CartToast />
       <AuthModal />
     </>
   );
