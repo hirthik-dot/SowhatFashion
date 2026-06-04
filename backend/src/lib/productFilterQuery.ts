@@ -14,8 +14,19 @@ const RESERVED_QUERY_KEYS = new Set([
   'discount',
   'promotions',
   'search',
+  'q',
   'inStock',
 ]);
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Case-insensitive match for a string value on an array field (tags, filterTags.*). */
+function arrayFieldMatchesValue(field: string, value: string): Record<string, unknown> {
+  const re = new RegExp(`^${escapeRegex(value.trim())}$`, 'i');
+  return { [field]: { $elemMatch: { $regex: re } } };
+}
 
 export function isReservedFilterQueryKey(key: string): boolean {
   return RESERVED_QUERY_KEYS.has(key);
@@ -41,14 +52,17 @@ export function buildFacetFilterCondition(filterKey: string, values: string[]): 
       if (values.includes('flash-sale')) or.push({ isFeatured: true });
       return or.length ? { $or: or } : null;
     }
-    default:
-      return {
-        $or: [
-          { [`filterTags.${filterKey}`]: { $in: values } },
-          { tags: { $in: values } },
-          { subCategory: { $in: values } },
-        ],
-      };
+    default: {
+      const or: Record<string, unknown>[] = [];
+      for (const v of values) {
+        const trimmed = v.trim();
+        if (!trimmed) continue;
+        or.push(arrayFieldMatchesValue(`filterTags.${filterKey}`, trimmed));
+        or.push(arrayFieldMatchesValue('tags', trimmed));
+        or.push({ subCategory: { $regex: new RegExp(`^${escapeRegex(trimmed)}$`, 'i') } });
+      }
+      return or.length ? { $or: or } : null;
+    }
   }
 }
 

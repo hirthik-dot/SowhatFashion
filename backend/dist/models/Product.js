@@ -38,6 +38,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const slugify_1 = __importDefault(require("slugify"));
+const SidebarConfig_1 = __importDefault(require("./SidebarConfig"));
+const productFilterTags_1 = require("../lib/productFilterTags");
 const ProductSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
     billingName: { type: String, trim: true, default: '' },
@@ -53,6 +55,11 @@ const ProductSchema = new mongoose_1.Schema({
     sizes: [{ type: String, trim: true }],
     stock: { type: Number, required: true, default: 0, min: 0 },
     tags: [{ type: String }],
+    filterTags: {
+        type: Map,
+        of: [String],
+        default: {},
+    },
     isFeatured: { type: Boolean, default: false },
     isNewArrival: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
@@ -77,6 +84,45 @@ ProductSchema.pre('save', function (next) {
         this.slug = (0, slugify_1.default)(this.name, { lower: true, strict: true });
     }
     next();
+});
+ProductSchema.pre('save', async function (next) {
+    try {
+        const relevant = this.isNew ||
+            this.isModified('category') ||
+            this.isModified('subCategory') ||
+            this.isModified('sizes') ||
+            this.isModified('tags') ||
+            this.isModified('price') ||
+            this.isModified('discountPrice') ||
+            this.isModified('isNewArrival') ||
+            this.isModified('isFeatured') ||
+            this.isModified('filterTags');
+        if (!relevant)
+            return next();
+        const config = await SidebarConfig_1.default.findOne();
+        const manual = {};
+        if (this.filterTags instanceof Map) {
+            this.filterTags.forEach((v, k) => {
+                if (Array.isArray(v) && v.length)
+                    manual[k] = v.map(String);
+            });
+        }
+        const merged = (0, productFilterTags_1.mergeFilterTags)({
+            category: this.category,
+            subCategory: this.subCategory,
+            sizes: this.sizes,
+            tags: this.tags,
+            price: this.price,
+            discountPrice: this.discountPrice,
+            isNewArrival: this.isNewArrival,
+            isFeatured: this.isFeatured,
+        }, manual, config?.filters || []);
+        this.set('filterTags', new Map(Object.entries(merged).filter(([, v]) => Array.isArray(v) && v.length > 0)));
+        next();
+    }
+    catch (err) {
+        next(err);
+    }
 });
 exports.default = mongoose_1.default.model('Product', ProductSchema);
 //# sourceMappingURL=Product.js.map

@@ -2,10 +2,20 @@ import { Router, Request, Response } from 'express';
 import Product from '../models/Product';
 import SidebarConfig from '../models/SidebarConfig';
 import authMiddleware from '../middleware/authMiddleware';
-import { mergeFilterTags } from '../lib/productFilterTags';
+import { mergeFilterTags, plainFilterTags, type FilterTagsMap } from '../lib/productFilterTags';
 import { buildFacetFilterCondition, collectFacetFiltersFromQuery } from '../lib/productFilterQuery';
 
 const router = Router();
+
+function filterTagsToMap(tags: FilterTagsMap): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const [key, values] of Object.entries(tags)) {
+    if (Array.isArray(values) && values.length > 0) {
+      map.set(key, values.map((v) => String(v)));
+    }
+  }
+  return map;
+}
 
 async function applyFilterTagsToBody(body: Record<string, unknown>) {
   const config = await SidebarConfig.findOne();
@@ -21,10 +31,10 @@ async function applyFilterTagsToBody(body: Record<string, unknown>) {
       isNewArrival: body.isNewArrival as boolean,
       isFeatured: body.isFeatured as boolean,
     },
-    body.filterTags as Record<string, string[]> | undefined,
+    body.filterTags as FilterTagsMap | undefined,
     sidebarFilters
   );
-  body.filterTags = merged;
+  body.filterTags = filterTagsToMap(merged);
 }
 
 // GET /api/products - all active products with filters
@@ -161,6 +171,38 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Product not found' });
     }
     res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+});
+
+// POST /api/products/backfill-filter-tags — populate filterTags on all products (protected)
+router.post('/backfill-filter-tags', authMiddleware, async (_req: Request, res: Response) => {
+  try {
+    const config = await SidebarConfig.findOne();
+    const sidebarFilters = config?.filters || [];
+    const products = await Product.find({});
+    let updated = 0;
+    for (const product of products) {
+      const merged = mergeFilterTags(
+        {
+          category: product.category,
+          subCategory: product.subCategory,
+          sizes: product.sizes,
+          tags: product.tags,
+          price: product.price,
+          discountPrice: product.discountPrice,
+          isNewArrival: product.isNewArrival,
+          isFeatured: product.isFeatured,
+        },
+        plainFilterTags(product),
+        sidebarFilters
+      );
+      product.set('filterTags', filterTagsToMap(merged));
+      await product.save();
+      updated++;
+    }
+    res.json({ message: 'Filter tags backfilled', updated });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }

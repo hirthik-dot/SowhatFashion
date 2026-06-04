@@ -16,7 +16,6 @@ import { newArrivalsPublicRoutes, newArrivalsAdminRoutes } from './routes/newArr
 import homepageSectionsRoutes from './routes/homepageSections';
 import orderRoutes from './routes/orders';
 import settingsRoutes from './routes/settings';
-import paymentRoutes from './routes/payment';
 import uploadRoutes from './routes/upload';
 import usersRoutes from './routes/users';
 import catalogueRoutes from './routes/catalogue';
@@ -120,7 +119,6 @@ app.use('/api/admin/new-arrivals', newArrivalsAdminRoutes);
 app.use('/api/homepage-sections', homepageSectionsRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/settings', settingsRoutes);
-app.use('/api/payment', paymentRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/catalogue', catalogueRoutes);

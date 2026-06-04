@@ -11,6 +11,8 @@ export interface IProduct extends Document {
     sizes: string[];
     stock: number;
     tags: string[];
+    /** Admin-assigned shop filter values keyed by filterKey (e.g. fit, fabric). Auto-filled on save when empty. */
+    filterTags?: Map<string, string[]> | Record<string, string[]>;
     isFeatured: boolean;
     isNewArrival: boolean;
     isActive: boolean;

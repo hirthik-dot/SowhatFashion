@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { getOrdersByCustomer } from '@/lib/api';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, getOrderStatusLabel } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function MyOrdersPage() {
@@ -154,12 +154,17 @@ export default function MyOrdersPage() {
                           order.orderStatus === 'delivered' ? 'bg-green-100 text-green-700' :
                           order.orderStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
                           order.orderStatus === 'shipped' ? 'bg-blue-100 text-blue-700' :
-                          'bg-orange-100 text-orange-700'
+                          order.orderStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          'bg-yellow-100 text-yellow-700'
                         }`}>
-                          {order.orderStatus}
+                          {getOrderStatusLabel(order.orderStatus)}
                         </span>
                         <span className="text-sm text-[var(--text-secondary)] font-medium">
-                          {order.orderStatus === 'delivered' ? 'Package has been delivered' : 'Expected delivery in 3-5 days'}
+                          {order.orderStatus === 'pending'
+                            ? 'Send your WhatsApp message to confirm'
+                            : order.orderStatus === 'delivered'
+                            ? 'Package has been delivered'
+                            : 'Expected delivery in 3-5 days'}
                         </span>
                       </div>
 

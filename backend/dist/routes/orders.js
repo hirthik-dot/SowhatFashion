@@ -128,12 +128,34 @@ router.get('/:id', async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
-// POST /api/orders - create order (public, after payment)
+// POST /api/orders - create order (public)
 router.post('/', async (req, res) => {
     try {
-        const order = new Order_1.default(req.body);
+        const order = new Order_1.default({
+            ...req.body,
+            orderStatus: 'pending',
+            paymentStatus: 'pending',
+        });
         await order.save();
         res.status(201).json(order);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+// PATCH /api/orders/:id/confirm - customer confirms WhatsApp message sent (public)
+router.patch('/:id/confirm', async (req, res) => {
+    try {
+        const order = await Order_1.default.findById(req.params.id);
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+        if (order.orderStatus !== 'pending') {
+            return res.status(400).json({ message: 'Order is not awaiting confirmation' });
+        }
+        order.orderStatus = 'confirmed';
+        await order.save();
+        res.json(order);
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });

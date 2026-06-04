@@ -85,7 +85,7 @@ export default function PremiumFooter({ instagramHandle }: { instagramHandle?: s
             <span>·</span>
             <span>UPI</span>
             <span>·</span>
-            <span>Razorpay</span>
+            <span>WhatsApp</span>
           </div>
         </div>
         <p className="text-center text-[10px] text-white/30 mt-4 md:hidden">{handle}</p>

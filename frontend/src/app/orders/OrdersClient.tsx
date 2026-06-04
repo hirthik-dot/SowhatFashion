@@ -2,14 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  pending: { bg: '#FEF3C7', text: '#92400E' },
-  confirmed: { bg: '#DBEAFE', text: '#1E40AF' },
-  shipped: { bg: '#EDE9FE', text: '#5B21B6' },
-  delivered: { bg: '#D1FAE5', text: '#065F46' },
-  cancelled: { bg: '#FEE2E2', text: '#991B1B' },
-};
+import { getOrderStatusLabel, getOrderStatusColors } from '@/lib/utils';
 
 function TrackerStep({ label, completed, active, failed }: { label: string, completed: boolean, active: boolean, failed?: boolean }) {
   return (
@@ -148,7 +141,7 @@ export default function OrdersClient({ theme }: { theme: string }) {
         <div className="space-y-6">
           {orders.map((order) => {
             const isExpanded = expandedId === order._id;
-            const statusColor = STATUS_COLORS[order.orderStatus] || STATUS_COLORS.pending;
+            const statusColor = getOrderStatusColors(order.orderStatus);
             const dateStr = new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
             
             return (
@@ -165,7 +158,7 @@ export default function OrdersClient({ theme }: { theme: string }) {
                         className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded"
                         style={{ backgroundColor: statusColor.bg, color: statusColor.text }}
                       >
-                        {order.orderStatus}
+                        {getOrderStatusLabel(order.orderStatus)}
                       </span>
                     </div>
                     <p className="text-gray-500 text-sm mb-4">{dateStr}</p>
@@ -219,8 +212,8 @@ export default function OrdersClient({ theme }: { theme: string }) {
                            </>
                          ) : (
                            <>
-                              <TrackerStep label="Order Placed" completed={true} active={order.orderStatus === 'pending'} />
-                              <TrackerStep label="Confirmed" completed={['confirmed', 'shipped', 'delivered'].includes(order.orderStatus)} active={order.orderStatus === 'confirmed'} />
+                              <TrackerStep label="Awaiting Confirmation" completed={false} active={order.orderStatus === 'pending'} />
+                              <TrackerStep label="Order Placed" completed={['confirmed', 'shipped', 'delivered'].includes(order.orderStatus)} active={order.orderStatus === 'confirmed'} />
                               <TrackerStep label="Shipped" completed={['shipped', 'delivered'].includes(order.orderStatus)} active={order.orderStatus === 'shipped'} />
                               <TrackerStep label="Delivered" completed={order.orderStatus === 'delivered'} active={order.orderStatus === 'delivered'} />
                            </>
@@ -235,7 +228,7 @@ export default function OrdersClient({ theme }: { theme: string }) {
                           <span>Total</span><span>₹{order.totalAmount}</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mt-2">
-                           Paid via Razorpay <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+                           Order via WhatsApp <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
                         </div>
                       </div>
                     </div>

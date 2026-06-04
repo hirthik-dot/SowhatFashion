@@ -94,6 +94,22 @@ export const createOrder = async (orderData: any) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(orderData),
   });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to create order');
+  }
+  return res.json();
+};
+
+export const confirmOrder = async (id: string) => {
+  const res = await fetch(`${API}/api/orders/${id}/confirm`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to confirm order');
+  }
   return res.json();
 };
 
@@ -109,25 +125,6 @@ export const getOrdersByCustomer = async (email: string, phone: string) => {
     body: JSON.stringify({ email, phone }),
   });
   if (!res.ok) throw new Error('Failed to fetch user orders');
-  return res.json();
-};
-
-// ============ PAYMENT ============
-export const createPaymentOrder = async (amount: number) => {
-  const res = await fetch(`${API}/api/payment/create-order`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount }),
-  });
-  return res.json();
-};
-
-export const verifyPayment = async (paymentData: any) => {
-  const res = await fetch(`${API}/api/payment/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(paymentData),
-  });
   return res.json();
 };
 

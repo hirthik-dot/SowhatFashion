@@ -296,7 +296,7 @@ router.get('/search', billingAuthMiddleware_1.billingAuthMiddleware, async (req,
         return res.json([]);
     const regex = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     const results = await StockItem_1.default.aggregate([
-        { $match: { status: 'available' } },
+        { $match: { status: { $in: [...stock_inventory_counts_1.BILLABLE_STATUSES] } } },
         {
             $lookup: {
                 from: 'products',
@@ -596,7 +596,7 @@ router.post('/complete', billingAuthMiddleware_1.billingAuthMiddleware, async (r
                 });
             }
             for (const barcode of barcodes) {
-                const updated = await StockItem_1.default.findOneAndUpdate({ barcode, status: 'available' }, { status: 'sold', soldInBill: completed._id });
+                const updated = await StockItem_1.default.findOneAndUpdate({ barcode, status: { $in: [...stock_inventory_counts_1.BILLABLE_STATUSES] } }, { status: 'sold', soldInBill: completed._id, returnedInReturn: null });
                 if (!updated) {
                     return res.status(400).json({ message: `Barcode not available: ${barcode}` });
                 }
@@ -788,7 +788,7 @@ router.put('/:id/edit', billingAuthMiddleware_1.billingAuthMiddleware, async (re
             await adjustProductSizeStock(productId, String(sourceItem?.size || released.size || ''), 1);
         }
         for (const barcode of addedBarcodes) {
-            const sold = await StockItem_1.default.findOneAndUpdate({ barcode, status: 'available' }, { status: 'sold', soldInBill: bill._id });
+            const sold = await StockItem_1.default.findOneAndUpdate({ barcode, status: { $in: [...stock_inventory_counts_1.BILLABLE_STATUSES] } }, { status: 'sold', soldInBill: bill._id, returnedInReturn: null });
             if (!sold) {
                 return res.status(400).json({ message: `Barcode not available: ${barcode}` });
             }

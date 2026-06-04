@@ -40,6 +40,7 @@ const express_1 = require("express");
 const MegaDropdown_1 = __importDefault(require("../models/MegaDropdown"));
 const SidebarConfig_1 = __importDefault(require("../models/SidebarConfig"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
+const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const router = (0, express_1.Router)();
 // ============ MEGA DROPDOWN ============
 // GET /api/catalogue/mega-dropdown/:category — public (cached by frontend ISR)
@@ -191,6 +192,7 @@ router.put('/admin/sidebar-config', authMiddleware_1.default, async (req, res) =
             config = new SidebarConfig_1.default({ filters });
             await config.save();
         }
+        await (0, revalidateFrontend_1.triggerRevalidate)(['/products', '/']);
         res.json(config);
     }
     catch (error) {
@@ -241,17 +243,76 @@ router.get('/product-counts', async (req, res) => {
                     discountBuckets['50']++;
             }
         });
+        const config = await SidebarConfig_1.default.findOne();
+        const facets = {};
+        const customFilters = (config?.filters || []).filter((f) => f.filterKey &&
+            f.filterKey !== 'price' &&
+            !['size', 'category', 'promotions', 'discount'].includes(f.filterKey));
+        const taggedProducts = customFilters.length > 0
+            ? await Product.find(baseFilter).select('filterTags tags subCategory').lean()
+            : [];
+        for (const f of config?.filters || []) {
+            const key = f.filterKey;
+            if (!key || key === 'price')
+                continue;
+            if (key === 'size') {
+                facets.size = sizes;
+                continue;
+            }
+            if (key === 'category') {
+                facets.category = categories;
+                continue;
+            }
+            if (key === 'promotions') {
+                facets.promotions = {
+                    'new-arrivals': newArrivalsCount,
+                    'flash-sale': featuredCount,
+                    'combo-offers': 0,
+                    '50-off': discountBuckets['50'],
+                };
+                continue;
+            }
+            if (key === 'discount') {
+                facets.discount = discountBuckets;
+                continue;
+            }
+            const bucket = {};
+            for (const opt of f.options || []) {
+                bucket[opt.value] = 0;
+            }
+            taggedProducts.forEach((p) => {
+                const tagMap = p.filterTags instanceof Map ? Object.fromEntries(p.filterTags) : p.filterTags || {};
+                const values = tagMap[key];
+                if (values?.length) {
+                    values.forEach((v) => {
+                        if (bucket[v] != null)
+                            bucket[v]++;
+                    });
+                    return;
+                }
+                const productTags = (p.tags || []).map((t) => t.toLowerCase());
+                const sub = String(p.subCategory || '').toLowerCase();
+                for (const opt of f.options || []) {
+                    const val = opt.value.toLowerCase();
+                    if (productTags.includes(val) || sub === val) {
+                        bucket[opt.value] = (bucket[opt.value] || 0) + 1;
+                    }
+                }
+            });
+            facets[key] = bucket;
+        }
         res.json({
             total: totalCount,
             size: sizes,
             category: categories,
             promotions: {
                 'new-arrivals': newArrivalsCount,
-                'flash-sale': featuredCount, // map featured to flash sale for demo
+                'flash-sale': featuredCount,
                 'combo-offers': 0,
                 '50-off': discountBuckets['50'],
             },
             discount: discountBuckets,
+            facets,
         });
     }
     catch (error) {

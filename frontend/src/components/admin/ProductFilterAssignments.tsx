@@ -25,7 +25,14 @@ export default function ProductFilterAssignments({ filterTags, onChange, product
 
   useEffect(() => {
     adminGetSidebarConfig()
-      .then((data) => setFilters((data.filters || []).filter((f: SidebarFilterConfig) => f.isVisible && f.type !== 'range_slider' && !SKIP_KEYS.has(f.filterKey)))
+      .then((data) =>
+        setFilters(
+          (data.filters || []).filter(
+            (f: SidebarFilterConfig) =>
+              f.isVisible && (f.type !== 'range_slider') && !SKIP_KEYS.has(f.filterKey),
+          ),
+        ),
+      )
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

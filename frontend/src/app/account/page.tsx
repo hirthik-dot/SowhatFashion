@@ -6,6 +6,7 @@ import ProductCard from '@/components/shared/ProductCard';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { normalizeAuthUser, userInitials } from '@/lib/auth-user';
+import { getOrderStatusLabel } from '@/lib/utils';
 
 type AccountTab = 'profile' | 'orders' | 'wishlist' | 'addresses';
 
@@ -266,10 +267,11 @@ function AccountContent() {
                               <p className="font-bold text-[#C9A84C]">₹{o.totalAmount || o.total}</p>
                               <span className={`text-xs px-3 py-1 font-semibold rounded-full uppercase tracking-wider ${
                                 o.orderStatus === 'delivered' ? 'bg-green-100 text-green-700' :
+                                o.orderStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
                                 o.orderStatus === 'shipped' ? 'bg-blue-100 text-blue-700' :
                                 o.orderStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
                                 'bg-yellow-100 text-yellow-700'
-                              }`}>{o.orderStatus || o.status}</span>
+                              }`}>{getOrderStatusLabel(o.orderStatus || o.status)}</span>
                             </div>
                           </div>
                           

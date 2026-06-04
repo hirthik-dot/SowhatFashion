@@ -1,5 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import slugify from 'slugify';
+import SidebarConfig from './SidebarConfig';
+import { mergeFilterTags, type FilterTagsMap } from '../lib/productFilterTags';
 
 export interface IProduct extends Document {
   name: string;
@@ -14,7 +16,7 @@ export interface IProduct extends Document {
   stock: number;
   tags: string[];
   /** Admin-assigned shop filter values keyed by filterKey (e.g. fit, fabric). Auto-filled on save when empty. */
-  filterTags?: Record<string, string[]>;
+  filterTags?: Map<string, string[]> | Record<string, string[]>;
   isFeatured: boolean;
   isNewArrival: boolean;
   isActive: boolean;
@@ -79,6 +81,55 @@ ProductSchema.pre('save', function (next) {
     this.slug = slugify(this.name, { lower: true, strict: true });
   }
   next();
+});
+
+ProductSchema.pre('save', async function (next) {
+  try {
+    const relevant =
+      this.isNew ||
+      this.isModified('category') ||
+      this.isModified('subCategory') ||
+      this.isModified('sizes') ||
+      this.isModified('tags') ||
+      this.isModified('price') ||
+      this.isModified('discountPrice') ||
+      this.isModified('isNewArrival') ||
+      this.isModified('isFeatured') ||
+      this.isModified('filterTags');
+
+    if (!relevant) return next();
+
+    const config = await SidebarConfig.findOne();
+    const manual: FilterTagsMap = {};
+    if (this.filterTags instanceof Map) {
+      this.filterTags.forEach((v, k) => {
+        if (Array.isArray(v) && v.length) manual[k] = v.map(String);
+      });
+    }
+
+    const merged = mergeFilterTags(
+      {
+        category: this.category,
+        subCategory: this.subCategory,
+        sizes: this.sizes,
+        tags: this.tags,
+        price: this.price,
+        discountPrice: this.discountPrice,
+        isNewArrival: this.isNewArrival,
+        isFeatured: this.isFeatured,
+      },
+      manual,
+      config?.filters || []
+    );
+
+    this.set(
+      'filterTags',
+      new Map(Object.entries(merged).filter(([, v]) => Array.isArray(v) && v.length > 0) as [string, string[]][])
+    );
+    next();
+  } catch (err) {
+    next(err as Error);
+  }
 });
 
 export default mongoose.model<IProduct>('Product', ProductSchema);
