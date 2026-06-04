@@ -1,8 +1,31 @@
 import { Router, Request, Response } from 'express';
 import Product from '../models/Product';
+import SidebarConfig from '../models/SidebarConfig';
 import authMiddleware from '../middleware/authMiddleware';
+import { mergeFilterTags } from '../lib/productFilterTags';
+import { buildFacetFilterCondition, collectFacetFiltersFromQuery } from '../lib/productFilterQuery';
 
 const router = Router();
+
+async function applyFilterTagsToBody(body: Record<string, unknown>) {
+  const config = await SidebarConfig.findOne();
+  const sidebarFilters = config?.filters || [];
+  const merged = mergeFilterTags(
+    {
+      category: body.category as string,
+      subCategory: body.subCategory as string,
+      sizes: body.sizes as string[],
+      tags: body.tags as string[],
+      price: body.price as number,
+      discountPrice: body.discountPrice as number,
+      isNewArrival: body.isNewArrival as boolean,
+      isFeatured: body.isFeatured as boolean,
+    },
+    body.filterTags as Record<string, string[]> | undefined,
+    sidebarFilters
+  );
+  body.filterTags = merged;
+}
 
 // GET /api/products - all active products with filters
 router.get('/', async (req: Request, res: Response) => {
@@ -53,6 +76,15 @@ router.get('/', async (req: Request, res: Response) => {
     // Search filter
     if (search) {
       filter.name = { $regex: search, $options: 'i' };
+    }
+
+    // Custom facet filters from sidebar config (e.g. ?fit=slim,regular)
+    const facetFilters = collectFacetFiltersFromQuery(req.query as Record<string, unknown>);
+    const facetConditions = Object.entries(facetFilters)
+      .map(([key, values]) => buildFacetFilterCondition(key, values))
+      .filter(Boolean) as Record<string, unknown>[];
+    if (facetConditions.length) {
+      filter.$and = [...(filter.$and || []), ...facetConditions];
     }
 
     let sortObj: any = { createdAt: -1 };
@@ -108,6 +140,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
 // POST /api/products - create product (protected)
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
+    await applyFilterTagsToBody(req.body);
     const product = new Product(req.body);
     await product.save();
     res.status(201).json(product);
@@ -119,6 +152,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 // PUT /api/products/:id - update product (protected)
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
+    await applyFilterTagsToBody(req.body);
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,

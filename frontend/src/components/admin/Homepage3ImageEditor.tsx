@@ -88,12 +88,19 @@ export default function Homepage3ImageEditor({
     setDirty(true);
   }, []);
 
+  const syncHeroCarousel = (next: Homepage3Placeholders, desktopUrl?: string) => {
+    if (desktopUrl) next.carouselImages = [desktopUrl];
+  };
+
   const applyStock = (url: string, alt: string) => {
     if (!stockTarget) return;
     const next = { ...draft };
     if (stockTarget.type === 'field') {
       (next as Record<string, unknown>)[stockTarget.field] = url;
-      if (stockTarget.field === 'heroDesktop') next.heroDesktopAlt = alt;
+      if (stockTarget.field === 'heroDesktop') {
+        next.heroDesktopAlt = alt;
+        syncHeroCarousel(next, url);
+      }
       if (stockTarget.field === 'heroMobile') next.heroMobileAlt = alt;
       if (stockTarget.field === 'brandStoryImage') next.brandStoryAlt = alt;
     } else if (stockTarget.type === 'carousel') {
@@ -122,6 +129,7 @@ export default function Homepage3ImageEditor({
       const next = { ...draft };
       if (t.type === 'field') {
         (next as Record<string, unknown>)[t.field] = res.url;
+        if (t.field === 'heroDesktop') syncHeroCarousel(next, res.url);
       } else if (t.type === 'carousel') {
         const arr = [...(next.carouselImages || [])];
         arr[t.index] = res.url;
@@ -152,11 +160,15 @@ export default function Homepage3ImageEditor({
   const saveAll = async () => {
     setSaving(true);
     try {
+      const catalogue = { ...draft };
+      if (catalogue.heroDesktop) {
+        catalogue.carouselImages = [catalogue.heroDesktop];
+      }
       await adminUpdateSettings({
         ...settings,
         placeholders: {
           ...settings?.placeholders,
-          catalogue: draft,
+          catalogue,
         },
       });
       setDirty(false);

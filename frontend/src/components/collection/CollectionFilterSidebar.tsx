@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { COLLECTION_FILTER_GROUPS, type FilterGroup } from '@/lib/collection-filters';
+import type { FilterGroup } from '@/lib/collection-filters';
+import { DEFAULT_FILTER_GROUPS } from '@/lib/sidebar-filters-default';
 import { cn } from '@/lib/utils';
 
 type Draft = Record<string, string | string[] | boolean>;
@@ -12,6 +13,7 @@ type Props = {
   onClear: () => void;
   onApply: () => void;
   resultCount: number;
+  filterGroups?: FilterGroup[];
   className?: string;
 };
 
@@ -24,7 +26,7 @@ function FilterSection({
   draft: Draft;
   onChange: (d: Draft) => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const key = group.paramKey || group.id;
 
   const toggleCheckbox = (value: string) => {
@@ -59,8 +61,11 @@ function FilterSection({
   }
 
   if (group.type === 'price-range') {
-    const min = Number(draft.minPrice) || 0;
-    const max = Number(draft.maxPrice) || 15000;
+    const rangeMin = group.rangeMin ?? 0;
+    const rangeMax = group.rangeMax ?? 15000;
+    const rangeStep = group.rangeStep ?? 100;
+    const min = Number(draft.minPrice) || rangeMin;
+    const max = Number(draft.maxPrice) || rangeMax;
     return (
       <div className="border-b border-[#E8E4DF] py-4">
         <button type="button" className="w-full flex justify-between items-center mb-4" onClick={() => setOpen(!open)}>
@@ -71,9 +76,9 @@ function FilterSection({
           <div className="space-y-3">
             <input
               type="range"
-              min={0}
-              max={15000}
-              step={100}
+              min={rangeMin}
+              max={rangeMax}
+              step={rangeStep}
               value={max}
               onChange={(e) => onChange({ ...draft, maxPrice: e.target.value, minPrice: String(min) })}
               className="w-full accent-[#111]"
@@ -150,7 +155,7 @@ function FilterSection({
               })}
             </div>
           )}
-          {group.type === 'checkbox' && (
+          {(group.type === 'checkbox' || group.type === 'radio') && (
             <ul className="space-y-2 max-h-[200px] overflow-y-auto">
               {group.options?.map((opt) => {
                 const checked = ((draft[key] as string[]) || []).includes(opt.value);
@@ -158,14 +163,23 @@ function FilterSection({
                   <li key={opt.value}>
                     <label className="flex items-center gap-2 cursor-pointer text-sm text-[#333]">
                       <input
-                        type="checkbox"
+                        type={group.type === 'radio' ? 'radio' : 'checkbox'}
+                        name={group.type === 'radio' ? key : undefined}
                         checked={checked}
-                        onChange={() => toggleCheckbox(opt.value)}
+                        onChange={() => {
+                          if (group.type === 'radio') {
+                            onChange({ ...draft, [key]: checked ? [] : [opt.value] });
+                          } else {
+                            toggleCheckbox(opt.value);
+                          }
+                        }}
                         className="w-4 h-4 accent-[#111]"
                       />
                       <span>
                         {opt.label}
-                        {opt.count != null && <span className="text-[#999] ml-1">({opt.count})</span>}
+                        {opt.count != null && opt.count > 0 && (
+                          <span className="text-[#999] ml-1">({opt.count})</span>
+                        )}
                       </span>
                     </label>
                   </li>
@@ -201,25 +215,28 @@ export default function CollectionFilterSidebar({
   onClear,
   onApply,
   resultCount,
+  filterGroups,
   className,
 }: Props) {
+  const groups = filterGroups?.length ? filterGroups : DEFAULT_FILTER_GROUPS;
+
   return (
-    <aside className={cn('flex flex-col', className)}>
-      <div className="flex items-center justify-between mb-4">
+    <aside className={cn('flex h-full min-h-0 flex-col', className)}>
+      <div className="flex shrink-0 items-center justify-between mb-4">
         <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[#111]">FILTERS</span>
         <button type="button" onClick={onClear} className="text-[11px] uppercase tracking-wider underline text-[#666]">
           CLEAR ALL
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto pr-2 -mr-2">
-        {COLLECTION_FILTER_GROUPS.map((g) => (
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 -mr-2">
+        {groups.map((g) => (
           <FilterSection key={g.id} group={g} draft={draft} onChange={onChange} />
         ))}
       </div>
       <button
         type="button"
         onClick={onApply}
-        className="mt-6 w-full bg-[#111] text-white text-[11px] uppercase tracking-[0.15em] py-4 font-semibold hover:bg-black/90 sticky bottom-0"
+        className="mt-4 w-full shrink-0 bg-[#111] text-white text-[11px] uppercase tracking-[0.15em] py-4 font-semibold hover:bg-black/90"
       >
         VIEW {resultCount} RESULTS
       </button>

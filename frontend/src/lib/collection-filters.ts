@@ -3,9 +3,12 @@ export type FilterOption = { label: string; value: string; count?: number };
 export type FilterGroup = {
   id: string;
   label: string;
-  type: 'checkbox' | 'size-buttons' | 'color-swatches' | 'price-range' | 'toggle';
+  type: 'checkbox' | 'radio' | 'size-buttons' | 'color-swatches' | 'price-range' | 'toggle';
   options?: FilterOption[];
   paramKey?: string;
+  rangeMin?: number;
+  rangeMax?: number;
+  rangeStep?: number;
 };
 
 export const COLLECTION_FILTER_GROUPS: FilterGroup[] = [

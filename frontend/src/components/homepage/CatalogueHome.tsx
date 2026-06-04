@@ -68,14 +68,17 @@ export default function CatalogueHome({
     [settings]
   );
   const heroSlides: string[] = useMemo(() => {
-    const fromSettings = p.carouselImages?.filter(Boolean);
-    if (fromSettings?.length) return fromSettings as string[];
+    const desktop = p.heroDesktop?.trim();
+    if (desktop) return [desktop];
+    const fromCarousel = p.carouselImages?.filter(Boolean);
+    if (fromCarousel?.length) return fromCarousel as string[];
     if (carouselOffers?.length) {
       return carouselOffers.map((o: any) => o.image || o.bannerImage).filter(Boolean);
     }
-    const desktop = p.heroDesktop;
-    return desktop ? [desktop] : [];
+    return [];
   }, [p, carouselOffers]);
+
+  const heroMobileSrc = p.heroMobile?.trim() || heroSlides[0];
 
   const categoryTiles = p.categoryTiles || DEFAULT_CATEGORY_TILES;
   const row1 = categoryTiles.slice(0, 3);
@@ -155,11 +158,25 @@ export default function CatalogueHome({
             )}
           >
             <Image
-              src={src}
-              alt="Hero"
+              src={i === 0 ? heroMobileSrc : src}
+              alt={p.heroMobileAlt || p.heroDesktopAlt || 'Hero'}
               fill
               priority={i === 0}
-              className={cn('object-cover', i === heroIndex && 'animate-ken-burns')}
+              className={cn(
+                'object-cover md:hidden',
+                i === heroIndex && 'animate-ken-burns'
+              )}
+              sizes="100vw"
+            />
+            <Image
+              src={src}
+              alt={p.heroDesktopAlt || 'Hero'}
+              fill
+              priority={i === 0}
+              className={cn(
+                'object-cover hidden md:block',
+                i === heroIndex && 'animate-ken-burns'
+              )}
               sizes="100vw"
             />
           </div>

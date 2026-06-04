@@ -341,8 +341,14 @@ function SidebarFilterEditor() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-bold">Sidebar Filters Editor</h2>
-        <button onClick={() => setShowAddModal(true)} className="text-sm font-semibold text-[var(--gold)] hover:underline">+ Add Filter</button>
+        <div>
+          <h2 className="text-lg font-bold">Sidebar Filters Editor</h2>
+          <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-2xl">
+            Filters shown on the products page. Assign products to options under{' '}
+            <strong>Products → Shop Filter Categories</strong>, or leave empty to auto-assign from category, sizes, and tags on save.
+          </p>
+        </div>
+        <button onClick={() => setShowAddModal(true)} className="text-sm font-semibold text-[var(--gold)] hover:underline shrink-0">+ Add Filter</button>
       </div>
 
       <div className="space-y-3 mb-8">

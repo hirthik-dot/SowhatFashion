@@ -28,7 +28,7 @@ router.put('/', authMiddleware, async (req: Request, res: Response) => {
       Object.assign(settings, req.body);
       await settings.save();
     }
-    if (req.body?.homepageSections) {
+    if (req.body?.homepageSections || req.body?.placeholders) {
       await triggerRevalidate(['/']);
     }
     res.json(settings);

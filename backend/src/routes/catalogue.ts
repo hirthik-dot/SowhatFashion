@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import MegaDropdown from '../models/MegaDropdown';
 import SidebarConfig from '../models/SidebarConfig';
 import authMiddleware from '../middleware/authMiddleware';
+import { triggerRevalidate } from '../lib/revalidateFrontend';
 
 const router = Router();
 
@@ -164,6 +165,7 @@ router.put('/admin/sidebar-config', authMiddleware, async (req: Request, res: Re
       await config.save();
     }
 
+    await triggerRevalidate(['/products', '/']);
     res.json(config);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -222,17 +224,82 @@ router.get('/product-counts', async (req: Request, res: Response) => {
       }
     });
 
+    const config = await SidebarConfig.findOne();
+    const facets: Record<string, Record<string, number>> = {};
+    const customFilters = (config?.filters || []).filter(
+      (f) =>
+        f.filterKey &&
+        f.filterKey !== 'price' &&
+        !['size', 'category', 'promotions', 'discount'].includes(f.filterKey)
+    );
+    const taggedProducts =
+      customFilters.length > 0
+        ? await Product.find(baseFilter).select('filterTags tags subCategory').lean()
+        : [];
+
+    for (const f of config?.filters || []) {
+      const key = f.filterKey;
+      if (!key || key === 'price') continue;
+
+      if (key === 'size') {
+        facets.size = sizes;
+        continue;
+      }
+      if (key === 'category') {
+        facets.category = categories;
+        continue;
+      }
+      if (key === 'promotions') {
+        facets.promotions = {
+          'new-arrivals': newArrivalsCount,
+          'flash-sale': featuredCount,
+          'combo-offers': 0,
+          '50-off': discountBuckets['50'],
+        };
+        continue;
+      }
+      if (key === 'discount') {
+        facets.discount = discountBuckets;
+        continue;
+      }
+
+      const bucket: Record<string, number> = {};
+      for (const opt of f.options || []) {
+        bucket[opt.value] = 0;
+      }
+      taggedProducts.forEach((p: any) => {
+        const tagMap = p.filterTags instanceof Map ? Object.fromEntries(p.filterTags) : p.filterTags || {};
+        const values = tagMap[key] as string[] | undefined;
+        if (values?.length) {
+          values.forEach((v: string) => {
+            if (bucket[v] != null) bucket[v]++;
+          });
+          return;
+        }
+        const productTags = (p.tags || []).map((t: string) => t.toLowerCase());
+        const sub = String(p.subCategory || '').toLowerCase();
+        for (const opt of f.options || []) {
+          const val = opt.value.toLowerCase();
+          if (productTags.includes(val) || sub === val) {
+            bucket[opt.value] = (bucket[opt.value] || 0) + 1;
+          }
+        }
+      });
+      facets[key] = bucket;
+    }
+
     res.json({
       total: totalCount,
       size: sizes,
       category: categories,
       promotions: {
         'new-arrivals': newArrivalsCount,
-        'flash-sale': featuredCount, // map featured to flash sale for demo
+        'flash-sale': featuredCount,
         'combo-offers': 0,
         '50-off': discountBuckets['50'],
       },
       discount: discountBuckets,
+      facets,
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });

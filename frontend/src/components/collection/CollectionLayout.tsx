@@ -6,38 +6,53 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import CollectionFilterSidebar from './CollectionFilterSidebar';
 import CollectionProductCard from './CollectionProductCard';
 import { SORT_OPTIONS, SEO_SHOP_LINKS } from '@/lib/collection-filters';
+import {
+  sidebarConfigToFilterGroups,
+  getFacetParamKeys,
+  type SidebarFilterConfig,
+  type ProductCountsResponse,
+} from '@/lib/sidebar-filters';
+import { DEFAULT_FILTER_GROUPS } from '@/lib/sidebar-filters-default';
 import { cn } from '@/lib/utils';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 const PAGE_SIZE = 24;
 
-function parseDraftFromParams(params: URLSearchParams): Record<string, string | string[] | boolean> {
+function parseDraftFromParams(
+  params: URLSearchParams,
+  facetKeys: string[]
+): Record<string, string | string[] | boolean> {
   const draft: Record<string, string | string[] | boolean> = {};
   if (params.get('minPrice')) draft.minPrice = params.get('minPrice')!;
   if (params.get('maxPrice')) draft.maxPrice = params.get('maxPrice')!;
   if (params.get('inStock') === 'true') draft.inStock = true;
-  const multiKeys = ['size', 'fit', 'collar', 'sleeves', 'neck', 'fabric', 'pattern', 'color', 'occasion'];
-  multiKeys.forEach((k) => {
+  facetKeys.forEach((k) => {
     const v = params.get(k);
-    if (v) draft[k] = v.split(',');
+    if (v) draft[k] = v.split(',').filter(Boolean);
   });
   return draft;
 }
 
-function draftToQuery(draft: Record<string, string | string[] | boolean>, base: URLSearchParams) {
+function draftToQuery(
+  draft: Record<string, string | string[] | boolean>,
+  base: URLSearchParams,
+  facetKeys: string[],
+  priceMax = 15000
+) {
   const p = new URLSearchParams(base.toString());
-  ['fit', 'collar', 'sleeves', 'neck', 'fabric', 'pattern', 'color', 'occasion', 'inStock'].forEach((k) =>
-    p.delete(k)
-  );
+  facetKeys.forEach((k) => p.delete(k));
+  p.delete('inStock');
   if (draft.minPrice) p.set('minPrice', String(draft.minPrice));
   else p.delete('minPrice');
-  if (draft.maxPrice && Number(draft.maxPrice) < 15000) p.set('maxPrice', String(draft.maxPrice));
+  if (draft.maxPrice && Number(draft.maxPrice) < priceMax) p.set('maxPrice', String(draft.maxPrice));
   else p.delete('maxPrice');
   if (draft.inStock) p.set('inStock', 'true');
   else p.delete('inStock');
-  const sizes = draft.size as string[] | undefined;
-  if (sizes?.length) p.set('size', sizes.join(','));
-  else p.delete('size');
+  facetKeys.forEach((k) => {
+    const val = draft[k];
+    if (Array.isArray(val) && val.length) p.set(k, val.join(','));
+    else p.delete(k);
+  });
   return p;
 }
 
@@ -60,8 +75,12 @@ function CollectionLayoutInner({
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [seoOpen, setSeoOpen] = useState(false);
+  const [filterGroups, setFilterGroups] = useState(DEFAULT_FILTER_GROUPS);
+  const [facetKeys, setFacetKeys] = useState<string[]>(() => getFacetParamKeys(DEFAULT_FILTER_GROUPS));
+  const [priceMax, setPriceMax] = useState(15000);
+
   const [draft, setDraft] = useState<Record<string, string | string[] | boolean>>(() =>
-    parseDraftFromParams(searchParams)
+    parseDraftFromParams(searchParams, getFacetParamKeys(DEFAULT_FILTER_GROUPS))
   );
 
   const page = parseInt(searchParams.get('page') || '1', 10);
@@ -126,6 +145,27 @@ function CollectionLayoutInner({
   }, [fetchProducts]);
 
   useEffect(() => {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const cat = searchParams.get('category') || '';
+    Promise.all([
+      fetch(`${API_BASE}/api/catalogue/sidebar-config`).then((r) => r.json()),
+      fetch(`${API_BASE}/api/catalogue/product-counts${cat ? `?category=${cat}` : ''}`).then((r) => r.json()),
+    ])
+      .then(([config, counts]: [{ filters?: SidebarFilterConfig[] }, ProductCountsResponse]) => {
+        const filters = config?.filters?.length ? config.filters : [];
+        const groups = filters.length
+          ? sidebarConfigToFilterGroups(filters, counts)
+          : DEFAULT_FILTER_GROUPS;
+        setFilterGroups(groups);
+        const keys = getFacetParamKeys(groups);
+        setFacetKeys(keys);
+        const priceGroup = groups.find((g) => g.type === 'price-range');
+        if (priceGroup?.rangeMax) setPriceMax(priceGroup.rangeMax);
+      })
+      .catch(() => {});
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!initialParams || Object.keys(initialParams).length === 0) return;
     const p = new URLSearchParams(searchParams.toString());
     let changed = false;
@@ -139,11 +179,11 @@ function CollectionLayoutInner({
   }, [initialParams, pathname, router, searchParams]);
 
   useEffect(() => {
-    setDraft(parseDraftFromParams(searchParams));
-  }, [searchParams]);
+    setDraft(parseDraftFromParams(searchParams, facetKeys));
+  }, [searchParams, facetKeys]);
 
   const applyDraft = () => {
-    const p = draftToQuery(draft, searchParams);
+    const p = draftToQuery(draft, searchParams, facetKeys, priceMax);
     p.delete('page');
     router.push(`${pathname}?${p.toString()}`);
     setMobileFiltersOpen(false);
@@ -155,6 +195,9 @@ function CollectionLayoutInner({
     if (search) p.set('search', search);
     if (newArrival) p.set('newArrival', 'true');
     if (featured) p.set('featured', 'true');
+    ['minPrice', 'maxPrice', 'inStock', 'size', 'promotions', 'discount', ...facetKeys].forEach((k) =>
+      p.delete(k)
+    );
     setDraft({});
     router.push(`${pathname}?${p.toString()}`);
     setMobileFiltersOpen(false);
@@ -242,16 +285,17 @@ function CollectionLayoutInner({
         </div>
       </div>
 
-      <div className="flex gap-8 lg:gap-12">
-        {/* Desktop sidebar */}
-        <div className="hidden lg:block w-[280px] shrink-0">
-          <div className="sticky top-[120px] max-h-[calc(100vh-140px)] flex flex-col">
+      <div className="flex items-start gap-8 lg:gap-12">
+        {/* Desktop sidebar — viewport-height panel with internal scroll */}
+        <div className="hidden lg:block w-[280px] shrink-0 self-start">
+          <div className="sticky top-[104px] z-30 h-[calc(100vh-104px)] min-h-[320px]">
             <CollectionFilterSidebar
               draft={draft}
               onChange={setDraft}
               onClear={clearFilters}
               onApply={applyDraft}
               resultCount={total}
+              filterGroups={filterGroups}
             />
           </div>
         </div>
@@ -372,6 +416,7 @@ function CollectionLayoutInner({
                 onClear={clearFilters}
                 onApply={applyDraft}
                 resultCount={total}
+                filterGroups={filterGroups}
               />
             </div>
           </div>

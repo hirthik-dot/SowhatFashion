@@ -13,6 +13,8 @@ export interface IProduct extends Document {
   sizes: string[];
   stock: number;
   tags: string[];
+  /** Admin-assigned shop filter values keyed by filterKey (e.g. fit, fabric). Auto-filled on save when empty. */
+  filterTags?: Record<string, string[]>;
   isFeatured: boolean;
   isNewArrival: boolean;
   isActive: boolean;
@@ -45,6 +47,11 @@ const ProductSchema = new Schema<IProduct>(
     sizes: [{ type: String, trim: true }],
     stock: { type: Number, required: true, default: 0, min: 0 },
     tags: [{ type: String }],
+    filterTags: {
+      type: Map,
+      of: [String],
+      default: {},
+    },
     isFeatured: { type: Boolean, default: false },
     isNewArrival: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },

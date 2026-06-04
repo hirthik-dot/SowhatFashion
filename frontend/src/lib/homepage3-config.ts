@@ -68,7 +68,11 @@ export function mergeHomepage3Placeholders(stored?: Homepage3Placeholders | null
     ...DEFAULT_HOMEPAGE3_PLACEHOLDERS,
     ...stored,
     categoryTiles: stored.categoryTiles?.length ? stored.categoryTiles : DEFAULT_CATEGORY_TILES,
-    carouselImages: stored.carouselImages?.length ? stored.carouselImages : DEFAULT_HOMEPAGE3_PLACEHOLDERS.carouselImages,
+    carouselImages: stored.carouselImages?.length
+      ? stored.carouselImages
+      : stored.heroDesktop
+        ? [stored.heroDesktop]
+        : DEFAULT_HOMEPAGE3_PLACEHOLDERS.carouselImages,
     instagramImages: stored.instagramImages?.length ? stored.instagramImages : DEFAULT_HOMEPAGE3_PLACEHOLDERS.instagramImages,
   };
 }

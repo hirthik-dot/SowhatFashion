@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage, adminGetCategories } from '@/lib/api';
+import ProductFilterAssignments from '@/components/admin/ProductFilterAssignments';
 import { formatPrice } from '@/lib/utils';
 import Image from 'next/image';
 
@@ -25,7 +26,8 @@ export default function AdminProductsPage() {
     images: [] as string[],
     isFeatured: false,
     isNewArrival: false,
-    isActive: true
+    isActive: true,
+    filterTags: {} as Record<string, string[]>,
   };
   const [formData, setFormData] = useState(initialForm);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
@@ -49,10 +51,18 @@ export default function AdminProductsPage() {
   const handleOpenModal = (product?: any) => {
     if (product) {
       setEditingId(product._id);
+      const ft = product.filterTags;
+      const filterTags: Record<string, string[]> =
+        ft instanceof Map
+          ? Object.fromEntries(ft)
+          : typeof ft === 'object' && ft
+            ? ft
+            : {};
       setFormData({
         ...product,
         subCategory: product.subCategory || '',
-        tags: product.tags?.join(', ') || ''
+        tags: product.tags?.join(', ') || '',
+        filterTags,
       });
     } else {
       setEditingId(null);
@@ -100,7 +110,10 @@ export default function AdminProductsPage() {
     try {
       const payload = {
         ...formData,
-        tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+        tags: typeof formData.tags === 'string'
+          ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+          : formData.tags,
+        filterTags: formData.filterTags || {},
       };
 
       if (editingId) {
@@ -275,6 +288,21 @@ export default function AdminProductsPage() {
                     <div className="space-y-1 md:col-span-2">
                       <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Tags (comma separated)</label>
                       <input type="text" value={formData.tags} onChange={(e) => setFormData({...formData, tags: e.target.value})} placeholder="casual, summer, cotton" className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
+                    </div>
+
+                    <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)]">
+                      <h4 className="text-sm font-bold uppercase tracking-wider">Shop Filter Categories</h4>
+                      <ProductFilterAssignments
+                        filterTags={formData.filterTags || {}}
+                        onChange={(filterTags) => setFormData({ ...formData, filterTags })}
+                        productHints={{
+                          category: formData.category,
+                          subCategory: formData.subCategory,
+                          sizes: formData.sizes,
+                          isFeatured: formData.isFeatured,
+                          isNewArrival: formData.isNewArrival,
+                        }}
+                      />
                     </div>
 
                     <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)]">
