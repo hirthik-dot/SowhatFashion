@@ -282,7 +282,7 @@ export default function CustomersPage() {
                   {/* Order History */}
                   <h4 className="font-bold text-gray-900 mb-4 font-playfair text-lg">Order History ({selectedCustomerDetail.orders?.length || selectedCustomerDetail.totalOrders})</h4>
                   
-                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="border border-gray-200 rounded-xl overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-gray-50/50 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
                         <tr>

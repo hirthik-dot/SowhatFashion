@@ -3,9 +3,18 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useAdminUIStore } from '@/lib/admin-store';
+import { useEffect } from 'react';
+import { X } from 'lucide-react';
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const { isSidebarOpen, setSidebarOpen } = useAdminUIStore();
+
+  // Close sidebar on route change on mobile
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname, setSidebarOpen]);
 
   const links = [
     { href: '/admin', label: 'Dashboard', icon: 'M3 3v18h18M3 21l6-6 6 6 6-6' },
@@ -21,28 +30,45 @@ export default function AdminSidebar() {
   ];
 
   return (
-    <aside className="admin-sidebar fixed left-0 top-0 bottom-0 z-40 hidden md:block border-r border-[#333]">
-      <div className="p-6">
-        <Link href="/" className="flex items-center gap-3">
-          <Image src="/sowaatlogo.jpeg" alt="Sowaat Admin" width={40} height={40} className="object-contain rounded-sm" />
-          <span className="text-sm font-sans tracking-normal opacity-70 text-white font-bold">ADMIN</span>
-        </Link>
-      </div>
+    <>
+      {/* Mobile Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-      <nav className="mt-6 flex flex-col gap-2">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={pathname === link.href || (link.href !== '/admin' && pathname.startsWith(link.href)) ? 'active' : ''}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d={link.icon} />
-            </svg>
-            {link.label}
+      {/* Sidebar */}
+      <aside className={`admin-sidebar fixed left-0 top-0 bottom-0 z-50 border-r border-[#333] transition-transform duration-300 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <Image src="/sowaatlogo.jpeg" alt="Sowaat Admin" width={40} height={40} className="object-contain rounded-sm" />
+            <span className="text-sm font-sans tracking-normal opacity-70 text-white font-bold">ADMIN</span>
           </Link>
-        ))}
-      </nav>
-    </aside>
+          <button 
+            className="md:hidden text-white opacity-70 hover:opacity-100"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <nav className="mt-2 flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-100px)] pb-20">
+          {links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={pathname === link.href || (link.href !== '/admin' && pathname.startsWith(link.href)) ? 'active' : ''}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d={link.icon} />
+              </svg>
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }
