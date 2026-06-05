@@ -13,7 +13,18 @@ const productStockEntryFilter = (productId: mongoose.Types.ObjectId) => ({
   $or: [{ productId }, { productIds: productId }],
 });
 
-/** Latest purchase batch for a product size (inventory edits attach new units here). */
+type ProductBatchContext = {
+  _id: mongoose.Types.ObjectId;
+  supplier?: mongoose.Types.ObjectId;
+  billingCategory?: mongoose.Types.ObjectId;
+  billingSubCategory?: mongoose.Types.ObjectId;
+  billingName?: string;
+  name?: string;
+  incomingPrice?: number;
+  price?: number;
+};
+
+/** Latest purchase batch for a product size (exact match only). */
 const findLatestStockEntryForSize = async (productId: mongoose.Types.ObjectId, size: string) => {
   const sizeNorm = String(size).trim();
   const entries = await StockEntry.find(productStockEntryFilter(productId))
@@ -21,11 +32,70 @@ const findLatestStockEntryForSize = async (productId: mongoose.Types.ObjectId, s
     .select('_id size')
     .lean();
   const sized = entries.find((e) => String(e.size || '').trim() === sizeNorm);
-  return sized?._id ?? entries[0]?._id ?? null;
+  return sized?._id ?? null;
+};
+
+/** Create a purchase batch for a size when stock entry did not already introduce it. */
+const ensureStockEntryForSize = async (
+  product: ProductBatchContext,
+  size: string,
+  enteredBy?: mongoose.Types.ObjectId | string
+) => {
+  const existing = await findLatestStockEntryForSize(product._id, size);
+  if (existing) return existing;
+
+  let supplier = product.supplier;
+  let category = product.billingCategory;
+  let subCategory = product.billingSubCategory;
+  let gstPercent = 5;
+
+  if (!supplier || !category || !subCategory) {
+    const template = await StockEntry.findOne(productStockEntryFilter(product._id))
+      .sort({ entryDate: -1, createdAt: -1 })
+      .select('supplier category subCategory gstPercent')
+      .lean();
+    if (template) {
+      supplier = supplier || template.supplier;
+      category = category || template.category;
+      subCategory = subCategory || template.subCategory;
+      gstPercent = template.gstPercent ?? 5;
+    }
+  }
+
+  if (!supplier || !category || !subCategory) return null;
+
+  const stockEntry = await StockEntry.create({
+    supplier,
+    category,
+    subCategory,
+    productName: product.billingName || product.name || '',
+    quantity: 1,
+    incomingPrice: product.incomingPrice ?? 0,
+    sellingPrice: product.price ?? 0,
+    size: String(size).trim(),
+    gstPercent,
+    notes: 'Added via inventory',
+    barcodes: [],
+    stockItemIds: [],
+    productId: product._id,
+    productIds: [product._id],
+    enteredBy,
+    entryDate: new Date(),
+  });
+
+  return stockEntry._id;
 };
 
 /** Items created from admin inventory have no batch until linked. */
-const linkOrphanItemsToBatches = async (productId: mongoose.Types.ObjectId) => {
+const linkOrphanItemsToBatches = async (
+  productId: mongoose.Types.ObjectId,
+  enteredBy?: mongoose.Types.ObjectId | string
+) => {
+  const product = await Product.findById(productId)
+    .select('supplier billingCategory billingSubCategory billingName name incomingPrice price')
+    .lean();
+  if (!product) return;
+
   const orphans = await StockItem.find({
     product: productId,
     $or: [{ stockEntry: null }, { stockEntry: { $exists: false } }],
@@ -41,7 +111,7 @@ const linkOrphanItemsToBatches = async (productId: mongoose.Types.ObjectId) => {
   }
 
   for (const [size, itemIds] of bySize) {
-    const entryId = await findLatestStockEntryForSize(productId, size);
+    const entryId = await ensureStockEntryForSize(product, size, enteredBy);
     if (!entryId || !itemIds.length) continue;
     await StockItem.updateMany({ _id: { $in: itemIds } }, { $set: { stockEntry: entryId } });
   }
@@ -50,9 +120,10 @@ const linkOrphanItemsToBatches = async (productId: mongoose.Types.ObjectId) => {
 /** Keep purchase/profit batch rows in sync with live stock (qty + cost/MRP). */
 const syncProductPurchaseBatches = async (
   productId: mongoose.Types.ObjectId,
-  priceUpdates?: { incomingPrice?: number; sellingPrice?: number }
+  priceUpdates?: { incomingPrice?: number; sellingPrice?: number },
+  enteredBy?: mongoose.Types.ObjectId | string
 ) => {
-  await linkOrphanItemsToBatches(productId);
+  await linkOrphanItemsToBatches(productId, enteredBy);
 
   const entries = await StockEntry.find(productStockEntryFilter(productId)).select('_id').lean();
   for (const entry of entries) {
@@ -264,7 +335,7 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
 
       const providedSizes = new Set(updates.sizeEntries.map((e: any) => String(e.size).trim()));
       const existingSizes = (product.sizes || []).map(s => String(s).trim());
-      
+
       const allEntries = [...updates.sizeEntries];
       for (const es of existingSizes) {
         if (!providedSizes.has(es)) {
@@ -282,7 +353,7 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
 
         if (diff > 0) {
           const barcodes = await generateBarcodes(diff);
-          const stockEntryId = await findLatestStockEntryForSize(product._id, size);
+          const stockEntryId = await ensureStockEntryForSize(product, size, req.billingAdminId);
           await StockItem.insertMany(
             barcodes.map((barcode) => ({
               barcode,
@@ -301,7 +372,7 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
           const availableItems = await StockItem.find({ product: product._id, size, status: 'available' })
             .limit(toDelete)
             .select('_id');
-          
+
           if (availableItems.length > 0) {
             await StockItem.deleteMany({ _id: { $in: availableItems.map((i) => i._id) } });
           }
@@ -337,7 +408,8 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     if (shouldSyncBatches) {
       await syncProductPurchaseBatches(
         product._id,
-        Object.keys(priceUpdates).length ? priceUpdates : undefined
+        Object.keys(priceUpdates).length ? priceUpdates : undefined,
+        req.billingAdminId
       );
     }
 
