@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { formatPrice, getOrderStatusLabel } from '@/lib/utils';
+import { formatPrice, getOrderStatusLabel, getOrderStatusColors, getPaymentStatusLabel, getPaymentStatusColors } from '@/lib/utils';
 import { confirmOrder } from '@/lib/api';
 import { buildWhatsAppOrderLink } from '@/lib/whatsapp';
 import { IconCheckCircle, IconSmartphone } from '@/components/icons/PremiumIcons';
@@ -12,12 +12,38 @@ interface OrderConfirmationClientProps {
   order: any;
 }
 
+function TrackerStep({ label, completed, active, failed }: { label: string; completed: boolean; active: boolean; failed?: boolean }) {
+  return (
+    <div className="flex flex-col md:flex-row items-center md:items-start group relative">
+      <div className="flex flex-col items-center">
+        <div
+          className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border-2 z-10 bg-white
+          ${failed ? 'border-red-500 bg-red-50 text-red-500' :
+            completed ? 'border-[var(--gold)] bg-[var(--gold)] text-black' :
+            active ? 'border-[var(--gold)]' : 'border-gray-300'}`}
+        >
+          {failed ? '×' : completed ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg> : ''}
+        </div>
+        <div className={`w-px h-10 md:h-full md:w-full md:absolute md:top-2.5 md:left-5 md:h-px ${completed ? 'bg-[var(--gold)]' : 'bg-gray-300'} hidden md:block last-of-type:hidden`} style={{ width: 'calc(100% - 20px)' }} />
+        <div className={`w-px h-10 ${completed ? 'bg-[var(--gold)]' : 'bg-gray-300'} md:hidden group-last:hidden`} />
+      </div>
+      <div className="mt-2 md:mt-6 md:-ml-8 md:text-center text-xs font-bold md:w-20 uppercase tracking-wider md:absolute md:left-1/2 md:-translate-x-1/2 ml-3">
+        <span className={`${active || completed ? 'text-black' : 'text-gray-400'} ${failed ? 'text-red-600' : ''}`}>
+          {label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function OrderConfirmationClient({ order: initialOrder }: OrderConfirmationClientProps) {
   const [order, setOrder] = useState(initialOrder);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
   const isConfirmed = order.orderStatus === 'confirmed';
   const isPending = order.orderStatus === 'pending';
+  const orderStatusColor = getOrderStatusColors(order.orderStatus);
+  const paymentStatusColor = getPaymentStatusColors(order.paymentStatus);
 
   const address = [
     order.customer?.address?.line1,
@@ -87,14 +113,55 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
             <p className="font-mono text-lg font-bold">{order._id}</p>
           </div>
           <div className="md:text-right">
-            <p className="text-[var(--text-secondary)] text-sm uppercase tracking-widest font-bold mb-1">Status</p>
-            <span
-              className={`inline-block text-sm font-bold uppercase tracking-wider px-3 py-1 rounded ${
-                isConfirmed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-              }`}
-            >
-              {getOrderStatusLabel(order.orderStatus)}
-            </span>
+            <p className="text-[var(--text-secondary)] text-sm uppercase tracking-widest font-bold mb-2">Status</p>
+            <div className="flex flex-wrap gap-2 md:justify-end">
+              <span
+                className="inline-block text-sm font-bold uppercase tracking-wider px-3 py-1 rounded"
+                style={{ backgroundColor: orderStatusColor.bg, color: orderStatusColor.text }}
+              >
+                {getOrderStatusLabel(order.orderStatus)}
+              </span>
+              <span
+                className="inline-block text-sm font-bold uppercase tracking-wider px-3 py-1 rounded"
+                style={{ backgroundColor: paymentStatusColor.bg, color: paymentStatusColor.text }}
+              >
+                {getPaymentStatusLabel(order.paymentStatus)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-10">
+          <h2 className="text-xl font-bold font-playfair mb-6">Order Progress</h2>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] mb-4">Order Status</h3>
+          <div className="flex md:flex-row md:justify-between flex-col gap-6 md:gap-0 relative mb-8 ml-2 md:ml-0">
+            {order.orderStatus === 'cancelled' ? (
+              <>
+                <TrackerStep label="Order Placed" completed={true} active={false} />
+                <TrackerStep label="Cancelled" completed={false} active={false} failed={true} />
+              </>
+            ) : (
+              <>
+                <TrackerStep label="Awaiting Confirmation" completed={false} active={order.orderStatus === 'pending'} />
+                <TrackerStep label="Order Placed" completed={['confirmed', 'shipped', 'delivered'].includes(order.orderStatus)} active={order.orderStatus === 'confirmed'} />
+                <TrackerStep label="Shipped" completed={['shipped', 'delivered'].includes(order.orderStatus)} active={order.orderStatus === 'shipped'} />
+                <TrackerStep label="Delivered" completed={order.orderStatus === 'delivered'} active={order.orderStatus === 'delivered'} />
+              </>
+            )}
+          </div>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] mb-4 border-t border-[var(--border)] pt-6">Payment Status</h3>
+          <div className="flex md:flex-row md:justify-between flex-col gap-6 md:gap-0 relative ml-2 md:ml-0">
+            {order.paymentStatus === 'failed' ? (
+              <>
+                <TrackerStep label="Payment Pending" completed={true} active={false} />
+                <TrackerStep label="Payment Failed" completed={false} active={false} failed={true} />
+              </>
+            ) : (
+              <>
+                <TrackerStep label="Payment Pending" completed={order.paymentStatus === 'paid'} active={order.paymentStatus === 'pending'} />
+                <TrackerStep label="Paid" completed={order.paymentStatus === 'paid'} active={order.paymentStatus === 'paid'} />
+              </>
+            )}
           </div>
         </div>
 
@@ -163,6 +230,15 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
               <div className="flex justify-between items-center text-lg">
                 <span className="font-bold font-playfair">Total</span>
                 <span className="font-bold">{formatPrice(order.totalAmount)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-4 mt-4 border-t border-[var(--border)] text-sm">
+                <span className="text-[var(--text-secondary)]">Payment Status</span>
+                <span
+                  className="font-bold uppercase tracking-wider text-[10px] px-2 py-1 rounded"
+                  style={{ backgroundColor: paymentStatusColor.bg, color: paymentStatusColor.text }}
+                >
+                  {getPaymentStatusLabel(order.paymentStatus)}
+                </span>
               </div>
             </div>
           </div>

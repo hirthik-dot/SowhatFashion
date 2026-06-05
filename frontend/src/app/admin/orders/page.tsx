@@ -1,31 +1,45 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
-import { adminGetOrders, adminUpdateOrderStatus } from '@/lib/api';
+import { adminGetOrders, adminUpdateOrderStatus, adminUpdatePaymentStatus } from '@/lib/api';
 import { formatPrice } from '@/lib/utils';
 import Image from 'next/image';
 
+const ORDER_STATUS_FILTERS = ['all', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'] as const;
+const PAYMENT_STATUS_FILTERS = ['all', 'pending', 'paid', 'failed'] as const;
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
+  const [paymentUpdateLoading, setPaymentUpdateLoading] = useState(false);
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all');
 
-  const fetchOrders = async () => {
+  const hasActiveFilters = orderStatusFilter !== 'all' || paymentStatusFilter !== 'all';
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await adminGetOrders(1, 50); // Just getting 50 for simplicity in demo
+      const res = await adminGetOrders(1, 50, {
+        orderStatus: orderStatusFilter !== 'all' ? orderStatusFilter : undefined,
+        paymentStatus: paymentStatusFilter !== 'all' ? paymentStatusFilter : undefined,
+      });
       setOrders(res.orders || []);
+      setTotal(res.total ?? res.orders?.length ?? 0);
     } catch (error) {
       console.error('Failed to load orders');
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderStatusFilter, paymentStatusFilter]);
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [fetchOrders]);
 
   const handleStatusUpdate = async (status: string) => {
     if (!selectedOrder) return;
@@ -41,11 +55,96 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const handlePaymentUpdate = async (status: string) => {
+    if (!selectedOrder) return;
+    setPaymentUpdateLoading(true);
+    try {
+      await adminUpdatePaymentStatus(selectedOrder._id, status);
+      setSelectedOrder({ ...selectedOrder, paymentStatus: status });
+      fetchOrders();
+    } catch (error) {
+      alert('Failed to update payment status');
+    } finally {
+      setPaymentUpdateLoading(false);
+    }
+  };
+
+  const paymentBadgeClass = (status: string) => {
+    if (status === 'paid') return 'bg-green-100 text-green-700';
+    if (status === 'failed') return 'bg-red-100 text-red-700';
+    return 'bg-orange-100 text-orange-700';
+  };
+
   return (
     <div>
       <AdminHeader title="Order Management" />
       
-      <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-4">
+        <div className="bg-white rounded-xl border border-[var(--border)] shadow-sm p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+            <div>
+              <h2 className="font-bold text-sm uppercase tracking-widest text-[var(--text-secondary)]">Filters</h2>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                {loading ? 'Loading orders...' : `${total} order${total === 1 ? '' : 's'} found`}
+              </p>
+            </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderStatusFilter('all');
+                  setPaymentStatusFilter('all');
+                }}
+                className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] hover:text-black border border-[var(--border)] px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors self-start lg:self-auto"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-orange-700 mb-2">Order Status</p>
+              <div className="flex flex-wrap gap-2">
+                {ORDER_STATUS_FILTERS.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setOrderStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      orderStatusFilter === status
+                        ? 'bg-[var(--gold)] text-black border border-[var(--gold)]'
+                        : 'bg-gray-50 border border-[var(--border)] text-[var(--text-secondary)] hover:bg-gray-100'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 mb-2">Payment Status</p>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_STATUS_FILTERS.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setPaymentStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      paymentStatusFilter === status
+                        ? 'bg-[var(--gold)] text-black border border-[var(--gold)]'
+                        : 'bg-gray-50 border border-[var(--border)] text-[var(--text-secondary)] hover:bg-gray-100'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-xl border border-[var(--border)] shadow-sm overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-gray-50 border-b border-[var(--border)] text-xs uppercase tracking-wider text-[var(--text-secondary)]">
@@ -62,7 +161,9 @@ export default function AdminOrdersPage() {
               {loading ? (
                 <tr><td colSpan={6} className="px-6 py-8 text-center">Loading orders...</td></tr>
               ) : orders.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-[var(--text-secondary)]">No orders found.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-[var(--text-secondary)]">
+                  {hasActiveFilters ? 'No orders match the selected filters.' : 'No orders found.'}
+                </td></tr>
               ) : orders.map((order) => (
                 <tr 
                   key={order._id} 
@@ -79,7 +180,7 @@ export default function AdminOrdersPage() {
                   <td className="px-6 py-4 font-medium">{order.items?.length || 0} items</td>
                   <td className="px-6 py-4 font-semibold">{formatPrice(order.totalAmount)}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${order.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${paymentBadgeClass(order.paymentStatus)}`}>
                       {order.paymentStatus}
                     </span>
                   </td>
@@ -135,7 +236,7 @@ export default function AdminOrdersPage() {
                   ))}
                 </div>
 
-                <div className="bg-orange-50 border border-orange-100 rounded-lg p-5">
+                <div className="bg-orange-50 border border-orange-100 rounded-lg p-5 mb-4">
                   <h3 className="font-bold uppercase tracking-widest text-xs mb-3 text-orange-800">Update Order Status</h3>
                   <div className="flex flex-wrap gap-2">
                     {['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].map(status => (
@@ -150,6 +251,26 @@ export default function AdminOrdersPage() {
                         }`}
                       >
                         {statusUpdateLoading && selectedOrder.orderStatus !== status ? '...' : status}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-5">
+                  <h3 className="font-bold uppercase tracking-widest text-xs mb-3 text-blue-800">Update Payment Status</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {['pending', 'paid', 'failed'].map(status => (
+                      <button
+                        key={status}
+                        onClick={() => handlePaymentUpdate(status)}
+                        disabled={selectedOrder.paymentStatus === status || paymentUpdateLoading}
+                        className={`px-4 py-2 rounded text-xs font-bold uppercase tracking-wider transition-colors ${
+                          selectedOrder.paymentStatus === status
+                            ? 'bg-[var(--gold)] text-black border border-[var(--gold)] cursor-default'
+                            : 'bg-white border border-blue-200 text-blue-800 hover:bg-blue-100'
+                        }`}
+                      >
+                        {paymentUpdateLoading && selectedOrder.paymentStatus !== status ? '...' : status}
                       </button>
                     ))}
                   </div>
@@ -184,7 +305,7 @@ export default function AdminOrdersPage() {
                     </div>
                     <div className="flex justify-between mb-2">
                       <span className="text-[var(--text-secondary)]">Status</span>
-                      <span className="font-semibold uppercase text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded">{selectedOrder.paymentStatus}</span>
+                      <span className={`font-semibold uppercase text-[10px] px-2 py-0.5 rounded ${paymentBadgeClass(selectedOrder.paymentStatus)}`}>{selectedOrder.paymentStatus}</span>
                     </div>
                     {selectedOrder.razorpayPaymentId && (
                       <div className="mt-4 pt-4 border-t border-[var(--border)] break-all">

@@ -41,3 +41,25 @@ export function getOrderStatusColors(status: string): { bg: string; text: string
       return { bg: '#FEF3C7', text: '#92400E' };
   }
 }
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: 'Payment Pending',
+  paid: 'Paid',
+  failed: 'Payment Failed',
+};
+
+export function getPaymentStatusLabel(status: string): string {
+  return PAYMENT_STATUS_LABELS[status] || status;
+}
+
+export function getPaymentStatusColors(status: string): { bg: string; text: string } {
+  switch (status) {
+    case 'paid':
+      return { bg: '#D1FAE5', text: '#065F46' };
+    case 'failed':
+      return { bg: '#FEE2E2', text: '#991B1B' };
+    case 'pending':
+    default:
+      return { bg: '#FEF3C7', text: '#92400E' };
+  }
+}

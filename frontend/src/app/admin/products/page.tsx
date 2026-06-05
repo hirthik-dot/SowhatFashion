@@ -13,6 +13,7 @@ export default function AdminProductsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   
   const initialForm = {
     name: '',
@@ -128,6 +129,20 @@ export default function AdminProductsPage() {
     }
   };
 
+  const handleToggleVisibility = async (product: any) => {
+    setTogglingId(product._id);
+    try {
+      await adminUpdateProduct(product._id, { isActive: !product.isActive });
+      setProducts((prev) =>
+        prev.map((p) => (p._id === product._id ? { ...p, isActive: !product.isActive } : p))
+      );
+    } catch {
+      alert('Failed to update product visibility');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       try {
@@ -163,7 +178,7 @@ export default function AdminProductsPage() {
                 <th className="px-6 py-4 font-semibold">Details</th>
                 <th className="px-6 py-4 font-semibold">Price</th>
                 <th className="px-6 py-4 font-semibold">Stock</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
+                <th className="px-6 py-4 font-semibold">Visibility</th>
                 <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -195,8 +210,33 @@ export default function AdminProductsPage() {
                     <span className={product.stock <= 5 ? 'text-[var(--sale-red)]' : ''}>{product.stock}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`w-2.5 h-2.5 rounded-full inline-block mr-2 ${product.isActive ? 'bg-[var(--success)]' : 'bg-gray-400'}`}></span>
-                    {product.isActive ? 'Active' : 'Draft'}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleVisibility(product)}
+                      disabled={togglingId === product._id}
+                      title={product.isActive ? 'Visible to customers — click to hide' : 'Hidden from customers — click to show'}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                        product.isActive
+                          ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                          : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'
+                      }`}
+                    >
+                      {togglingId === product._id ? (
+                        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      ) : product.isActive ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      )}
+                      {product.isActive ? 'Visible' : 'Hidden'}
+                    </button>
                   </td>
                   <td className="px-6 py-4 text-right space-x-3">
                     <button onClick={() => handleOpenModal(product)} className="text-[var(--gold-hover)] hover:underline font-semibold">Edit</button>

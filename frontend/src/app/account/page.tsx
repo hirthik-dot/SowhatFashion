@@ -6,7 +6,7 @@ import ProductCard from '@/components/shared/ProductCard';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { normalizeAuthUser, userInitials } from '@/lib/auth-user';
-import { getOrderStatusLabel } from '@/lib/utils';
+import { getOrderStatusLabel, getPaymentStatusLabel } from '@/lib/utils';
 import { IconUser, IconPackage, IconHeart, IconMapPin } from '@/components/icons/PremiumIcons';
 
 type AccountTab = 'profile' | 'orders' | 'wishlist' | 'addresses';
@@ -303,13 +303,20 @@ function AccountContent() {
                             </div>
                             <div className="text-right flex flex-col items-end gap-2">
                               <p className="font-bold text-[#C9A84C]">₹{o.totalAmount || o.total}</p>
-                              <span className={`text-xs px-3 py-1 font-semibold rounded-full uppercase tracking-wider ${
-                                o.orderStatus === 'delivered' ? 'bg-green-100 text-green-700' :
-                                o.orderStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
-                                o.orderStatus === 'shipped' ? 'bg-blue-100 text-blue-700' :
-                                o.orderStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
-                                'bg-yellow-100 text-yellow-700'
-                              }`}>{getOrderStatusLabel(o.orderStatus || o.status)}</span>
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <span className={`text-xs px-3 py-1 font-semibold rounded-full uppercase tracking-wider ${
+                                  o.orderStatus === 'delivered' ? 'bg-green-100 text-green-700' :
+                                  o.orderStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                  o.orderStatus === 'shipped' ? 'bg-blue-100 text-blue-700' :
+                                  o.orderStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                  'bg-yellow-100 text-yellow-700'
+                                }`}>{getOrderStatusLabel(o.orderStatus || o.status)}</span>
+                                <span className={`text-xs px-3 py-1 font-semibold rounded-full uppercase tracking-wider ${
+                                  o.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                                  o.paymentStatus === 'failed' ? 'bg-red-100 text-red-700' :
+                                  'bg-yellow-100 text-yellow-700'
+                                }`}>{getPaymentStatusLabel(o.paymentStatus || 'pending')}</span>
+                              </div>
                             </div>
                           </div>
                           
@@ -339,7 +346,15 @@ function AccountContent() {
                                   </div>
                                 ))}
                               </div>
-                              <div className="mt-5 flex justify-end">
+                              <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div className="text-sm text-gray-600">
+                                  <span className="font-semibold text-gray-700">Payment: </span>
+                                  <span className={`font-bold uppercase text-xs px-2 py-0.5 rounded ${
+                                    o.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                                    o.paymentStatus === 'failed' ? 'bg-red-100 text-red-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                  }`}>{getPaymentStatusLabel(o.paymentStatus || 'pending')}</span>
+                                </div>
                                 <button type="button" className="text-sm font-bold text-[#C9A84C] hover:text-[#B59640] uppercase tracking-wider bg-white px-4 py-2 border border-[#C9A84C] rounded-md transition-colors" onClick={() => router.push(`/order/${oid}`)}>
                                   View order details
                                 </button>

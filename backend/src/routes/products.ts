@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import Product from '../models/Product';
 import SidebarConfig from '../models/SidebarConfig';
 import authMiddleware from '../middleware/authMiddleware';
@@ -6,6 +7,29 @@ import { mergeFilterTags, plainFilterTags, type FilterTagsMap } from '../lib/pro
 import { buildFacetFilterCondition, collectFacetFiltersFromQuery } from '../lib/productFilterQuery';
 
 const router = Router();
+
+function isAdminRequest(req: Request): boolean {
+  try {
+    const token = req.cookies?.token;
+    if (!token) return false;
+    jwt.verify(token, process.env.JWT_SECRET as string);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const FILTER_TAG_BODY_FIELDS = [
+  'category',
+  'subCategory',
+  'sizes',
+  'tags',
+  'price',
+  'discountPrice',
+  'isNewArrival',
+  'isFeatured',
+  'filterTags',
+] as const;
 
 function filterTagsToMap(tags: FilterTagsMap): Map<string, string[]> {
   const map = new Map<string, string[]>();
@@ -42,7 +66,10 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { category, subCategory, featured, newArrival, sort, limit, page, size, minPrice, maxPrice, discount, promotions, search } = req.query;
 
-    const filter: any = { isActive: true };
+    const filter: any = {};
+    if (!isAdminRequest(req)) {
+      filter.isActive = true;
+    }
     if (category) {
       // Normalize: strip trailing 's' for plurals, case-insensitive match
       let catVal = (category as string).trim();
@@ -162,7 +189,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 // PUT /api/products/:id - update product (protected)
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
-    await applyFilterTagsToBody(req.body);
+    const shouldApplyFilterTags = FILTER_TAG_BODY_FIELDS.some((field) => field in req.body);
+    if (shouldApplyFilterTags) {
+      await applyFilterTagsToBody(req.body);
+    }
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,

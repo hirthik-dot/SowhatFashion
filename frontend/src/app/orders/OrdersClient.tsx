@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { getOrderStatusLabel, getOrderStatusColors } from '@/lib/utils';
+import { getOrderStatusLabel, getOrderStatusColors, getPaymentStatusLabel, getPaymentStatusColors } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
 import { IconInbox } from '@/components/icons/PremiumIcons';
 
@@ -178,6 +178,7 @@ export default function OrdersClient({ theme }: { theme: string }) {
           {orders.map((order) => {
             const isExpanded = expandedId === order._id;
             const statusColor = getOrderStatusColors(order.orderStatus);
+            const paymentColor = getPaymentStatusColors(order.paymentStatus);
             const dateStr = new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
             
             return (
@@ -190,12 +191,20 @@ export default function OrdersClient({ theme }: { theme: string }) {
                   <div className="flex-1">
                     <div className="flex items-center justify-between md:justify-start gap-4 mb-2">
                       <h3 className="font-bold text-base md:text-lg">ORDER #{order._id.slice(-6).toUpperCase()}</h3>
-                      <span 
-                        className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded"
-                        style={{ backgroundColor: statusColor.bg, color: statusColor.text }}
-                      >
-                        {getOrderStatusLabel(order.orderStatus)}
-                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <span 
+                          className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded"
+                          style={{ backgroundColor: statusColor.bg, color: statusColor.text }}
+                        >
+                          {getOrderStatusLabel(order.orderStatus)}
+                        </span>
+                        <span 
+                          className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded"
+                          style={{ backgroundColor: paymentColor.bg, color: paymentColor.text }}
+                        >
+                          {getPaymentStatusLabel(order.paymentStatus)}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-gray-500 text-sm mb-4">{dateStr}</p>
                     
@@ -238,9 +247,9 @@ export default function OrdersClient({ theme }: { theme: string }) {
                     
                     {/* Left Column (Tracker & Summary) */}
                     <div className="flex-1 p-0">
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">Status Tracker</h4>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">Order Status</h4>
                       
-                      <div className="flex md:flex-row md:justify-between flex-col gap-6 md:gap-0 relative mb-12 ml-2 md:ml-0">
+                      <div className="flex md:flex-row md:justify-between flex-col gap-6 md:gap-0 relative mb-10 ml-2 md:ml-0">
                          {order.orderStatus === 'cancelled' ? (
                            <>
                              <TrackerStep label="Order Placed" completed={true} active={false} />
@@ -256,6 +265,21 @@ export default function OrdersClient({ theme }: { theme: string }) {
                          )}
                       </div>
 
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6 border-t border-gray-200 pt-8">Payment Status</h4>
+                      <div className="flex md:flex-row md:justify-between flex-col gap-6 md:gap-0 relative mb-10 ml-2 md:ml-0">
+                        {order.paymentStatus === 'failed' ? (
+                          <>
+                            <TrackerStep label="Payment Pending" completed={true} active={false} />
+                            <TrackerStep label="Payment Failed" completed={false} active={false} failed={true} />
+                          </>
+                        ) : (
+                          <>
+                            <TrackerStep label="Payment Pending" completed={order.paymentStatus === 'paid'} active={order.paymentStatus === 'pending'} />
+                            <TrackerStep label="Paid" completed={order.paymentStatus === 'paid'} active={order.paymentStatus === 'paid'} />
+                          </>
+                        )}
+                      </div>
+
                       <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4 border-t border-gray-200 pt-8">Payment Summary</h4>
                       <div className="space-y-3 text-sm">
                         <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">₹{order.totalAmount}</span></div>
@@ -263,8 +287,14 @@ export default function OrdersClient({ theme }: { theme: string }) {
                         <div className="flex justify-between pt-3 border-t border-gray-200 font-bold text-base text-black">
                           <span>Total</span><span>₹{order.totalAmount}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mt-2">
-                           Order via WhatsApp <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-gray-500">Payment</span>
+                          <span
+                            className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded"
+                            style={{ backgroundColor: paymentColor.bg, color: paymentColor.text }}
+                          >
+                            {getPaymentStatusLabel(order.paymentStatus)}
+                          </span>
                         </div>
                       </div>
                     </div>

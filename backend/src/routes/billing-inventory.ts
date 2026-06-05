@@ -318,7 +318,11 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
       (product as any).totalStock = newSizeStock.reduce((sum, s) => sum + s.stock, 0);
       product.stock = (product as any).totalStock;
       product.sizes = newSizeStock.map((s) => s.size);
-      product.isActive = product.stock > 0;
+      // Billing products: don't auto-activate based on stock.
+      // Admin must manually toggle visibility after adding images etc.
+      if (!product.isBillingProduct) {
+        product.isActive = product.stock > 0;
+      }
     }
 
     await product.save();

@@ -45,13 +45,14 @@ router.get('/my-orders', async (req: Request, res: Response) => {
 // GET /api/orders - all orders with pagination (protected)
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { page, limit, status } = req.query;
+    const { page, limit, status, paymentStatus } = req.query;
     const pageNum = parseInt(page as string) || 1;
     const limitNum = parseInt(limit as string) || 20;
     const skip = (pageNum - 1) * limitNum;
 
     const filter: any = {};
     if (status) filter.orderStatus = status;
+    if (paymentStatus) filter.paymentStatus = paymentStatus;
 
     const [orders, total] = await Promise.all([
       Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
@@ -184,6 +185,30 @@ router.put('/:id/status', authMiddleware, async (req: Request, res: Response) =>
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { orderStatus },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+});
+
+// PUT /api/orders/:id/payment-status - update payment status (protected)
+router.put('/:id/payment-status', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { paymentStatus } = req.body;
+    if (!['pending', 'paid', 'failed'].includes(paymentStatus)) {
+      return res.status(400).json({ message: 'Invalid payment status' });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { paymentStatus },
       { new: true }
     );
 

@@ -322,8 +322,19 @@ export const adminPutHomepageSections = async (theme: string, sections: unknown[
 };
 
 // Admin Orders
-export const adminGetOrders = async (page = 1, limit = 20) => {
-  const res = await fetch(`${API}/api/orders?page=${page}&limit=${limit}`, {
+export const adminGetOrders = async (
+  page = 1,
+  limit = 20,
+  filters?: { orderStatus?: string; paymentStatus?: string }
+) => {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (filters?.orderStatus) params.set('status', filters.orderStatus);
+  if (filters?.paymentStatus) params.set('paymentStatus', filters.paymentStatus);
+
+  const res = await fetch(`${API}/api/orders?${params.toString()}`, {
     credentials: 'include',
   });
   return res.json();
@@ -342,6 +353,16 @@ export const adminUpdateOrderStatus = async (id: string, orderStatus: string) =>
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ orderStatus }),
+  });
+  return res.json();
+};
+
+export const adminUpdatePaymentStatus = async (id: string, paymentStatus: string) => {
+  const res = await fetch(`${API}/api/orders/${id}/payment-status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ paymentStatus }),
   });
   return res.json();
 };
