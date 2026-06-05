@@ -10,6 +10,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'ordered' | 'visited'>('all');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<any>(null);
   const [loadingModal, setLoadingModal] = useState(false);
@@ -80,11 +81,18 @@ export default function CustomersPage() {
     }
   };
 
-  const filteredCustomers = customers.filter(c => 
-    c.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.phone?.includes(searchTerm)
-  );
+  const filteredCustomers = customers.filter(c => {
+    const matchesSearch = c.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.phone?.includes(searchTerm);
+
+    if (!matchesSearch) return false;
+
+    if (filterType === 'ordered') return c.totalOrders > 0;
+    if (filterType === 'visited') return c.totalOrders === 0;
+
+    return true;
+  });
 
   return (
     <div className="bg-gray-50 min-h-screen pb-12">
@@ -113,7 +121,7 @@ export default function CustomersPage() {
         </div>
 
         {/* CONTROLS */}
-        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm gap-4">
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input 
@@ -123,6 +131,27 @@ export default function CustomersPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+
+          <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar">
+            <button 
+              onClick={() => setFilterType('all')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterType === 'all' ? 'bg-amber-100 text-amber-800' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+            >
+              All Customers
+            </button>
+            <button 
+              onClick={() => setFilterType('ordered')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterType === 'ordered' ? 'bg-amber-100 text-amber-800' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+            >
+              Ordered
+            </button>
+            <button 
+              onClick={() => setFilterType('visited')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterType === 'visited' ? 'bg-amber-100 text-amber-800' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+            >
+              Just Visited
+            </button>
           </div>
         </div>
 
@@ -213,13 +242,40 @@ export default function CustomersPage() {
                       <div>
                         <h3 className="text-2xl font-bold text-gray-900">{selectedCustomerDetail.name}</h3>
                         <p className="text-gray-500 flex items-center gap-2 mt-1"><Calendar size={14}/> Joined {new Date(selectedCustomerDetail.createdAt).toLocaleDateString()}</p>
+                        {(selectedCustomerDetail.gender || selectedCustomerDetail.dob) && (
+                          <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                            {selectedCustomerDetail.gender && <span>Gender: <span className="font-medium text-gray-900">{selectedCustomerDetail.gender}</span></span>}
+                            {selectedCustomerDetail.dob && <span>DOB: <span className="font-medium text-gray-900">{selectedCustomerDetail.dob}</span></span>}
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* Contact Card */}
                     <div className="md:ml-auto bg-gray-50 p-4 rounded-xl space-y-2 text-sm text-gray-600 min-w-[250px]">
                       <div className="flex items-center gap-3"><Mail size={16} className="text-gray-400"/> {selectedCustomerDetail.email}</div>
-                      {selectedCustomerDetail.phone && <div className="flex items-center gap-3"><Phone size={16} className="text-gray-400"/> {selectedCustomerDetail.phone}</div>}
+                      {(() => {
+                        const phone = selectedCustomerDetail.phone || selectedCustomerDetail.orders?.[0]?.customer?.phone;
+                        if (phone) {
+                          return <div className="flex items-center gap-3"><Phone size={16} className="text-gray-400"/> {phone}</div>;
+                        }
+                        return null;
+                      })()}
+                      {(() => {
+                        const address = selectedCustomerDetail.savedAddresses?.[0] || selectedCustomerDetail.orders?.[0]?.customer?.address;
+                        if (address) {
+                          return (
+                            <div className="flex items-start gap-3 mt-2 pt-2 border-t border-gray-200">
+                              <MapPin size={16} className="text-gray-400 mt-0.5 shrink-0"/> 
+                              <div>
+                                <div className="font-medium text-gray-800">{address.line1}</div>
+                                <div>{address.city}, {address.state} {address.pincode}</div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
 

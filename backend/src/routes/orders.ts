@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import Order from '../models/Order';
+import { User } from '../models/User';
 import authMiddleware from '../middleware/authMiddleware';
 import rateLimit from 'express-rate-limit';
 
@@ -149,6 +150,19 @@ router.post('/', async (req: Request, res: Response) => {
       paymentStatus: 'pending',
     });
     await order.save();
+
+    // Update user phone number if email exists and phone is provided
+    if (req.body.customer && req.body.customer.email && req.body.customer.phone) {
+      try {
+        await User.findOneAndUpdate(
+          { email: req.body.customer.email },
+          { $set: { phone: req.body.customer.phone } }
+        );
+      } catch (err) {
+        console.error('Failed to update user phone:', err);
+      }
+    }
+
     res.status(201).json(order);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });

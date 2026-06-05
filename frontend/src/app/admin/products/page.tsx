@@ -14,6 +14,10 @@ export default function AdminProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Filters
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterVisibility, setFilterVisibility] = useState('');
   
   const initialForm = {
     name: '',
@@ -156,6 +160,15 @@ export default function AdminProductsPage() {
 
   const availableSizes = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
+  const uniqueCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+
+  const filteredProducts = products.filter(p => {
+    if (filterCategory && p.category !== filterCategory) return false;
+    if (filterVisibility === 'visible' && !p.isActive) return false;
+    if (filterVisibility === 'hidden' && p.isActive) return false;
+    return true;
+  });
+
   return (
     <div>
       <AdminHeader title="Products Management" />
@@ -167,6 +180,35 @@ export default function AdminProductsPage() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add Product
           </button>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-xl border border-[var(--border)] shadow-sm mb-6 flex flex-wrap gap-4 items-center">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">Filter by Category</label>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)] text-sm"
+            >
+              <option value="">All Categories</option>
+              {uniqueCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">Filter by Visibility</label>
+            <select
+              value={filterVisibility}
+              onChange={(e) => setFilterVisibility(e.target.value)}
+              className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)] text-sm"
+            >
+              <option value="">All (Visible & Hidden)</option>
+              <option value="visible">Visible Only</option>
+              <option value="hidden">Hidden Only</option>
+            </select>
+          </div>
         </div>
 
         {/* Products Table */}
@@ -185,9 +227,9 @@ export default function AdminProductsPage() {
             <tbody className="divide-y divide-[var(--border)]">
               {loading ? (
                 <tr><td colSpan={6} className="px-6 py-8 text-center">Loading products...</td></tr>
-              ) : products.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-[var(--text-secondary)]">No products found. Add one to get started.</td></tr>
-              ) : products.map((product) => (
+              ) : filteredProducts.length === 0 ? (
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-[var(--text-secondary)]">No products found matching the current filters.</td></tr>
+              ) : filteredProducts.map((product) => (
                 <tr key={product._id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="w-12 h-16 relative rounded overflow-hidden border border-[var(--border)] bg-gray-100">
