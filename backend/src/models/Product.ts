@@ -30,6 +30,7 @@ export interface IProduct extends Document {
   totalStock?: number;
   isBillingProduct?: boolean;
   notes?: string;
+  isEcommerceProduct?: boolean;
   createdAt: Date;
 }
 
@@ -71,6 +72,7 @@ const ProductSchema = new Schema<IProduct>(
     ],
     totalStock: { type: Number, min: 0, default: 0 },
     isBillingProduct: { type: Boolean, default: false, index: true },
+    isEcommerceProduct: { type: Boolean, default: true, index: true },
     notes: { type: String, trim: true, default: '' },
   },
   { timestamps: true }

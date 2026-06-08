@@ -305,8 +305,13 @@ router.get('/bills', async (req, res: Response) => {
   const page = Number(req.query.page || 1);
   const limit = Number(req.query.limit || 20);
   const skip = (page - 1) * limit;
-  const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+  const { startDate, endDate, search } = req.query as { startDate?: string; endDate?: string; search?: string };
   const query = getDateFilter(startDate, endDate);
+  const trimmedSearch = String(search || '').trim();
+  if (trimmedSearch) {
+    const regex = new RegExp(trimmedSearch, 'i');
+    query.$or = [{ billNumber: regex }, { 'customer.name': regex }, { 'customer.phone': regex }];
+  }
   const [data, total] = await Promise.all([
     Bill.find(query).populate('salesman', 'name phone').populate('createdBy', 'name').sort({ createdAt: -1 }).skip(skip).limit(limit),
     Bill.countDocuments(query),
@@ -1226,14 +1231,25 @@ router.get('/profit', requirePermission('canViewReports'), async (req, res: Resp
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
   const skip = (page - 1) * limit;
   const sortMode = String(req.query.sort || 'entryDate');
-  const { supplier: supplierQuery, startDate, endDate } = req.query as {
+  const { supplier: supplierQuery, startDate, endDate, search: searchRaw } = req.query as {
     supplier?: string;
     startDate?: string;
     endDate?: string;
+    search?: string;
   };
   const entryMatch = buildStockEntryMatch(supplierQuery, startDate, endDate);
   if (entryMatch === null) {
     return res.status(400).json({ message: 'Invalid supplier id' });
+  }
+  const searchTrimmed = String(searchRaw || '').trim();
+  if (searchTrimmed) {
+    const regex = new RegExp(searchTrimmed, 'i');
+    (entryMatch as any).$or = [
+      { productName: regex },
+      { size: regex },
+      { notes: regex },
+      { $expr: { $regexMatch: { input: { $toString: '$_id' }, regex: searchTrimmed, options: 'i' } } }
+    ];
   }
 
   const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;

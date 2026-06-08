@@ -24,6 +24,7 @@ export default function ReportsPage() {
   const [salesPage, setSalesPage] = useState(1);
   const [salesTotal, setSalesTotal] = useState(0);
   const [selectedBill, setSelectedBill] = useState<any>(null);
+  const [salesSearch, setSalesSearch] = useState("");
 
   // Profit Tab State
   const [profitData, setProfitData] = useState<any[]>([]);
@@ -37,6 +38,7 @@ export default function ReportsPage() {
   const [profitPeriod, setProfitPeriod] = useState<"all" | "today" | "week" | "month" | "custom">("all");
   const [profitFrom, setProfitFrom] = useState("");
   const [profitTo, setProfitTo] = useState("");
+  const [profitSearch, setProfitSearch] = useState("");
 
   const getProfitDateRange = () => {
     if (profitPeriod === "all") return { start: "", end: "" };
@@ -81,9 +83,11 @@ export default function ReportsPage() {
       end = to;
     }
     try {
+      const billParams = new URLSearchParams({ page: String(currentPage), limit: '20', startDate: start, endDate: end });
+      if (salesSearch.trim()) billParams.set('search', salesSearch.trim());
       const [summaryData, billsData] = await Promise.all([
         billingApi.reportSummary(start, end),
-        billingApi.reportBills(`page=${currentPage}&limit=20&startDate=${start}&endDate=${end}`),
+        billingApi.reportBills(billParams.toString()),
       ]);
       setSummary(summaryData);
       setBills(billsData.data || []);
@@ -99,10 +103,11 @@ export default function ReportsPage() {
     sort: string = profitSort,
     supplierId: string = profitSupplierId,
     startDate: string = profitDateRange.start,
-    endDate: string = profitDateRange.end
+    endDate: string = profitDateRange.end,
+    search: string = profitSearch
   ) => {
     try {
-      const res = await billingApi.reportProfit(currentPage, sort, supplierId, startDate, endDate);
+      const res = await billingApi.reportProfit(currentPage, sort, supplierId, startDate, endDate, search);
       setProfitData(res.data || []);
       setProfitSummary(res.summary || null);
       setProfitTotal(res.total || 0);
@@ -138,7 +143,7 @@ export default function ReportsPage() {
       loadSales(salesPage);
     } else {
       loadSupplierPurchaseSummary(profitDateRange.start, profitDateRange.end);
-      loadProfit(profitPage, profitSort, profitSupplierId, profitDateRange.start, profitDateRange.end);
+      loadProfit(profitPage, profitSort, profitSupplierId, profitDateRange.start, profitDateRange.end, profitSearch);
     }
   }, [
     activeTab,
@@ -146,12 +151,14 @@ export default function ReportsPage() {
     from,
     to,
     salesPage,
+    salesSearch,
     profitPage,
     profitSort,
     profitSupplierId,
     profitPeriod,
     profitFrom,
     profitTo,
+    profitSearch,
   ]);
 
   const exportSalesExcel = () => {
@@ -326,6 +333,13 @@ export default function ReportsPage() {
                   💰 Bill Wise Profit
                 </Link>
               </div>
+              <input
+                className="pos-input w-full sm:min-w-[220px] flex-1"
+                placeholder="Search by bill number, customer name, phone..."
+                value={salesSearch}
+                onChange={(e) => setSalesSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setSalesPage(1); loadSales(1); } }}
+              />
               {[
                 { id: "today", label: "Today" },
                 { id: "week", label: "This Week" },
@@ -336,7 +350,7 @@ export default function ReportsPage() {
               ))}
               <input className="pos-input h-10 min-h-0" type="date" value={from} onChange={(e) => setFrom(e.target.value)} disabled={period !== "custom"} />
               <input className="pos-input h-10 min-h-0" type="date" value={to} onChange={(e) => setTo(e.target.value)} disabled={period !== "custom"} />
-              <button className="h-10 px-3 rounded border border-[var(--border)]" onClick={() => loadSales(salesPage)}>Apply</button>
+              <button className="h-10 px-3 rounded bg-[var(--gold)] text-black font-semibold" onClick={() => { setSalesPage(1); loadSales(1); }}>Apply Filters</button>
               <button className="h-10 px-3 rounded bg-[var(--gold)] text-black sm:ml-auto font-semibold shadow-sm hover:opacity-90 w-full sm:w-auto" onClick={exportSalesExcel}>⬇ Export Sales Excel</button>
             </div>
 
@@ -486,6 +500,13 @@ export default function ReportsPage() {
                 </p>
               </div>
               <div className="flex flex-wrap items-end gap-2 ml-auto">
+                <input
+                  className="pos-input w-full sm:min-w-[220px] flex-1"
+                  placeholder="Search by product name, batch, size..."
+                  value={profitSearch}
+                  onChange={(e) => setProfitSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { setProfitPage(1); loadProfit(1, profitSort, profitSupplierId, profitDateRange.start, profitDateRange.end, profitSearch); } }}
+                />
                 <div className="flex flex-wrap gap-1 items-center">
                   {[
                     { id: "all", label: "All time" },
@@ -568,6 +589,12 @@ export default function ReportsPage() {
                     📅 Entry Date
                   </button>
                 </div>
+                <button
+                  className="h-10 px-4 rounded bg-[var(--gold)] text-black font-semibold"
+                  onClick={() => { setProfitPage(1); loadProfit(1, profitSort, profitSupplierId, profitDateRange.start, profitDateRange.end, profitSearch); }}
+                >
+                  Apply Filters
+                </button>
                 <button className="h-11 px-6 rounded bg-[var(--success)] text-white font-bold shadow-sm hover:opacity-90 flex items-center gap-2" onClick={exportProfitExcel}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   Export Profit Excel

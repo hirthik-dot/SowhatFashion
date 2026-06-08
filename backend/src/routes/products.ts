@@ -66,7 +66,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { category, subCategory, featured, newArrival, sort, limit, page, size, minPrice, maxPrice, discount, promotions, search } = req.query;
 
-    const filter: any = {};
+    const filter: any = { isEcommerceProduct: { $ne: false } };
     if (!isAdminRequest(req)) {
       filter.isActive = true;
     }
@@ -164,7 +164,7 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /api/products/:slug - single product by slug
 router.get('/:slug', async (req: Request, res: Response) => {
   try {
-    const product = await Product.findOne({ slug: req.params.slug, isActive: true });
+    const product = await Product.findOne({ slug: req.params.slug, isActive: true, isEcommerceProduct: { $ne: false } });
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
@@ -241,9 +241,16 @@ router.post('/backfill-filter-tags', authMiddleware, async (_req: Request, res: 
 // DELETE /api/products/:id - delete product (protected)
 router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
+    }
+
+    if (product.isBillingProduct) {
+      product.isEcommerceProduct = false;
+      await product.save();
+    } else {
+      await Product.findByIdAndDelete(req.params.id);
     }
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {

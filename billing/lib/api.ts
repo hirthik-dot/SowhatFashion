@@ -167,12 +167,14 @@ export const billingApi = {
     sort = "entryDate",
     supplier = "",
     startDate = "",
-    endDate = ""
+    endDate = "",
+    search = ""
   ) => {
     const params = new URLSearchParams({ page: String(page), sort });
     if (supplier) params.set("supplier", supplier);
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
+    if (search) params.set("search", search);
     return request(`/api/billing/reports/profit?${params.toString()}`);
   },
   reportProfitSupplierSummary: (startDate = "", endDate = "") => {
