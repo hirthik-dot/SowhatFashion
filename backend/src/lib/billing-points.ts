@@ -1,7 +1,7 @@
 /** Loyalty points rules — earn on pre-points bill total; redeem before payment. */
 
 export const EARN_RUPEES_PER_POINT = 10;
-export const REDEEM_RUPEES_PER_POINT = 0.5;
+export const REDEEM_RUPEES_PER_POINT = 0.25;
 export const MIN_REDEEM_POINTS = 100;
 
 export type PointsMode = 'earn' | 'redeem' | 'none';
@@ -19,7 +19,7 @@ export const calcPointsDiscountRupees = (pointsRedeemed: number): number =>
   Math.max(0, pointsRedeemed) * REDEEM_RUPEES_PER_POINT;
 
 export const maxRedeemablePoints = (prePointsTotalRupees: number, balance: number): number => {
-  const byBill = Math.floor(Math.max(0, prePointsTotalRupees) / REDEEM_RUPEES_PER_POINT);
+  const byBill = Math.floor((Math.max(0, prePointsTotalRupees) * 0.5) / REDEEM_RUPEES_PER_POINT);
   return Math.max(0, Math.min(Math.max(0, balance), byBill));
 };
 
