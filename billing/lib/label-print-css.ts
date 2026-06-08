@@ -43,8 +43,8 @@ export const LABEL_CSS = `
     text-transform: uppercase;
     width: 100%;
     overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-wrap: break-word;
   }
 
   .label-size {
@@ -117,7 +117,7 @@ export const LABEL_CSS = `
 
   .label-shop-name {
     position: absolute;
-    right: 0.08cm;
+    right: 0.48cm;
     bottom: 0.06cm;
     font-family: "Courier New", monospace;
     font-size: 5pt;
