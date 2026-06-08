@@ -65,7 +65,7 @@ export const ReceiptPrint = forwardRef<
   { bill, logoSrc = "/1775556627469.png" },
   ref
 ) {
-  const createdAt = new Date(bill.createdAt || Date.now());
+  const createdAt = new Date();
   const items = (bill.items || []).filter((item: any) => !item.replacedOut);
   const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
