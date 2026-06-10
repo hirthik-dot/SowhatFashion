@@ -5,6 +5,12 @@ import SidebarConfig from '../models/SidebarConfig';
 import authMiddleware from '../middleware/authMiddleware';
 import { mergeFilterTags, plainFilterTags, type FilterTagsMap } from '../lib/productFilterTags';
 import { buildFacetFilterCondition, collectFacetFiltersFromQuery } from '../lib/productFilterQuery';
+import {
+  applyEcommerceVariant,
+  expandProductsForEcommerce,
+  getEcommerceVariantsByProducts,
+  parsePriceVariantSlug,
+} from '../lib/ecommerce-product-variants';
 
 const router = Router();
 
@@ -134,24 +140,25 @@ router.get('/', async (req: Request, res: Response) => {
     const limitNum = parseInt(limit as string) || 50;
     const skip = (pageNum - 1) * limitNum;
 
-    let [products, total] = await Promise.all([
-      Product.find(filter).sort(sortObj).skip(skip).limit(limitNum),
-      Product.countDocuments(filter),
-    ]);
+    const isAdmin = isAdminRequest(req);
+    let products = await Product.find(filter).sort(sortObj).lean();
+    let expandedProducts = isAdmin ? products : await expandProductsForEcommerce(products);
 
     // Post-query discount filter (computed field)
     if (discount) {
       const discountMin = parseInt(discount as string);
-      products = products.filter(p => {
+      expandedProducts = expandedProducts.filter((p) => {
         if (!p.discountPrice || p.discountPrice >= p.price) return false;
         const pct = Math.round(((p.price - p.discountPrice) / p.price) * 100);
         return pct >= discountMin;
       });
-      total = products.length;
     }
 
+    const total = expandedProducts.length;
+    const pagedProducts = expandedProducts.slice(skip, skip + limitNum);
+
     res.json({
-      products,
+      products: pagedProducts,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum),
@@ -164,10 +171,44 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /api/products/:slug - single product by slug
 router.get('/:slug', async (req: Request, res: Response) => {
   try {
-    const product = await Product.findOne({ slug: req.params.slug, isActive: true, isEcommerceProduct: { $ne: false } });
+    const slug = String(req.params.slug || '').trim();
+    const variantSlug = parsePriceVariantSlug(slug);
+
+    if (variantSlug) {
+      const product = await Product.findOne({
+        slug: variantSlug.baseSlug,
+        isActive: true,
+        isEcommerceProduct: { $ne: false },
+      }).lean();
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      const variantsByProduct = await getEcommerceVariantsByProducts([product._id]);
+      const variant = (variantsByProduct.get(String(product._id)) || []).find(
+        (entry) => Math.round(entry.sellingPrice) === Math.round(variantSlug.sellingPrice)
+      );
+      if (!variant) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      return res.json(applyEcommerceVariant(product, variant, true));
+    }
+
+    const product = await Product.findOne({ slug, isActive: true, isEcommerceProduct: { $ne: false } }).lean();
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
+
+    if (product.isBillingProduct) {
+      const variantsByProduct = await getEcommerceVariantsByProducts([product._id]);
+      const variants = (variantsByProduct.get(String(product._id)) || []).filter((entry) => entry.stock > 0);
+      if (variants.length === 1) {
+        return res.json(applyEcommerceVariant(product, variants[0], false));
+      }
+      if (variants.length > 1) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+    }
+
     res.json(product);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });

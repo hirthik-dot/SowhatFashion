@@ -13,6 +13,7 @@ import {
   type ProductCountsResponse,
 } from '@/lib/sidebar-filters';
 import { DEFAULT_FILTER_GROUPS } from '@/lib/sidebar-filters-default';
+import { productListKey } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -320,7 +321,7 @@ function CollectionLayoutInner({
               )}
             >
               {products.map((product) => (
-                <CollectionProductCard key={product._id} product={product} listView={viewMode === 'list'} />
+                <CollectionProductCard key={productListKey(product)} product={product} listView={viewMode === 'list'} />
               ))}
             </div>
           )}

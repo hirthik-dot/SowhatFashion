@@ -8,6 +8,7 @@ import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 import EditProductModal from "@/components/inventory/EditProductModal";
 import MultiplePriceBadge from "@/components/inventory/MultiplePriceBadge";
+import PriceVariantsDropdown from "@/components/inventory/PriceVariantsDropdown";
 
 type BarcodePrintState = {
   title: string;
@@ -256,7 +257,11 @@ export default function AdminInventoryPage() {
                     className={`border-t border-[var(--border)] ${row.hasMultiplePrices ? "bg-[color-mix(in_srgb,var(--error)_6%,transparent)]" : ""}`}
                   >
                     <td>
-                      <span className="inline-flex items-center flex-wrap gap-x-1">
+                      <span className="inline-flex items-center flex-wrap gap-x-1 gap-y-1">
+                        <PriceVariantsDropdown
+                          variants={row.priceVariants}
+                          showCost={isSuperAdmin}
+                        />
                         <span>{row.name || "-"}</span>
                         <MultiplePriceBadge
                           hasMultiplePrices={row.hasMultiplePrices}

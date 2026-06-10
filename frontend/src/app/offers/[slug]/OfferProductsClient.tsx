@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import ProductCard from '@/components/shared/ProductCard';
+import { productListKey } from '@/lib/utils';
 
 type P = { _id: string; price: number; discountPrice?: number; name?: string; slug?: string; images?: string[] };
 
@@ -64,7 +65,7 @@ export default function OfferProductsClient({ products }: { products: P[] }) {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {sorted.map((p) => (
-          <ProductCard key={p._id} product={p as any} />
+          <ProductCard key={productListKey(p)} product={p as any} />
         ))}
       </div>
     </div>

@@ -8,6 +8,7 @@ import PremiumNavbar from '@/components/homepage/premium/PremiumNavbar';
 import PremiumProductCard from '@/components/homepage/premium/PremiumProductCard';
 import PremiumFooter from '@/components/homepage/premium/PremiumFooter';
 import CatalogueHero from '@/components/homepage/CatalogueHero';
+import { productListKey } from '@/lib/utils';
 import { mergeCatalogueHomeSections, type CatalogueHomeSection } from '@/lib/catalogue-sections';
 import {
   mergeHomepage3Placeholders,
@@ -184,7 +185,7 @@ export default function CatalogueHome({
           </h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
             {newArrivalProducts.map((product: any) => (
-              <PremiumProductCard key={product._id} product={product} forceNewBadge />
+              <PremiumProductCard key={productListKey(product)} product={product} forceNewBadge />
             ))}
           </div>
           <div className="text-center mt-12">
@@ -252,7 +253,7 @@ export default function CatalogueHome({
         </div>
         <div className="max-w-7xl mx-auto overflow-x-auto no-scrollbar snap-x snap-mandatory flex gap-4 md:gap-8 pb-4">
           {(bestsellers.length ? bestsellers : products.slice(0, 8)).map((product: any) => (
-            <div key={product._id} className="w-[45vw] sm:w-[240px] shrink-0 snap-start">
+            <div key={productListKey(product)} className="w-[45vw] sm:w-[240px] shrink-0 snap-start">
               <PremiumProductCard product={product} />
             </div>
           ))}

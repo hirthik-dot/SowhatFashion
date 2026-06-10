@@ -6,6 +6,7 @@ import ProductCard from '@/components/shared/ProductCard';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
+import { productListKey } from '@/lib/utils';
 
 function MagazineBentoCard({ product, className, type = 'small' }: any) {
   const [isHovered, setIsHovered] = useState(false);
@@ -151,7 +152,7 @@ export default function MagazineHome({ products, offers, settings }: any) {
             </Link>
             <div className="hidden md:block space-y-4">
               {featuredProducts.slice(0, 2).map((product: any) => (
-                <ProductCard key={product._id} product={product} variant="wide" />
+                <ProductCard key={productListKey(product)} product={product} variant="wide" />
               ))}
             </div>
           </div>
@@ -216,7 +217,7 @@ export default function MagazineHome({ products, offers, settings }: any) {
 
           <div className="max-w-5xl mx-auto flex overflow-x-auto no-scrollbar md:grid md:grid-cols-3 gap-4 md:gap-6 relative z-10 px-4 pb-4 -mx-4 md:mx-auto">
             {(flashSale.products || featuredProducts).slice(0, 3).map((product: any) => (
-              <MagazineFlashCard key={product._id} product={product} />
+              <MagazineFlashCard key={productListKey(product)} product={product} />
             ))}
           </div>
         </section>
@@ -241,7 +242,7 @@ export default function MagazineHome({ products, offers, settings }: any) {
           <h2 className="text-3xl md:text-5xl font-playfair font-bold mb-10">Curated Staples</h2>
           <div className="divide-y divide-[var(--border)]">
             {products?.slice(0, 4).map((product: any) => (
-              <MagazineCuratedCard key={product._id} product={product} />
+              <MagazineCuratedCard key={productListKey(product)} product={product} />
             ))}
           </div>
         </div>

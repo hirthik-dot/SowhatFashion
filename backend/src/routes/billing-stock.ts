@@ -8,6 +8,7 @@ import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
 import { requirePermission } from '../middleware/billingRoleMiddleware';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
 import slugify from 'slugify';
+import { applyBillingCategoriesToProduct } from '../lib/billing-ecommerce-category';
 import {
   getInShopCountsByProducts,
   getProductPriceVarianceByProducts,
@@ -87,6 +88,9 @@ router.post('/entry', requirePermission('canManageStock'), async (req: BillingAu
       billingName: { $regex: `^${cleanProductName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
     });
 
+    const ecommerceCategory = { category: '', subCategory: '' };
+    applyBillingCategoriesToProduct(ecommerceCategory, categoryDoc.name, subCategoryDoc.name);
+
     // 2) If not found, create master product
     const masterProduct =
       existingMaster ||
@@ -94,8 +98,8 @@ router.post('/entry', requirePermission('canManageStock'), async (req: BillingAu
         name: cleanProductName,
         billingName: cleanProductName,
         slug: `${slugify(cleanProductName, { lower: true, strict: true })}-${Date.now()}`,
-        category: categoryDoc.name,
-        subCategory: subCategoryDoc.name,
+        category: ecommerceCategory.category,
+        subCategory: ecommerceCategory.subCategory,
         billingCategory: categoryDoc._id,
         billingSubCategory: subCategoryDoc._id,
         supplier: supplierDoc._id,
@@ -147,6 +151,10 @@ router.post('/entry', requirePermission('canManageStock'), async (req: BillingAu
       })),
       { ordered: true }
     );
+
+    applyBillingCategoriesToProduct(masterProduct, categoryDoc.name, subCategoryDoc.name);
+    masterProduct.billingCategory = categoryDoc._id;
+    masterProduct.billingSubCategory = subCategoryDoc._id;
 
     // 5) Update master Product aggregates
     const sizeStock = Array.isArray((masterProduct as any).sizeStock) ? (masterProduct as any).sizeStock : [];
@@ -219,14 +227,17 @@ router.post('/entry/bulk', requirePermission('canManageStock'), async (req: Bill
       billingName: { $regex: `^${cleanProductName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
     });
 
+    const ecommerceCategory = { category: '', subCategory: '' };
+    applyBillingCategoriesToProduct(ecommerceCategory, categoryDoc.name, subCategoryDoc.name);
+
     const masterProduct =
       existingMaster ||
       (await Product.create({
         name: cleanProductName,
         billingName: cleanProductName,
         slug: `${slugify(cleanProductName, { lower: true, strict: true })}-${Date.now()}`,
-        category: categoryDoc.name,
-        subCategory: subCategoryDoc.name,
+        category: ecommerceCategory.category,
+        subCategory: ecommerceCategory.subCategory,
         billingCategory: categoryDoc._id,
         billingSubCategory: subCategoryDoc._id,
         supplier: supplierDoc._id,
@@ -240,6 +251,10 @@ router.post('/entry/bulk', requirePermission('canManageStock'), async (req: Bill
         isActive: false,
         isBillingProduct: true,
       }));
+
+    applyBillingCategoriesToProduct(masterProduct, categoryDoc.name, subCategoryDoc.name);
+    masterProduct.billingCategory = categoryDoc._id;
+    masterProduct.billingSubCategory = subCategoryDoc._id;
 
     const createdEntries: any[] = [];
 
@@ -418,6 +433,7 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
     const priceVariance = priceVarianceByProduct.get(productKey) || {
       hasMultiplePrices: false,
       sellingPrices: [],
+      priceVariants: [],
     };
     return {
     _id: p._id,
@@ -436,6 +452,7 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
     mrp: Number(p.price || 0),
     hasMultiplePrices: priceVariance.hasMultiplePrices,
     sellingPrices: priceVariance.sellingPrices,
+    priceVariants: priceVariance.priceVariants,
     status: p.isActive ? 'active' : 'inactive',
     notes: p.notes || '',
     incomingPrice: isSuperAdmin ? Number(p.incomingPrice || 0) : undefined,

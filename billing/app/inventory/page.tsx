@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import BillingShell from "@/components/layout/BillingShell";
 import MultiplePriceBadge from "@/components/inventory/MultiplePriceBadge";
+import PriceVariantsDropdown from "@/components/inventory/PriceVariantsDropdown";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 
@@ -145,7 +146,11 @@ export default function InventoryPage() {
                   className={`border-t border-[var(--border)] ${product.hasMultiplePrices ? "bg-[color-mix(in_srgb,var(--error)_6%,transparent)]" : ""}`}
                 >
                   <td>
-                    <span className="inline-flex items-center flex-wrap gap-x-1">
+                    <span className="inline-flex items-center flex-wrap gap-x-1 gap-y-1">
+                      <PriceVariantsDropdown
+                        variants={product.priceVariants}
+                        showCost={isSuperAdmin}
+                      />
                       <span>{product.name}</span>
                       <MultiplePriceBadge
                         hasMultiplePrices={product.hasMultiplePrices}

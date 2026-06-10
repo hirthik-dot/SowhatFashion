@@ -2,6 +2,20 @@ export function formatPrice(price: number): string {
   return `₹${price.toLocaleString('en-IN')}`;
 }
 
+/** Stable React key for product lists (handles multi-price ecommerce variants). */
+export function productListKey(product: {
+  _id?: string;
+  slug?: string;
+  priceVariant?: number;
+  isPriceVariant?: boolean;
+}): string {
+  if (product.slug) return String(product.slug);
+  if (product.isPriceVariant && product._id != null && product.priceVariant != null) {
+    return `${product._id}-${Math.round(Number(product.priceVariant))}`;
+  }
+  return String(product._id ?? '');
+}
+
 export function calculateDiscount(price: number, discountPrice: number): number {
   if (!discountPrice || discountPrice >= price) return 0;
   return Math.round(((price - discountPrice) / price) * 100);

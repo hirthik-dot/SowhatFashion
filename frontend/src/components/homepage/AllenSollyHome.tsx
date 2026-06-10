@@ -5,6 +5,7 @@ import ProductCard from '@/components/shared/ProductCard';
 import ComboOfferBanner from '@/components/shared/ComboOfferBanner';
 import FlashSaleCountdown from '@/components/shared/FlashSaleCountdown';
 import Link from 'next/link';
+import { productListKey } from '@/lib/utils';
 
 export default function AllenSollyHome({ products, offers, settings }: any) {
   const featuredProducts = products?.filter((p: any) => p.isFeatured).slice(0, 4) || [];
@@ -105,7 +106,7 @@ export default function AllenSollyHome({ products, offers, settings }: any) {
             <div className="w-full xl:w-2/3 overflow-x-auto no-scrollbar pb-4 -mx-4 px-4 xl:mx-0 xl:px-0">
               <div className="flex gap-4 md:gap-6 min-w-max">
                 {(flashSale.products || featuredProducts).slice(0, 4).map((product: any) => (
-                  <div key={product._id} className="w-[160px] md:w-[240px] shrink-0">
+                  <div key={productListKey(product)} className="w-[160px] md:w-[240px] shrink-0">
                     <ProductCard product={product} />
                   </div>
                 ))}
@@ -120,7 +121,7 @@ export default function AllenSollyHome({ products, offers, settings }: any) {
         <h2 className="text-3xl md:text-4xl font-playfair font-bold mb-12 tracking-wide uppercase">Featured Collection</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-left">
           {featuredProducts.map((product: any) => (
-            <ProductCard key={product._id} product={product} />
+            <ProductCard key={productListKey(product)} product={product} />
           ))}
         </div>
         <div className="mt-12 text-center">
@@ -151,7 +152,7 @@ export default function AllenSollyHome({ products, offers, settings }: any) {
         <div className="overflow-x-auto no-scrollbar px-4 pb-8">
           <div className="flex gap-4 md:gap-6 min-w-max">
             {newArrivals.slice(0, 6).map((product: any) => (
-              <div key={product._id} className="w-[160px] md:w-[280px] shrink-0">
+              <div key={productListKey(product)} className="w-[160px] md:w-[280px] shrink-0">
                 <ProductCard product={product} />
               </div>
             ))}

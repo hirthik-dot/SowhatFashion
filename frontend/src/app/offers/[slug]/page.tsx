@@ -5,6 +5,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/shared/ProductCard';
 import OfferProductsClient, { OfferCountdownLive } from './OfferProductsClient';
+import { productListKey } from '@/lib/utils';
 
 export const revalidate = 60;
 
@@ -90,7 +91,7 @@ export default async function OfferDetailPage({ params }: { params: Promise<{ sl
             <h3 className="text-lg font-playfair font-bold mb-6">You might also like</h3>
             <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
               {related.map((p: any) => (
-                <div key={p._id} className="min-w-[160px] w-[160px] shrink-0">
+                <div key={productListKey(p)} className="min-w-[160px] w-[160px] shrink-0">
                   <ProductCard product={p} />
                 </div>
               ))}

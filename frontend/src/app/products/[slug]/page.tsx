@@ -3,6 +3,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/shared/ProductCard';
 import ProductDetailClient from '@/app/products/[slug]/ProductDetailClient';
+import { productListKey } from '@/lib/utils';
 
 export const revalidate = 60; // SSG with ISR
 
@@ -57,7 +58,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             <h2 className="text-2xl font-playfair font-bold text-center uppercase tracking-widest mb-10">You May Also Like</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
               {relatedProducts.map((p: any) => (
-                <ProductCard key={p._id} product={p} />
+                <ProductCard key={productListKey(p)} product={p} />
               ))}
             </div>
           </section>

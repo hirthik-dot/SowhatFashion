@@ -5,6 +5,8 @@ import StockEntry from '../models/StockEntry';
 import StockItem from '../models/StockItem';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
 import { requireAnyPermission } from '../middleware/billingRoleMiddleware';
+import BillingCategory from '../models/BillingCategory';
+import { toEcommerceCategorySlug, toEcommerceSubCategorySlug } from '../lib/billing-ecommerce-category';
 import {
   getBillingInShopSummary,
   getInShopCountsByProducts,
@@ -212,6 +214,7 @@ router.get('/products', async (req: BillingAuthRequest, res: Response) => {
       const priceVariance = priceVarianceByProduct.get(productKey) || {
         hasMultiplePrices: false,
         sellingPrices: [],
+        priceVariants: [],
       };
       const row = {
         ...product,
@@ -222,6 +225,7 @@ router.get('/products', async (req: BillingAuthRequest, res: Response) => {
         stock: inShop.stockInShop,
         hasMultiplePrices: priceVariance.hasMultiplePrices,
         sellingPrices: priceVariance.sellingPrices,
+        priceVariants: priceVariance.priceVariants,
       };
       if (!isSuperAdmin) {
         delete (row as any).incomingPrice;
@@ -283,9 +287,8 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     if (updates.billingCategory !== undefined) {
       if (updates.billingCategory && String(updates.billingCategory).match(/^[0-9a-fA-F]{24}$/)) {
         (product as any).billingCategory = updates.billingCategory;
-        const BillingCategory = require('../models/BillingCategory').default;
         const catDoc = await BillingCategory.findById(updates.billingCategory).select('name').lean();
-        if (catDoc) product.category = catDoc.name;
+        if (catDoc) product.category = toEcommerceCategorySlug(catDoc.name);
       }
     } else if (updates.category !== undefined) {
       product.category = String(updates.category).trim();
@@ -295,9 +298,8 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     if (updates.billingSubCategory !== undefined) {
       if (updates.billingSubCategory && String(updates.billingSubCategory).match(/^[0-9a-fA-F]{24}$/)) {
         (product as any).billingSubCategory = updates.billingSubCategory;
-        const BillingCategory = require('../models/BillingCategory').default;
         const subDoc = await BillingCategory.findById(updates.billingSubCategory).select('name').lean();
-        if (subDoc) product.subCategory = subDoc.name;
+        if (subDoc) product.subCategory = toEcommerceSubCategorySlug(subDoc.name);
       }
     } else if (updates.subCategory !== undefined) {
       product.subCategory = String(updates.subCategory).trim();

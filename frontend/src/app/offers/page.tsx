@@ -5,6 +5,7 @@ import ComboOfferBanner from '@/components/shared/ComboOfferBanner';
 import FlashSaleCountdown from '@/components/shared/FlashSaleCountdown';
 import OfferBadge from '@/components/shared/OfferBadge';
 import { getOffers } from '@/lib/api';
+import { productListKey } from '@/lib/utils';
 
 export const revalidate = 30; // ISR
 
@@ -62,7 +63,7 @@ export default async function OffersPage() {
                       <div className="p-6 md:p-8">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                           {offer.products?.map((p: any) => (
-                            <ProductCard key={p._id} product={p} />
+                            <ProductCard key={productListKey(p)} product={p} />
                           ))}
                         </div>
                       </div>
@@ -102,7 +103,7 @@ export default async function OffersPage() {
                       <p className="text-[var(--text-secondary)] mb-8">{offer.description}</p>
                       <div className="grid grid-cols-3 gap-2">
                          {offer.products?.slice(0,3).map((p:any) => (
-                            <div key={p._id} className="aspect-[3/4] bg-gray-100 rounded overflow-hidden relative border border-[var(--border)]"> {/* Real product images if populated */}
+                            <div key={productListKey(p)} className="aspect-[3/4] bg-gray-100 rounded overflow-hidden relative border border-[var(--border)]"> {/* Real product images if populated */}
                               <img src={p.images?.[0] || '/placeholder.jpg'} alt={p.name} className="object-cover w-full h-full" />
                             </div>
                          ))}

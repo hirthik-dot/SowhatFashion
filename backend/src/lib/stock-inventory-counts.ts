@@ -113,48 +113,102 @@ export async function getProductStockBreakdown(
   return buildBreakdownFromAggregateRows(rows);
 }
 
+export type ProductPriceVariant = {
+  sellingPrice: number;
+  incomingPrice: number;
+  stock: number;
+  sizeStock: { size: string; stock: number }[];
+};
+
 export type ProductPriceVariance = {
   hasMultiplePrices: boolean;
   sellingPrices: number[];
+  priceVariants: ProductPriceVariant[];
 };
 
-export async function getProductPriceVarianceByProducts(
+export async function getProductPriceVariantsByProducts(
   productIds: Array<mongoose.Types.ObjectId | string>
-): Promise<Map<string, ProductPriceVariance>> {
+): Promise<Map<string, ProductPriceVariant[]>> {
   const ids = productIds
     .filter(Boolean)
     .map((id) => new mongoose.Types.ObjectId(String(id)));
-  const result = new Map<string, ProductPriceVariance>();
+  const result = new Map<string, ProductPriceVariant[]>();
   if (!ids.length) return result;
 
   const rows = await StockItem.aggregate([
     { $match: { product: { $in: ids }, status: { $in: [...BILLABLE_STATUSES] } } },
     {
       $group: {
-        _id: { product: '$product', sellingPrice: '$sellingPrice' },
-      },
-    },
-    {
-      $group: {
-        _id: '$_id.product',
-        sellingPrices: { $addToSet: '$_id.sellingPrice' },
+        _id: { product: '$product', sellingPrice: '$sellingPrice', size: '$size' },
+        count: { $sum: 1 },
+        incomingPrice: { $first: '$incomingPrice' },
       },
     },
   ]);
 
-  for (const id of ids) {
-    result.set(String(id), { hasMultiplePrices: false, sellingPrices: [] });
-  }
+  const byProduct = new Map<string, Map<number, ProductPriceVariant>>();
 
   for (const row of rows) {
-    const sellingPrices = [...(row.sellingPrices || [])]
-      .map((price: unknown) => Number(price || 0))
-      .filter((price: number) => Number.isFinite(price))
-      .sort((a: number, b: number) => a - b);
-    result.set(String(row._id), {
+    const productKey = String(row._id?.product || '');
+    const sellingPrice = Number(row._id?.sellingPrice || 0);
+    const size = String(row._id?.size || '').trim() || '-';
+    const count = Number(row.count || 0);
+    if (!productKey) continue;
+
+    if (!byProduct.has(productKey)) byProduct.set(productKey, new Map());
+    const priceMap = byProduct.get(productKey)!;
+    if (!priceMap.has(sellingPrice)) {
+      priceMap.set(sellingPrice, {
+        sellingPrice,
+        incomingPrice: Number(row.incomingPrice || 0),
+        stock: 0,
+        sizeStock: [],
+      });
+    }
+    const variant = priceMap.get(sellingPrice)!;
+    variant.stock += count;
+    const sizeRow = variant.sizeStock.find((entry) => entry.size === size);
+    if (sizeRow) sizeRow.stock += count;
+    else variant.sizeStock.push({ size, stock: count });
+  }
+
+  for (const id of ids) {
+    const key = String(id);
+    const priceMap = byProduct.get(key);
+    const variants = priceMap
+      ? [...priceMap.values()]
+          .map((variant) => ({
+            ...variant,
+            sizeStock: [...variant.sizeStock].sort((a, b) => compareSizes(a.size, b.size)),
+          }))
+          .sort((a, b) => a.sellingPrice - b.sellingPrice)
+      : [];
+    result.set(key, variants);
+  }
+
+  return result;
+}
+
+export async function getProductPriceVarianceByProducts(
+  productIds: Array<mongoose.Types.ObjectId | string>
+): Promise<Map<string, ProductPriceVariance>> {
+  const variantsByProduct = await getProductPriceVariantsByProducts(productIds);
+  const result = new Map<string, ProductPriceVariance>();
+
+  for (const [productId, priceVariants] of variantsByProduct.entries()) {
+    const sellingPrices = priceVariants.map((variant) => variant.sellingPrice);
+    result.set(productId, {
       hasMultiplePrices: sellingPrices.length > 1,
       sellingPrices,
+      priceVariants,
     });
+  }
+
+  for (const id of productIds) {
+    const key = String(id);
+    if (!result.has(key)) {
+      result.set(key, { hasMultiplePrices: false, sellingPrices: [], priceVariants: [] });
+    }
   }
 
   return result;

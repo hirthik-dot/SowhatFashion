@@ -6,7 +6,7 @@ import ProductCard from '@/components/shared/ProductCard';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { normalizeAuthUser, userInitials } from '@/lib/auth-user';
-import { getOrderStatusLabel, getPaymentStatusLabel } from '@/lib/utils';
+import { getOrderStatusLabel, getPaymentStatusLabel, productListKey } from '@/lib/utils';
 import { IconUser, IconPackage, IconHeart, IconMapPin } from '@/components/icons/PremiumIcons';
 
 type AccountTab = 'profile' | 'orders' | 'wishlist' | 'addresses';
@@ -377,7 +377,7 @@ function AccountContent() {
                   ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                       {wishlistProducts.map((p) => (
-                        <ProductCard key={p._id} product={p} />
+                        <ProductCard key={productListKey(p)} product={p} />
                       ))}
                     </div>
                   )}
