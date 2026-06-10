@@ -126,6 +126,9 @@ export default function HistoryPage() {
       Salesman: bill.salesman?.name || "-",
       Items: activeBillItemCount(bill.items, bill.returns),
       Total: bill.totalAmount,
+      PointsRedeemed: Number(bill.pointsRedeemed || 0),
+      PointsCost: Number(bill.pointsDiscountAmount || 0),
+      CashCollected: Number(bill.totalAmount || 0),
       PaymentMethod: bill.paymentMethod,
       Status: formatStatusLabel(bill),
       EditedCount: (bill.editHistory || []).length,
@@ -189,7 +192,7 @@ export default function HistoryPage() {
         </div>
 
         <div className="pos-card p-3 overflow-auto">
-          <table className="w-full min-w-[1040px] text-sm">
+          <table className="w-full min-w-[1180px] text-sm">
             <thead>
               <tr className="text-left text-[var(--text-secondary)]">
                 <th>Bill#</th>
@@ -197,7 +200,8 @@ export default function HistoryPage() {
                 <th>Customer</th>
                 <th>Salesman</th>
                 <th>Items</th>
-                <th>Total</th>
+                <th>Points Cost</th>
+                <th>Cash</th>
                 <th>Payment</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -211,6 +215,11 @@ export default function HistoryPage() {
                   <td>{bill.customer?.name || "Walk-in"}</td>
                   <td>{bill.salesman?.name || "-"}</td>
                   <td>{activeBillItemCount(bill.items, bill.returns)}</td>
+                  <td>
+                    {Number(bill.pointsDiscountAmount || 0) > 0
+                      ? `₹${Number(bill.pointsDiscountAmount).toLocaleString("en-IN")}`
+                      : "-"}
+                  </td>
                   <td>₹{Number(bill.totalAmount || 0).toLocaleString("en-IN")}</td>
                   <td>{String(bill.paymentMethod || "").toUpperCase()}</td>
                   <td>
@@ -330,8 +339,13 @@ export default function HistoryPage() {
               {Number(viewBill.billDiscountAmount || 0) > 0 && (
                 <div className="text-red-400">Customer Disc: -₹{viewBill.billDiscountAmount}</div>
               )}
+              {Number(viewBill.pointsDiscountAmount || 0) > 0 && (
+                <div className="text-orange-300">
+                  Points ({Number(viewBill.pointsRedeemed || 0)} pts): -₹{viewBill.pointsDiscountAmount}
+                </div>
+              )}
               <div className="font-bold text-lg pt-2 mt-1 border-t border-[var(--border)] min-w-[200px] text-right">
-                Net Total: ₹{viewBill.totalAmount}
+                Cash Collected: ₹{viewBill.totalAmount}
               </div>
             </div>
           </div>

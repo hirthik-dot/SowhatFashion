@@ -29,7 +29,8 @@ export type AddItemResult = { added: boolean; message?: string };
 /** GST is added on MRP subtotal; discounts reduce (subtotal + GST). */
 const BILLING_GST_RATE = 0.05;
 
-const lineKey = (productId: string, size?: string) => `${productId}|${size || ""}`;
+const lineKey = (productId: string, size?: string, mrp?: number) =>
+  `${productId}|${size || ""}|${mrp ?? ""}`;
 
 const itemBarcodes = (item: BillItem) => (item.barcodes?.length ? item.barcodes : item.barcode ? [item.barcode] : []);
 
@@ -230,9 +231,11 @@ export const useBillStore = create<BillState>((set, get) => ({
           return tab;
         }
 
-        const key = lineKey(productId, size);
+        const mrp = Number(product.mrp || product.price || 0);
+        const key = lineKey(productId, size, mrp);
         const existingIndex = tab.items.findIndex(
-          (item) => lineKey(String(item.productId || item.product), item.size) === key
+          (item) =>
+            lineKey(String(item.productId || item.product), item.size, item.mrp) === key
         );
 
         if (existingIndex >= 0) {
@@ -271,7 +274,7 @@ export const useBillStore = create<BillState>((set, get) => ({
               name: product.name,
               category: product.category || "",
               size,
-              mrp: Number(product.mrp || product.price || 0),
+              mrp,
               stock: stockLimit,
               quantity: 1,
               itemDiscountType: "none" as const,
@@ -319,7 +322,8 @@ export const useBillStore = create<BillState>((set, get) => ({
       const next = await billingApi.nextBarcode(
         String(item.productId || item.product),
         item.size || "",
-        exclude
+        exclude,
+        item.mrp
       );
       const barcode = String(next.barcode || "").trim();
       if (!barcode) return { added: false, message: "No barcode returned" };

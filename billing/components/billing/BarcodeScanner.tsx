@@ -99,7 +99,12 @@ export default function BarcodeScanner(props: {
     let barcode = pickBarcode(p);
     if (!barcode) {
       try {
-        const next = await billingApi.nextBarcode(p._id, p.size || "", usedBarcodes);
+        const next = await billingApi.nextBarcode(
+          p._id,
+          p.size || "",
+          usedBarcodes,
+          getDisplayPrice(p)
+        );
         barcode = String(next.barcode || "").trim() || null;
       } catch {
         onToast?.("No more stock available for this product");
@@ -276,7 +281,7 @@ export default function BarcodeScanner(props: {
                   const price = getDisplayPrice(p);
                   return (
                     <div
-                      key={`${p._id}-${p.size || "na"}-${p.barcode || idx}`}
+                      key={`${p._id}-${p.size || "na"}-${getDisplayPrice(p)}-${p.barcode || idx}`}
                       className={[
                         "px-3 py-2 cursor-pointer border-l-2",
                         isSelected ? "bg-[color-mix(in_srgb,var(--gold)_20%,transparent)] border-l-[var(--gold)]" : "border-l-transparent hover:bg-[var(--surface)]",

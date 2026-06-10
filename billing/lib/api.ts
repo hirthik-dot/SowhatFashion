@@ -75,10 +75,18 @@ export const billingApi = {
   logout: () => request("/api/billing/auth/logout", { method: "POST" }),
   dashboardSummary: () => request("/api/billing/reports/summary"),
   scanBarcode: (barcode: string) => request(`/api/billing/bills/scan/${encodeURIComponent(barcode)}`),
-  nextBarcode: (productId: string, size: string, exclude: string[] = []) => {
+  nextBarcode: (
+    productId: string,
+    size: string,
+    exclude: string[] = [],
+    sellingPrice?: number
+  ) => {
     const params = new URLSearchParams({ productId });
     if (size) params.set("size", size);
     if (exclude.length) params.set("exclude", exclude.join(","));
+    if (sellingPrice !== undefined && Number.isFinite(sellingPrice)) {
+      params.set("sellingPrice", String(sellingPrice));
+    }
     return request(`/api/billing/bills/next-barcode?${params.toString()}`);
   },
   calculateBill: (payload: any) =>

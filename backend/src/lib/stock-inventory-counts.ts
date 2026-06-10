@@ -113,6 +113,53 @@ export async function getProductStockBreakdown(
   return buildBreakdownFromAggregateRows(rows);
 }
 
+export type ProductPriceVariance = {
+  hasMultiplePrices: boolean;
+  sellingPrices: number[];
+};
+
+export async function getProductPriceVarianceByProducts(
+  productIds: Array<mongoose.Types.ObjectId | string>
+): Promise<Map<string, ProductPriceVariance>> {
+  const ids = productIds
+    .filter(Boolean)
+    .map((id) => new mongoose.Types.ObjectId(String(id)));
+  const result = new Map<string, ProductPriceVariance>();
+  if (!ids.length) return result;
+
+  const rows = await StockItem.aggregate([
+    { $match: { product: { $in: ids }, status: { $in: [...BILLABLE_STATUSES] } } },
+    {
+      $group: {
+        _id: { product: '$product', sellingPrice: '$sellingPrice' },
+      },
+    },
+    {
+      $group: {
+        _id: '$_id.product',
+        sellingPrices: { $addToSet: '$_id.sellingPrice' },
+      },
+    },
+  ]);
+
+  for (const id of ids) {
+    result.set(String(id), { hasMultiplePrices: false, sellingPrices: [] });
+  }
+
+  for (const row of rows) {
+    const sellingPrices = [...(row.sellingPrices || [])]
+      .map((price: unknown) => Number(price || 0))
+      .filter((price: number) => Number.isFinite(price))
+      .sort((a: number, b: number) => a - b);
+    result.set(String(row._id), {
+      hasMultiplePrices: sellingPrices.length > 1,
+      sellingPrices,
+    });
+  }
+
+  return result;
+}
+
 export async function getInShopCountsByProducts(
   productIds: Array<mongoose.Types.ObjectId | string>
 ): Promise<Map<string, ProductInShopCounts>> {

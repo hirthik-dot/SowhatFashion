@@ -79,6 +79,8 @@ export default function DashboardPage() {
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const cards = [
     { label: "Today's Revenue (ex-GST)", value: `₹${Math.round(summary?.totalRevenue || 0)}` },
+    { label: "Points Cost Today", value: `₹${Math.round(summary?.totalPointsCost || 0)}` },
+    { label: "Cash Collected Today", value: `₹${Math.round(summary?.totalCashCollected || 0)}` },
     { label: "Bills Today", value: todayBillsCount },
     { label: "Items Sold", value: summary?.totalItems || 0 },
     { label: "Low Stock", value: lowStock.length || 0 },
@@ -119,7 +121,7 @@ export default function DashboardPage() {
         </div>
       ) : (
       <>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {cards.map((card) => (
           <div key={card.label} className="pos-card p-4">
             <p className="text-sm text-[var(--text-secondary)]">{card.label}</p>
@@ -166,9 +168,16 @@ export default function DashboardPage() {
         <div className="pos-card p-3 overflow-auto">
           <p className="mb-2 font-medium">Recent Bills</p>
           <table className="w-full text-sm min-w-[500px]">
-            <thead><tr className="text-left text-[var(--text-secondary)]"><th>Bill</th><th>Customer</th><th>Total</th></tr></thead>
+            <thead><tr className="text-left text-[var(--text-secondary)]"><th>Bill</th><th>Customer</th><th>Points Cost</th><th>Cash</th></tr></thead>
             <tbody>
-              {bills.slice(0, 10).map((bill) => <tr key={bill._id} className="border-t border-[var(--border)]"><td>{bill.billNumber || "-"}</td><td>{bill.customer?.name || "Walk-in"}</td><td>₹{bill.totalAmount}</td></tr>)}
+              {bills.slice(0, 10).map((bill) => (
+                <tr key={bill._id} className="border-t border-[var(--border)]">
+                  <td>{bill.billNumber || "-"}</td>
+                  <td>{bill.customer?.name || "Walk-in"}</td>
+                  <td>{Number(bill.pointsDiscountAmount || 0) > 0 ? `₹${bill.pointsDiscountAmount}` : "-"}</td>
+                  <td>₹{bill.totalAmount}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

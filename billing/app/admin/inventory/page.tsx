@@ -7,6 +7,7 @@ import BarcodePrintDialog from "@/components/stock/BarcodePrintDialog";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 import EditProductModal from "@/components/inventory/EditProductModal";
+import MultiplePriceBadge from "@/components/inventory/MultiplePriceBadge";
 
 type BarcodePrintState = {
   title: string;
@@ -250,15 +251,30 @@ export default function AdminInventoryPage() {
                   .map((s: any) => `${s.size}:${s.stock}`)
                   .join(" ");
                 return (
-                  <tr key={row._id} className="border-t border-[var(--border)]">
-                    <td>{row.name || "-"}</td>
+                  <tr
+                    key={row._id}
+                    className={`border-t border-[var(--border)] ${row.hasMultiplePrices ? "bg-[color-mix(in_srgb,var(--error)_6%,transparent)]" : ""}`}
+                  >
+                    <td>
+                      <span className="inline-flex items-center flex-wrap gap-x-1">
+                        <span>{row.name || "-"}</span>
+                        <MultiplePriceBadge
+                          hasMultiplePrices={row.hasMultiplePrices}
+                          sellingPrices={row.sellingPrices}
+                        />
+                      </span>
+                    </td>
                     <td>{row.category || "-"}</td>
                     <td>{row.subCategory || "-"}</td>
                     <td>{row.supplier || "-"}</td>
                     <td className="whitespace-nowrap">{sizes || "-"}</td>
                     <td>{row.stockInShop ?? row.totalStock ?? 0}</td>
                     <td>{row.sold || 0}</td>
-                    <td>₹{Number(row.mrp || row.price || 0).toFixed(2)}</td>
+                    <td className={row.hasMultiplePrices ? "text-[var(--error)] font-medium" : ""}>
+                      {row.hasMultiplePrices && row.sellingPrices?.length
+                        ? row.sellingPrices.map((price: number) => `₹${Number(price).toFixed(2)}`).join(" / ")
+                        : `₹${Number(row.mrp || row.price || 0).toFixed(2)}`}
+                    </td>
                     <td>{statusData.icon} {statusData.label}</td>
                     <td>
                       <div className="flex gap-2">

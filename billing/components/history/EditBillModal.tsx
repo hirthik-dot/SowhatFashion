@@ -527,7 +527,7 @@ export default function EditBillModal({
             <div className="bg-[var(--surface-2)] rounded p-2 max-h-48 overflow-auto space-y-1">
               {searchResults.map((result: any) => (
                 <button
-                  key={`${result.barcode}-${result.size}`}
+                  key={`${result.barcode}-${result.size}-${result.price ?? result.mrp ?? 0}`}
                   className="w-full text-left flex items-center justify-between p-2 rounded hover:bg-black/20"
                   onClick={() => addFoundItem(result)}
                 >

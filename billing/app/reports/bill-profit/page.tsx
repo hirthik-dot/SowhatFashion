@@ -115,6 +115,9 @@ export default function BillWiseProfitPage() {
         Items: row.itemCount || 0,
         "Stock Units": row.stockUnits || 0,
         "Bill Total (incl. GST)": Number(row.totalAmount || 0),
+        PointsRedeemed: Number(row.pointsRedeemed || 0),
+        "Points Cost": Number(row.pointsCost ?? row.pointsDiscountAmount ?? 0),
+        "Cash Collected": Number(row.cashCollected ?? row.totalAmount ?? 0),
         "Revenue (ex-GST)": Number(row.revenue || 0),
         Cost: Number(row.cost || 0),
         Profit: Number(row.profit || 0),
@@ -158,10 +161,12 @@ export default function BillWiseProfitPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3">
           {[
             { label: "Bills", value: summary?.totalBills ?? 0, format: "number" },
             { label: "Revenue (ex-GST)", value: summary?.totalRevenue ?? 0, format: "currency" },
+            { label: "Points Cost", value: summary?.totalPointsCost ?? 0, format: "currency" },
+            { label: "Cash Collected", value: summary?.totalCashCollected ?? 0, format: "currency" },
             { label: "Total Cost", value: summary?.totalCost ?? 0, format: "currency" },
             { label: "Total Profit", value: summary?.totalProfit ?? 0, format: "currency", highlight: true },
             { label: "Avg Margin", value: summary?.profitMargin ?? 0, format: "percent" },
@@ -221,7 +226,7 @@ export default function BillWiseProfitPage() {
           {loading ? (
             <p className="text-sm text-[var(--text-secondary)] p-4">Loading...</p>
           ) : (
-            <table className="w-full min-w-[1100px] text-sm">
+            <table className="w-full min-w-[1280px] text-sm">
               <thead>
                 <tr className="text-left text-[var(--text-secondary)]">
                   <th>Bill #</th>
@@ -230,6 +235,8 @@ export default function BillWiseProfitPage() {
                   <th>Salesman</th>
                   <th>Items</th>
                   <th>Revenue</th>
+                  <th>Points Cost</th>
+                  <th>Cash</th>
                   <th>Cost</th>
                   <th>Profit</th>
                   <th>Margin</th>
@@ -255,6 +262,12 @@ export default function BillWiseProfitPage() {
                       <span className="text-xs text-[var(--text-secondary)]"> ({row.stockUnits || 0} units)</span>
                     </td>
                     <td>{formatCurrency(row.revenue)}</td>
+                    <td>
+                      {Number(row.pointsCost ?? row.pointsDiscountAmount ?? 0) > 0
+                        ? formatCurrency(row.pointsCost ?? row.pointsDiscountAmount ?? 0)
+                        : "-"}
+                    </td>
+                    <td>{formatCurrency(row.cashCollected ?? row.totalAmount)}</td>
                     <td>{formatCurrency(row.cost)}</td>
                     <td className={Number(row.profit) >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"}>
                       {formatCurrency(row.profit)}
@@ -271,7 +284,7 @@ export default function BillWiseProfitPage() {
                 ))}
                 {!rows.length && !loading ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-[var(--text-secondary)]">
+                    <td colSpan={14} className="p-8 text-center text-[var(--text-secondary)]">
                       No bills found for the selected filters.
                     </td>
                   </tr>
@@ -328,9 +341,11 @@ export default function BillWiseProfitPage() {
               <p className="text-[var(--text-secondary)]">Loading bill details...</p>
             ) : detail ? (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
                   {[
                     { label: "Revenue (ex-GST)", value: formatCurrency(detail.revenue) },
+                    { label: "Points Cost", value: formatCurrency(detail.bill?.pointsCost ?? detail.bill?.pointsDiscountAmount ?? 0) },
+                    { label: "Cash Collected", value: formatCurrency(detail.bill?.cashCollected ?? detail.bill?.totalAmount ?? 0) },
                     { label: "Cost", value: formatCurrency(detail.cost) },
                     { label: "Profit", value: formatCurrency(detail.profit), highlight: true },
                     { label: "Margin", value: formatPct(detail.margin) },
@@ -356,8 +371,14 @@ export default function BillWiseProfitPage() {
                     <strong className="text-white">Date:</strong> {formatDate(detail.bill?.createdAt)}
                   </p>
                   <p>
-                    <strong className="text-white">Bill total (incl. GST):</strong>{" "}
+                    <strong className="text-white">Cash collected:</strong>{" "}
                     {formatCurrency(detail.bill?.totalAmount)}
+                    {Number(detail.bill?.pointsDiscountAmount || 0) > 0 ? (
+                      <span className="ml-3 text-orange-300">
+                        Points: {Number(detail.bill?.pointsRedeemed || 0)} pts (−
+                        {formatCurrency(detail.bill?.pointsDiscountAmount)})
+                      </span>
+                    ) : null}
                     <span className="ml-3">
                       <strong className="text-white">Payment:</strong> {detail.bill?.paymentMethod}
                     </span>

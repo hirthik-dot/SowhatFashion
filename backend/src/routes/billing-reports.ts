@@ -217,6 +217,9 @@ router.get('/summary', async (req, res: Response) => {
   );
 
   const totalRevenue = bills.reduce((sum, bill) => sum + billRevenueExGst(bill), 0);
+  const totalPointsCost = bills.reduce((sum, bill) => sum + Number(bill.pointsDiscountAmount || 0), 0);
+  const totalPointsRedeemed = bills.reduce((sum, bill) => sum + Number(bill.pointsRedeemed || 0), 0);
+  const totalCashCollected = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
   const totalBills = bills.length;
   const totalItems = bills.reduce((sum, bill) => sum + (bill.items || []).reduce((x: number, i: any) => x + Number(i.quantity || 0), 0), 0);
   const totalDiscount = bills.reduce((sum, bill) => sum + Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0), 0);
@@ -283,6 +286,9 @@ router.get('/summary', async (req, res: Response) => {
 
   return res.json({
     totalRevenue,
+    totalPointsCost,
+    totalPointsRedeemed,
+    totalCashCollected,
     totalBills,
     totalItems,
     totalReturns: returnsCount,
@@ -498,11 +504,15 @@ router.get('/bill-profit', async (req, res: Response) => {
             status: 1,
             paymentMethod: 1,
             totalAmount: 1,
+            pointsRedeemed: 1,
+            pointsDiscountAmount: 1,
             subtotal: 1,
             totalItemDiscount: 1,
             billDiscountAmount: 1,
             gstAmount: 1,
             revenue: 1,
+            pointsCost: { $ifNull: ['$pointsDiscountAmount', 0] },
+            cashCollected: { $ifNull: ['$totalAmount', 0] },
             cost: 1,
             profit: 1,
             margin: 1,
@@ -537,6 +547,8 @@ router.get('/bill-profit', async (req, res: Response) => {
           $addFields: {
             revenue: billRevenueFromItemsMongoExpr,
             cost: { $ifNull: [{ $arrayElemAt: ['$costDoc.cost', 0] }, 0] },
+            pointsCost: { $ifNull: ['$pointsDiscountAmount', 0] },
+            cashCollected: { $ifNull: ['$totalAmount', 0] },
           },
         },
         {
@@ -545,6 +557,8 @@ router.get('/bill-profit', async (req, res: Response) => {
             totalBills: { $sum: 1 },
             totalRevenue: { $sum: '$revenue' },
             totalCost: { $sum: '$cost' },
+            totalPointsCost: { $sum: '$pointsCost' },
+            totalCashCollected: { $sum: '$cashCollected' },
           },
         },
         {
@@ -573,6 +587,8 @@ router.get('/bill-profit', async (req, res: Response) => {
       totalCost: 0,
       totalProfit: 0,
       profitMargin: 0,
+      totalPointsCost: 0,
+      totalCashCollected: 0,
     };
 
     res.json({
@@ -586,6 +602,8 @@ router.get('/bill-profit', async (req, res: Response) => {
         totalCost: Number(summary.totalCost || 0),
         totalProfit: Number(summary.totalProfit || 0),
         profitMargin: Number(summary.profitMargin || 0),
+        totalPointsCost: Number(summary.totalPointsCost || 0),
+        totalCashCollected: Number(summary.totalCashCollected || 0),
       },
     });
   } catch (err: any) {
@@ -624,6 +642,10 @@ router.get('/bill-profit/:id', async (req, res: Response) => {
         billDiscountAmount: bill.billDiscountAmount,
         gstAmount: bill.gstAmount,
         totalAmount: bill.totalAmount,
+        pointsRedeemed: Number((bill as any).pointsRedeemed || 0),
+        pointsDiscountAmount: Number((bill as any).pointsDiscountAmount || 0),
+        pointsCost: Number((bill as any).pointsDiscountAmount || 0),
+        cashCollected: Number((bill as any).totalAmount || 0),
       },
       ...metrics,
     });
@@ -911,6 +933,9 @@ router.get('/export', async (req, res: Response) => {
     { header: 'GST', key: 'gst', width: 12 },
     { header: 'Payment', key: 'payment', width: 15 },
     { header: 'Status', key: 'status', width: 14 },
+    { header: 'Points Redeemed', key: 'pointsRedeemed', width: 16 },
+    { header: 'Points Cost', key: 'pointsCost', width: 14 },
+    { header: 'Cash Collected', key: 'cashCollected', width: 14 },
     { header: 'Total', key: 'total', width: 14 },
   ];
 
@@ -925,6 +950,9 @@ router.get('/export', async (req, res: Response) => {
       gst: bill.gstAmount || 0,
       payment: bill.paymentMethod || '',
       status: bill.status || '',
+      pointsRedeemed: Number(bill.pointsRedeemed || 0),
+      pointsCost: Number(bill.pointsDiscountAmount || 0),
+      cashCollected: Number(bill.totalAmount || 0),
       total: bill.totalAmount || 0,
     });
   });

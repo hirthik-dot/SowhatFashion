@@ -8,7 +8,11 @@ import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
 import { requirePermission } from '../middleware/billingRoleMiddleware';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
 import slugify from 'slugify';
-import { getInShopCountsByProducts, getProductStockBreakdown } from '../lib/stock-inventory-counts';
+import {
+  getInShopCountsByProducts,
+  getProductPriceVarianceByProducts,
+  getProductStockBreakdown,
+} from '../lib/stock-inventory-counts';
 
 const router = express.Router();
 
@@ -397,17 +401,24 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
 
   // Sold = total StockItems sold (for this product). We compute per product for correctness.
   const productIds = products.map((p: any) => p._id);
-  const soldCounts = await StockItem.aggregate([
-    { $match: { product: { $in: productIds }, status: 'sold' } },
-    { $group: { _id: '$product', count: { $sum: 1 } } },
+  const [soldCounts, inShopByProduct, priceVarianceByProduct] = await Promise.all([
+    StockItem.aggregate([
+      { $match: { product: { $in: productIds }, status: 'sold' } },
+      { $group: { _id: '$product', count: { $sum: 1 } } },
+    ]),
+    getInShopCountsByProducts(productIds),
+    getProductPriceVarianceByProducts(productIds),
   ]);
   const soldByProduct = new Map<string, number>(soldCounts.map((d: any) => [String(d._id), Number(d.count || 0)]));
 
-  const inShopByProduct = await getInShopCountsByProducts(productIds);
-
   const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
   const data = products.map((p: any) => {
-    const inShop = inShopByProduct.get(String(p._id)) || { stockInShop: 0, sizeStockInShop: [] };
+    const productKey = String(p._id);
+    const inShop = inShopByProduct.get(productKey) || { stockInShop: 0, sizeStockInShop: [] };
+    const priceVariance = priceVarianceByProduct.get(productKey) || {
+      hasMultiplePrices: false,
+      sellingPrices: [],
+    };
     return {
     _id: p._id,
     name: p.billingName || p.name,
@@ -421,8 +432,10 @@ router.get('/inventory', async (req: BillingAuthRequest, res: Response) => {
     sizeStockInShop: inShop.sizeStockInShop,
     totalStock: Number(p.totalStock ?? p.stock ?? 0),
     stockInShop: inShop.stockInShop,
-    sold: soldByProduct.get(String(p._id)) || 0,
+    sold: soldByProduct.get(productKey) || 0,
     mrp: Number(p.price || 0),
+    hasMultiplePrices: priceVariance.hasMultiplePrices,
+    sellingPrices: priceVariance.sellingPrices,
     status: p.isActive ? 'active' : 'inactive',
     notes: p.notes || '',
     incomingPrice: isSuperAdmin ? Number(p.incomingPrice || 0) : undefined,

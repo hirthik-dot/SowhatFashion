@@ -5,7 +5,11 @@ import StockEntry from '../models/StockEntry';
 import StockItem from '../models/StockItem';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
 import { requireAnyPermission } from '../middleware/billingRoleMiddleware';
-import { getBillingInShopSummary, getInShopCountsByProducts } from '../lib/stock-inventory-counts';
+import {
+  getBillingInShopSummary,
+  getInShopCountsByProducts,
+  getProductPriceVarianceByProducts,
+} from '../lib/stock-inventory-counts';
 
 const router = express.Router();
 
@@ -189,24 +193,35 @@ router.get('/products', async (req: BillingAuthRequest, res: Response) => {
     Product.countDocuments(query),
   ]);
 
-  const soldCounts = await StockItem.aggregate([
-    { $match: { status: 'sold', product: { $in: data.map((d: any) => d._id) } } },
-    { $group: { _id: '$product', count: { $sum: 1 } } },
+  const productIds = data.map((d: any) => d._id);
+  const [soldCounts, inShopByProduct, priceVarianceByProduct] = await Promise.all([
+    StockItem.aggregate([
+      { $match: { status: 'sold', product: { $in: productIds } } },
+      { $group: { _id: '$product', count: { $sum: 1 } } },
+    ]),
+    getInShopCountsByProducts(productIds),
+    getProductPriceVarianceByProducts(productIds),
   ]);
   const soldMap = new Map<string, number>(soldCounts.map((s: any) => [String(s._id), Number(s.count || 0)]));
-  const inShopByProduct = await getInShopCountsByProducts(data.map((d: any) => d._id));
 
   const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
   return res.json({
     data: data.map((product: any) => {
-      const inShop = inShopByProduct.get(String(product._id)) || { stockInShop: 0, sizeStockInShop: [] };
+      const productKey = String(product._id);
+      const inShop = inShopByProduct.get(productKey) || { stockInShop: 0, sizeStockInShop: [] };
+      const priceVariance = priceVarianceByProduct.get(productKey) || {
+        hasMultiplePrices: false,
+        sellingPrices: [],
+      };
       const row = {
         ...product,
         name: product.billingName || product.name,
-        sold: soldMap.get(String(product._id)) || 0,
+        sold: soldMap.get(productKey) || 0,
         stockInShop: inShop.stockInShop,
         sizeStockInShop: inShop.sizeStockInShop,
         stock: inShop.stockInShop,
+        hasMultiplePrices: priceVariance.hasMultiplePrices,
+        sellingPrices: priceVariance.sellingPrices,
       };
       if (!isSuperAdmin) {
         delete (row as any).incomingPrice;

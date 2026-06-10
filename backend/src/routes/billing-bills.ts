@@ -318,12 +318,16 @@ router.get('/next-barcode', async (req, res: Response) => {
     return res.status(400).json({ message: 'Valid productId is required' });
   }
 
+  const sellingPrice = req.query.sellingPrice;
   const match: any = {
     product: new mongoose.Types.ObjectId(productId),
     status: { $in: [...BILLABLE_STATUSES] },
     ...(exclude.length ? { barcode: { $nin: exclude } } : {}),
   };
   if (size) match.size = size;
+  if (sellingPrice !== undefined && sellingPrice !== '') {
+    match.sellingPrice = Number(sellingPrice);
+  }
 
   const stockItem = await StockItem.findOne(match)
     .sort({ barcode: 1 })
@@ -381,7 +385,7 @@ router.get('/search', billingAuthMiddleware, async (req, res: Response) => {
     },
     {
       $group: {
-        _id: { product: '$productData._id', size: '$size' },
+        _id: { product: '$productData._id', size: '$size', sellingPrice: '$sellingPrice' },
         productId: { $first: '$productData._id' },
         name: { $first: { $ifNull: ['$productData.billingName', '$productData.name'] } },
         category: { $first: '$productData.category' },

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import BillingShell from "@/components/layout/BillingShell";
+import MultiplePriceBadge from "@/components/inventory/MultiplePriceBadge";
 import { billingApi } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 
@@ -139,8 +140,19 @@ export default function InventoryPage() {
             </thead>
             <tbody>
               {products.map((product) => (
-                <tr key={product._id} className="border-t border-[var(--border)]">
-                  <td>{product.name}</td>
+                <tr
+                  key={product._id}
+                  className={`border-t border-[var(--border)] ${product.hasMultiplePrices ? "bg-[color-mix(in_srgb,var(--error)_6%,transparent)]" : ""}`}
+                >
+                  <td>
+                    <span className="inline-flex items-center flex-wrap gap-x-1">
+                      <span>{product.name}</span>
+                      <MultiplePriceBadge
+                        hasMultiplePrices={product.hasMultiplePrices}
+                        sellingPrices={product.sellingPrices}
+                      />
+                    </span>
+                  </td>
                   <td>{product.category || "-"}</td>
                   <td>{product.billingSubCategory?.name || product.subCategory || "-"}</td>
                   <td>{product.supplier?.name || "-"}</td>
@@ -150,7 +162,11 @@ export default function InventoryPage() {
                       .join(" ") || "-"}
                   </td>
                   {isSuperAdmin ? <td>₹{Number(product.incomingPrice || 0).toFixed(2)}</td> : null}
-                  <td>₹{Number(product.price || 0).toFixed(2)}</td>
+                  <td className={product.hasMultiplePrices ? "text-[var(--error)] font-medium" : ""}>
+                    {product.hasMultiplePrices && product.sellingPrices?.length
+                      ? product.sellingPrices.map((price: number) => `₹${Number(price).toFixed(2)}`).join(" / ")
+                      : `₹${Number(product.price || 0).toFixed(2)}`}
+                  </td>
                   <td>{product.stockInShop ?? product.stock ?? 0}</td>
                   <td>{Number(product.sold || 0)}</td>
                   <td>

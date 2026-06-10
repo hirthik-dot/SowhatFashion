@@ -165,6 +165,9 @@ export default function ReportsPage() {
     const workbook = XLSX.utils.book_new();
     const summarySheet = XLSX.utils.json_to_sheet([{
       Revenue: summary?.totalRevenue || 0,
+      "Points Cost": summary?.totalPointsCost || 0,
+      "Points Redeemed": summary?.totalPointsRedeemed || 0,
+      "Cash Collected": summary?.totalCashCollected || 0,
       Bills: summary?.totalBills || 0,
       Items: summary?.totalItems || 0,
       Returns: summary?.totalReturns || 0,
@@ -186,6 +189,9 @@ export default function ReportsPage() {
         Subtotal: bill.subtotal,
         Discount: (bill.totalItemDiscount || 0) + (bill.billDiscountAmount || 0),
         GST: bill.gstAmount,
+        PointsRedeemed: Number(bill.pointsRedeemed || 0),
+        PointsCost: Number(bill.pointsDiscountAmount || 0),
+        CashCollected: Number(bill.totalAmount || 0),
         Total: bill.totalAmount,
         Payment: bill.paymentMethod,
         Status: bill.status,
@@ -377,9 +383,11 @@ export default function ReportsPage() {
               </p>
             </section>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
               {[
                 { label: "Revenue (ex-GST)", value: `₹${Math.round(summary?.totalRevenue || 0)}` },
+                { label: "Points Cost", value: `₹${Math.round(summary?.totalPointsCost || 0)}` },
+                { label: "Cash Collected", value: `₹${Math.round(summary?.totalCashCollected || 0)}` },
                 { label: "Bills", value: summary?.totalBills || 0 },
                 { label: "Items Sold", value: summary?.totalItems || 0 },
                 { label: "Returns", value: summary?.totalReturns || 0 },
@@ -425,12 +433,12 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
               <div className="pos-card p-3 overflow-auto">
                 <p className="mb-2 font-medium">All Bills</p>
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead><tr className="text-left text-[var(--text-secondary)]"><th>Bill#</th><th>Customer</th><th>Salesman</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead>
+                <table className="w-full min-w-[920px] text-sm">
+                  <thead><tr className="text-left text-[var(--text-secondary)]"><th>Bill#</th><th>Customer</th><th>Salesman</th><th>Items</th><th>Points Cost</th><th>Cash</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody>
                     {bills.map((bill) => (
                       <tr key={bill._id} className="border-t border-[var(--border)] group hover:bg-[var(--surface-2)]">
-                        <td className="py-2">{bill.billNumber}</td><td>{bill.customer?.name}</td><td>{bill.salesmanName || "-"}</td><td>{bill.items?.length || 0}</td><td className="font-semibold text-[var(--gold)]">₹{bill.totalAmount}</td><td>{bill.paymentMethod}</td><td>{bill.status}</td>
+                        <td className="py-2">{bill.billNumber}</td><td>{bill.customer?.name}</td><td>{bill.salesmanName || "-"}</td><td>{bill.items?.length || 0}</td><td>{Number(bill.pointsDiscountAmount || 0) > 0 ? `₹${bill.pointsDiscountAmount}` : "-"}</td><td className="font-semibold text-[var(--gold)]">₹{bill.totalAmount}</td><td>{bill.paymentMethod}</td><td>{bill.status}</td>
                         <td><button className="text-[var(--info)] hover:underline" onClick={() => setSelectedBill(bill)}>View</button></td>
                       </tr>
                     ))}
@@ -840,6 +848,11 @@ export default function ReportsPage() {
             <div className="mt-4 pt-3 border-t border-[var(--border)] text-right space-y-1">
               <p className="text-[var(--text-secondary)]">Subtotal: ₹{selectedBill.subtotal?.toLocaleString()}</p>
               <p className="text-[var(--success)]">Discount: -₹{((selectedBill.totalItemDiscount || 0) + (selectedBill.billDiscountAmount || 0)).toLocaleString()}</p>
+              {Number(selectedBill.pointsDiscountAmount || 0) > 0 ? (
+                <p className="text-orange-300">
+                  Points ({Number(selectedBill.pointsRedeemed || 0)} pts): -₹{Number(selectedBill.pointsDiscountAmount).toLocaleString()}
+                </p>
+              ) : null}
               <p className="text-[var(--text-secondary)]">
                 MRP ₹{Number(selectedBill.subtotal || 0).toLocaleString()} + GST 5% ₹
                 {(
@@ -860,7 +873,7 @@ export default function ReportsPage() {
                 CGST / SGST: ₹{Number(selectedBill.cgst || (Number(selectedBill.subtotal || 0) * 0.05) / 2).toFixed(2)} / ₹
                 {Number(selectedBill.sgst || (Number(selectedBill.subtotal || 0) * 0.05) / 2).toFixed(2)}
               </p>
-              <h2 className="text-2xl font-bold text-[var(--gold)] mt-2">Total: ₹{selectedBill.totalAmount?.toLocaleString()}</h2>
+              <h2 className="text-2xl font-bold text-[var(--gold)] mt-2">Cash Collected: ₹{selectedBill.totalAmount?.toLocaleString()}</h2>
             </div>
           </div>
         </div>
