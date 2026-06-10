@@ -11,10 +11,12 @@ import { cn } from '@/lib/utils';
 import { User as UserIcon } from 'lucide-react';
 import { userInitials } from '@/lib/auth-user';
 
+const CLOTHING_CATEGORIES = new Set(['tshirt', 'shirt', 'pant']);
+
 const NAV_ITEMS = [
   { label: 'NEW IN', href: '/products?newArrival=true', mega: false },
   { label: 'CLOTHING', href: '/products', mega: true, slug: 'clothing' },
-  { label: 'ACCESSORIES', href: '/products', mega: false },
+  { label: 'ACCESSORIES', href: '/collections/accessories', mega: false },
   { label: 'SALE', href: '/offers', mega: false, accent: true },
 ];
 
@@ -47,7 +49,9 @@ function MegaMenuPanel({
   categories: { name: string; slug: string; subCategories?: { name: string; slug: string; megaDropdownLabel?: string }[] }[];
   onClose: () => void;
 }) {
-  const clothingCats = categories.filter((c) => !['offers', 'sale'].includes(c.slug));
+  const clothingCats = categories.filter(
+    (c) => !['offers', 'sale', 'accessories', 'accessory'].includes(c.slug) && CLOTHING_CATEGORIES.has(c.slug)
+  );
 
   return (
     <div className="absolute top-full left-0 right-0 bg-white border-b border-[#E8E4DF] shadow-lg z-50 animate-fade-in">
@@ -342,7 +346,10 @@ export default function PremiumNavbar({ overHero = true }: { overHero?: boolean 
                     </button>
                     {accordionOpen === item.label && (
                       <div className="pb-4 pl-2 space-y-2">
-                        {categories.map((cat) => (
+                        {(categories.filter((c) => CLOTHING_CATEGORIES.has(c.slug)).length
+                          ? categories.filter((c) => CLOTHING_CATEGORIES.has(c.slug))
+                          : categories.filter((c) => !['offers', 'sale', 'accessories', 'accessory'].includes(c.slug))
+                        ).map((cat) => (
                           <Link
                             key={cat.slug}
                             href={`/products?category=${cat.slug}`}

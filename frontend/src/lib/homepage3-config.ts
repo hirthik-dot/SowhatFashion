@@ -1,3 +1,5 @@
+import { INSTAGRAM_URL } from './contact';
+
 /** Default Homepage 3 (catalogue / premium) image slots */
 export type CategoryTileSlot = {
   key: string;
@@ -5,6 +7,11 @@ export type CategoryTileSlot = {
   link: string;
   image: string;
   alt: string;
+};
+
+export type InstagramPostSlot = {
+  image: string;
+  link?: string;
 };
 
 export type Homepage3Placeholders = {
@@ -20,7 +27,9 @@ export type Homepage3Placeholders = {
   brandStoryAlt?: string;
   promoBannerBg?: string;
   promoBannerText?: string;
+  /** @deprecated use instagramPosts */
   instagramImages?: string[];
+  instagramPosts?: InstagramPostSlot[];
   newsletterBg?: string;
 };
 
@@ -51,16 +60,35 @@ export const DEFAULT_HOMEPAGE3_PLACEHOLDERS: Homepage3Placeholders = {
   brandStoryAlt: 'Brand editorial',
   promoBannerBg: '',
   promoBannerText: 'UP TO 50% OFF',
-  instagramImages: [
-    UNSPLASH('photo-1617137968427-85924c800a22', 600),
-    UNSPLASH('photo-1507003211169-e69fe9c31a88', 600),
-    UNSPLASH('photo-1611652022419-a9419f74343d', 600),
-    UNSPLASH('photo-1594938298603-c8148c4dae35', 600),
-    UNSPLASH('photo-1617127365659-22b7a1f99693', 600),
-    UNSPLASH('photo-1624378515194-6db612adff4d', 600),
+  instagramPosts: [
+    { image: UNSPLASH('photo-1617137968427-85924c800a22', 600), link: INSTAGRAM_URL },
+    { image: UNSPLASH('photo-1507003211169-e69fe9c31a88', 600), link: INSTAGRAM_URL },
+    { image: UNSPLASH('photo-1611652022419-a9419f74343d', 600), link: INSTAGRAM_URL },
+    { image: UNSPLASH('photo-1594938298603-c8148c4dae35', 600), link: INSTAGRAM_URL },
+    { image: UNSPLASH('photo-1617127365659-22b7a1f99693', 600), link: INSTAGRAM_URL },
+    { image: UNSPLASH('photo-1624378515194-6db612adff4d', 600), link: INSTAGRAM_URL },
   ],
   newsletterBg: UNSPLASH('photo-1490578474895-699cd4e2cf47', 1920),
 };
+
+function normalizeInstagramPosts(stored?: Homepage3Placeholders | null): InstagramPostSlot[] {
+  if (stored?.instagramPosts?.length) {
+    return stored.instagramPosts
+      .filter((post) => post?.image)
+      .slice(0, 6)
+      .map((post) => ({
+        image: post.image,
+        link: post.link?.trim() || INSTAGRAM_URL,
+      }));
+  }
+  if (stored?.instagramImages?.length) {
+    return stored.instagramImages
+      .filter(Boolean)
+      .slice(0, 6)
+      .map((image) => ({ image, link: INSTAGRAM_URL }));
+  }
+  return DEFAULT_HOMEPAGE3_PLACEHOLDERS.instagramPosts!;
+}
 
 export function mergeHomepage3Placeholders(stored?: Homepage3Placeholders | null): Homepage3Placeholders {
   if (!stored) return { ...DEFAULT_HOMEPAGE3_PLACEHOLDERS, categoryTiles: [...DEFAULT_CATEGORY_TILES] };
@@ -73,6 +101,6 @@ export function mergeHomepage3Placeholders(stored?: Homepage3Placeholders | null
       : stored.heroDesktop
         ? [stored.heroDesktop]
         : DEFAULT_HOMEPAGE3_PLACEHOLDERS.carouselImages,
-    instagramImages: stored.instagramImages?.length ? stored.instagramImages : DEFAULT_HOMEPAGE3_PLACEHOLDERS.instagramImages,
+    instagramPosts: normalizeInstagramPosts(stored),
   };
 }

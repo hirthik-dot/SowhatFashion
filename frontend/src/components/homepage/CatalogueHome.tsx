@@ -7,6 +7,8 @@ import RotatingAnnouncementBar from '@/components/homepage/premium/RotatingAnnou
 import PremiumNavbar from '@/components/homepage/premium/PremiumNavbar';
 import PremiumProductCard from '@/components/homepage/premium/PremiumProductCard';
 import PremiumFooter from '@/components/homepage/premium/PremiumFooter';
+import { INSTAGRAM_URL } from '@/lib/contact';
+import { subscribeNewsletter } from '@/lib/api';
 import CatalogueHero from '@/components/homepage/CatalogueHero';
 import { productListKey } from '@/lib/utils';
 import { mergeCatalogueHomeSections, type CatalogueHomeSection } from '@/lib/catalogue-sections';
@@ -89,6 +91,8 @@ export default function CatalogueHome({
   const [bestsellerTab, setBestsellerTab] = useState<BestsellerTab>('week');
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [subscribeError, setSubscribeError] = useState('');
+  const [subscribing, setSubscribing] = useState(false);
 
   const sections = useMemo(
     () => mergeCatalogueHomeSections(catalogueSectionsResponse?.sections),
@@ -125,14 +129,30 @@ export default function CatalogueHome({
     return withDiscount.slice(0, 4);
   }, [products]);
 
-  const instagramImages: string[] = useMemo(
-    () => (p.instagramImages?.filter(Boolean) as string[])?.slice(0, 6) || [],
+  const instagramPosts = useMemo(
+    () => (p.instagramPosts || []).filter((post) => post.image).slice(0, 6),
     [p]
   );
 
-  const handleNewsletter = (e: React.FormEvent) => {
+  const handleNewsletter = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.trim()) setSubscribed(true);
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    setSubscribeError('');
+    setSubscribing(true);
+    try {
+      const res = await subscribeNewsletter(trimmed);
+      if (res.success) {
+        setSubscribed(true);
+        setEmail('');
+      } else {
+        setSubscribeError(res.error || 'Subscription failed. Please try again.');
+      }
+    } catch {
+      setSubscribeError('Subscription failed. Please try again.');
+    } finally {
+      setSubscribing(false);
+    }
   };
 
   return (
@@ -332,13 +352,15 @@ export default function CatalogueHome({
           {settings?.instagramHandle || '@SOWAATMENSWEAR'}
         </h2>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-1 md:gap-2">
-          {instagramImages.map((src, i) => (
+          {instagramPosts.map((post, i) => (
             <a
               key={i}
-              href="#"
+              href={post.link || INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="relative aspect-square overflow-hidden group bg-[#F5F5F3]"
             >
-              <Image src={src} alt="" fill className="object-cover" sizes="20vw" />
+              <Image src={post.image} alt="" fill className="object-cover" sizes="20vw" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
                 <svg
                   className="opacity-0 group-hover:opacity-100 text-white transition-opacity"
@@ -357,7 +379,7 @@ export default function CatalogueHome({
           ))}
         </div>
         <p className="text-center mt-8">
-          <a href="#" className="text-[11px] uppercase tracking-[0.2em] text-[#111] premium-link">
+          <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="text-[11px] uppercase tracking-[0.2em] text-[#111] premium-link">
             FOLLOW US ON INSTAGRAM
           </a>
         </p>
@@ -380,21 +402,28 @@ export default function CatalogueHome({
           {subscribed ? (
             <p className="text-sm uppercase tracking-widest">Thank you for subscribing.</p>
           ) : (
-            <form onSubmit={handleNewsletter} className="flex flex-col sm:flex-row gap-0 max-w-md mx-auto">
-              <input
-                type="email"
-                required
-                placeholder="Your email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 px-4 py-4 text-[#111] text-sm focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="bg-white text-[#111] text-[11px] uppercase tracking-[0.2em] px-8 py-4 font-semibold hover:bg-white/90"
-              >
-                SUBSCRIBE
-              </button>
+            <form onSubmit={handleNewsletter} className="flex flex-col gap-3 max-w-md mx-auto">
+              <div className="flex flex-col sm:flex-row gap-0">
+                <input
+                  type="email"
+                  required
+                  placeholder="Your email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={subscribing}
+                  className="flex-1 px-4 py-4 text-[#111] text-sm focus:outline-none disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={subscribing}
+                  className="bg-white text-[#111] text-[11px] uppercase tracking-[0.2em] px-8 py-4 font-semibold hover:bg-white/90 disabled:opacity-60"
+                >
+                  {subscribing ? 'SUBSCRIBING…' : 'SUBSCRIBE'}
+                </button>
+              </div>
+              {subscribeError && (
+                <p className="text-xs text-red-200">{subscribeError}</p>
+              )}
             </form>
           )}
           <p className="text-[10px] text-white/50 mt-4 uppercase tracking-wider">No spam. Unsubscribe anytime.</p>

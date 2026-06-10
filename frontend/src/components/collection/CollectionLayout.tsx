@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import CollectionFilterSidebar from './CollectionFilterSidebar';
 import CollectionProductCard from './CollectionProductCard';
-import { SORT_OPTIONS, SEO_SHOP_LINKS } from '@/lib/collection-filters';
+import { SORT_OPTIONS, SEO_SHOP_LINKS, SHOP_CATEGORY_TABS } from '@/lib/collection-filters';
 import {
   sidebarConfigToFilterGroups,
   getFacetParamKeys,
@@ -90,6 +90,9 @@ function CollectionLayoutInner({
   const search = searchParams.get('search') || searchParams.get('q') || '';
   const newArrival = searchParams.get('newArrival') === 'true';
   const featured = searchParams.get('featured') === 'true';
+  const collectionSlug = pathname.startsWith('/collections/')
+    ? pathname.replace('/collections/', '').split('/')[0]
+    : '';
 
   const title = useMemo(() => {
     if (collectionTitle) return collectionTitle.toUpperCase();
@@ -214,6 +217,22 @@ function CollectionLayoutInner({
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const isTabActive = (tab: (typeof SHOP_CATEGORY_TABS)[number]) => {
+    if (tab.match.collection) {
+      return collectionSlug === tab.match.collection;
+    }
+    if (tab.match.newArrival) {
+      return newArrival && !category && !collectionSlug;
+    }
+    if (tab.match.featured === false && tab.label === 'All') {
+      return !category && !newArrival && !featured && !collectionSlug && !search;
+    }
+    if (tab.match.category) {
+      return category.toLowerCase() === tab.match.category && !collectionSlug;
+    }
+    return false;
+  };
+
   const loadMore = () => {
     const p = new URLSearchParams(searchParams.toString());
     p.set('page', String(page + 1));
@@ -234,6 +253,17 @@ function CollectionLayoutInner({
           </nav>
           <h1 className="font-cormorant font-light text-[28px] md:text-[32px] text-[#111]">{title}</h1>
           <p className="text-sm text-[#999] mt-1">({total} products)</p>
+          <nav className="flex flex-wrap gap-1 mt-6 -mb-2 overflow-x-auto no-scrollbar">
+            {SHOP_CATEGORY_TABS.map((tab) => (
+              <Link
+                key={tab.label}
+                href={tab.href}
+                className={cn('category-tab whitespace-nowrap', isTabActive(tab) && 'active')}
+              >
+                {tab.label}
+              </Link>
+            ))}
+          </nav>
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">

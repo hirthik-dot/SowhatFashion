@@ -9,7 +9,9 @@ import {
   mergeHomepage3Placeholders,
   type Homepage3Placeholders,
   type CategoryTileSlot,
+  type InstagramPostSlot,
 } from '@/lib/homepage3-config';
+import { INSTAGRAM_URL } from '@/lib/contact';
 import StockImagePickerModal from './StockImagePickerModal';
 
 type SlotTarget =
@@ -108,9 +110,9 @@ export default function Homepage3ImageEditor({
       arr[stockTarget.index] = url;
       next.carouselImages = arr;
     } else if (stockTarget.type === 'instagram') {
-      const arr = [...(next.instagramImages || [])];
-      arr[stockTarget.index] = url;
-      next.instagramImages = arr;
+      const arr = [...(next.instagramPosts || DEFAULT_HOMEPAGE3_PLACEHOLDERS.instagramPosts || [])];
+      arr[stockTarget.index] = { ...arr[stockTarget.index], image: url, link: arr[stockTarget.index]?.link || INSTAGRAM_URL };
+      next.instagramPosts = arr;
     } else if (stockTarget.type === 'category') {
       const tiles = [...(next.categoryTiles || DEFAULT_CATEGORY_TILES)];
       tiles[stockTarget.index] = { ...tiles[stockTarget.index], image: url, alt };
@@ -135,9 +137,9 @@ export default function Homepage3ImageEditor({
         arr[t.index] = res.url;
         next.carouselImages = arr;
       } else if (t.type === 'instagram') {
-        const arr = [...(next.instagramImages || [])];
-        arr[t.index] = res.url;
-        next.instagramImages = arr;
+        const arr = [...(next.instagramPosts || DEFAULT_HOMEPAGE3_PLACEHOLDERS.instagramPosts || [])];
+        arr[t.index] = { ...arr[t.index], image: res.url, link: arr[t.index]?.link || INSTAGRAM_URL };
+        next.instagramPosts = arr;
       } else if (t.type === 'category') {
         const tiles = [...(next.categoryTiles || DEFAULT_CATEGORY_TILES)];
         tiles[t.index] = { ...tiles[t.index], image: res.url };
@@ -194,6 +196,17 @@ export default function Homepage3ImageEditor({
   };
 
   const tiles = draft.categoryTiles || DEFAULT_CATEGORY_TILES;
+  const instagramPosts: InstagramPostSlot[] =
+    draft.instagramPosts?.length
+      ? draft.instagramPosts
+      : DEFAULT_HOMEPAGE3_PLACEHOLDERS.instagramPosts || [];
+
+  const updateInstagramPost = (index: number, patch: Partial<InstagramPostSlot>) => {
+    const arr = [...instagramPosts];
+    while (arr.length <= index) arr.push({ image: '', link: INSTAGRAM_URL });
+    arr[index] = { ...arr[index], ...patch };
+    markDirty({ ...draft, instagramPosts: arr });
+  };
 
   return (
     <div className="mt-8">
@@ -332,15 +345,30 @@ export default function Homepage3ImageEditor({
 
           <section>
             <h3 className="text-sm font-bold uppercase tracking-wider border-b pb-2 mb-4">Section 6 — Instagram / UGC (6 slots)</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="text-xs text-[var(--text-secondary)] mb-4">
+              Upload a product image and paste the Instagram post URL for each slot.
+            </p>
+            <div className="grid grid-cols-1 gap-4">
               {[0, 1, 2, 3, 4, 5].map((i) => (
-                <ImageSlotEditor
-                  key={i}
-                  label={`UGC Image ${i + 1}`}
-                  previewUrl={draft.instagramImages?.[i]}
-                  onUpload={() => triggerUpload({ type: 'instagram', index: i })}
-                  onStock={() => setStockTarget({ type: 'instagram', index: i })}
-                />
+                <div key={i} className="border border-[var(--border)] p-4 space-y-3">
+                  <ImageSlotEditor
+                    label={`UGC Image ${i + 1}`}
+                    previewUrl={instagramPosts[i]?.image}
+                    onUpload={() => triggerUpload({ type: 'instagram', index: i })}
+                    onStock={() => setStockTarget({ type: 'instagram', index: i })}
+                    uploading={uploading}
+                  />
+                  <label className="block text-sm">
+                    Instagram Post Link
+                    <input
+                      type="url"
+                      placeholder="https://www.instagram.com/p/..."
+                      value={instagramPosts[i]?.link || ''}
+                      onChange={(e) => updateInstagramPost(i, { link: e.target.value })}
+                      className="w-full border border-[var(--border)] mt-1 px-3 py-2 text-sm"
+                    />
+                  </label>
+                </div>
               ))}
             </div>
           </section>

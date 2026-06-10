@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { INSTAGRAM_URL, SUPPORT_EMAIL, STORE_LOCATION, WHATSAPP_DISPLAY, WHATSAPP_LINK } from '@/lib/contact';
 
 const BRAND = 'Sowaat Menswear';
 
@@ -17,7 +18,7 @@ export default function PremiumFooter({ instagramHandle }: { instagramHandle?: s
               Premium menswear for the modern man. Minimal silhouettes, timeless style.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="text-white/70 hover:text-white transition-colors" aria-label="Instagram">
+              <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="text-white/70 hover:text-white transition-colors" aria-label="Instagram">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <rect x="2" y="2" width="20" height="20" />
                   <circle cx="12" cy="12" r="4" />
@@ -61,12 +62,12 @@ export default function PremiumFooter({ instagramHandle }: { instagramHandle?: s
           <div>
             <h4 className="text-[11px] uppercase tracking-[0.2em] text-white/50 mb-6">Contact Info</h4>
             <ul className="space-y-3 text-sm text-white/70 mb-6">
-              <li>support@sowaatmenswear.com</li>
-              <li>+91 98765 43210</li>
-              <li>Chennai, Tamil Nadu, India</li>
+              <li>{SUPPORT_EMAIL}</li>
+              <li>{WHATSAPP_DISPLAY}</li>
+              <li>{STORE_LOCATION}</li>
             </ul>
             <a
-              href="https://wa.me/919876543210"
+              href={WHATSAPP_LINK}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block border border-white text-white text-[11px] uppercase tracking-[0.15em] px-5 py-3 hover:bg-white hover:text-[#111] transition-colors"

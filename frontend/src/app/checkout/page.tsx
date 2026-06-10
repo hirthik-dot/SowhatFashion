@@ -30,7 +30,7 @@ export default function CheckoutPage() {
     pincode: '',
   });
 
-  const { user, isLoggedIn, openAuthModal } = useAuthStore();
+  const { user, isLoggedIn, openAuthModal, setUser } = useAuthStore();
 
   useEffect(() => {
     setMounted(true);
@@ -98,6 +98,26 @@ export default function CheckoutPage() {
         throw new Error(order?.message || 'Failed to create order');
       }
 
+      if (isLoggedIn && user) {
+        try {
+          const token = localStorage.getItem('token');
+          const headers: HeadersInit = {};
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/me`, {
+            credentials: 'include',
+            headers,
+          });
+          if (meRes.ok) {
+            const meData = await meRes.json();
+            if (meData.success && meData.user?.savedAddresses) {
+              setUser({ ...user, savedAddresses: meData.user.savedAddresses });
+            }
+          }
+        } catch {
+          // non-blocking
+        }
+      }
+
       const address = `${formData.line1}, ${formData.city}, ${formData.state} ${formData.pincode}`;
       const whatsappUrl = buildWhatsAppOrderLink({
         customerName: formData.name,
@@ -106,30 +126,6 @@ export default function CheckoutPage() {
         address,
       });
       window.open(whatsappUrl, '_blank');
-
-      if (isLoggedIn) {
-        const isNewAddress = !user?.savedAddresses?.some(
-          (a: any) => a.line1 === formData.line1 && a.pincode === formData.pincode
-        );
-        if (isNewAddress) {
-          try {
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/users/addresses`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                label: 'Home',
-                line1: formData.line1,
-                city: formData.city,
-                state: formData.state,
-                pincode: formData.pincode,
-                isDefault: true,
-              }),
-            });
-          } catch {
-            // non-blocking
-          }
-        }
-      }
 
       setOrderPlaced(true);
       router.replace(`/order/${order._id}`);

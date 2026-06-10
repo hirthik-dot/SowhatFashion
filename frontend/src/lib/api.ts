@@ -6,6 +6,16 @@ export const getSettings = async () => {
   return res.json();
 };
 
+// ============ NEWSLETTER ============
+export const subscribeNewsletter = async (email: string) => {
+  const res = await fetch(`${API}/api/newsletter/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, source: 'inner-circle' }),
+  });
+  return res.json();
+};
+
 // ============ PRODUCTS ============
 export const getProducts = async (params?: string) => {
   const res = await fetch(`${API}/api/products${params ? `?${params}` : ''}`, {
@@ -84,6 +94,29 @@ export const getHomepageSections = async (theme: string) => {
   const res = await fetch(`${API}/api/homepage-sections/${encodeURIComponent(theme)}`, {
     next: { revalidate: 300 },
   });
+  return res.json();
+};
+
+// ============ USER ADDRESSES ============
+export const saveUserAddress = async (address: {
+  label: string;
+  line1: string;
+  city: string;
+  state: string;
+  pincode: string;
+  isDefault?: boolean;
+}) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API}/api/users/addresses`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify(address),
+  });
+  if (!res.ok) throw new Error('Failed to save address');
   return res.json();
 };
 

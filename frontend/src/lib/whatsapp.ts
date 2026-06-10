@@ -1,4 +1,4 @@
-const WHATSAPP_NUMBER = '917871163597';
+import { WHATSAPP_NUMBER } from './contact';
 
 export interface WhatsAppOrderItem {
   name: string;

@@ -10,7 +10,7 @@ const SLUG_META: Record<string, { title: string; initialParams?: Record<string, 
   pants: { title: 'Trousers', initialParams: { category: 'pant' } },
   tshirts: { title: 'T-Shirts', initialParams: { category: 'tshirt' } },
   outerwear: { title: 'Outerwear', initialParams: { category: 'shirt' } },
-  accessories: { title: 'Accessories', initialParams: {} },
+  accessories: { title: 'Accessories', initialParams: { category: 'accessories' } },
   sale: { title: 'Sale', initialParams: {} },
   'new-arrivals': { title: 'New Arrivals', initialParams: { newArrival: 'true' } },
 };

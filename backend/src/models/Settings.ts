@@ -54,7 +54,7 @@ const SettingsSchema = new Schema<ISettings>(
     },
     instagramHandle: { type: String, default: '@sowaatmenswear' },
     freeDeliveryAbove: { type: Number, default: 999 },
-    whatsappNumber: { type: String, default: '+919876543210' },
+    whatsappNumber: { type: String, default: '+917871163597' },
     heroMediaType: {
       type: String,
       enum: ['video', 'image'],
