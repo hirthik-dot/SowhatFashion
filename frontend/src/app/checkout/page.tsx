@@ -10,6 +10,7 @@ import { buildWhatsAppOrderLink } from '@/lib/whatsapp';
 import Navbar from '@/components/layout/Navbar';
 import { IconHome } from '@/components/icons/PremiumIcons';
 import Image from 'next/image';
+import { cartItemKey, isValidHex, normalizeHex } from '@/lib/product-colors';
 
 export default function CheckoutPage() {
   const { items, totalAmount, clearCart } = useCart();
@@ -70,6 +71,8 @@ export default function CheckoutPage() {
         name: item.name,
         image: item.image,
         size: item.size,
+        color: item.color || '',
+        colorHex: item.colorHex || '',
         quantity: item.quantity,
         price: item.discountPrice > 0 ? item.discountPrice : item.price,
       }));
@@ -164,7 +167,7 @@ export default function CheckoutPage() {
             <div className={`${summaryOpen ? 'block' : 'hidden'} p-4 border-t border-[var(--border)]`}>
               <div className="flex flex-col gap-4 mb-4">
                 {items.map((item) => (
-                  <div key={`${item.productId}-${item.size}`} className="flex gap-4">
+                  <div key={cartItemKey(item.productId, item.size, item.color)} className="flex gap-4">
                     <div className="relative w-16 h-20 bg-gray-100 rounded overflow-hidden border shrink-0">
                       <Image src={item.image || '/placeholder.jpg'} alt={item.name} fill className="object-cover" />
                       <span className="absolute -top-1 -right-1 bg-gray-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full z-10 border border-white">
@@ -173,7 +176,20 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm truncate">{item.name}</p>
-                      <p className="text-xs text-[var(--text-secondary)] my-1">Size: {item.size}</p>
+                      <p className="text-xs text-[var(--text-secondary)] my-1">
+                        Size: {item.size}
+                        {item.color && (
+                          <>
+                            {' · '}
+                            <span className="inline-flex items-center gap-1">
+                              {item.colorHex && isValidHex(item.colorHex) && (
+                                <span className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300" style={{ backgroundColor: normalizeHex(item.colorHex) }} />
+                              )}
+                              {item.color}
+                            </span>
+                          </>
+                        )}
+                      </p>
                       <p className="font-bold text-sm">
                         {formatPrice(item.discountPrice > 0 ? item.discountPrice : item.price)}
                       </p>
@@ -371,7 +387,7 @@ export default function CheckoutPage() {
 
               <div className="space-y-4 max-h-[40vh] overflow-y-auto no-scrollbar mb-6 border-b border-[var(--border)] pb-6 flex flex-col gap-4">
                 {items.map((item) => (
-                  <div key={`${item.productId}-${item.size}`} className="flex gap-4">
+                  <div key={cartItemKey(item.productId, item.size, item.color)} className="flex gap-4">
                     <div className="relative w-16 h-20 bg-gray-100 rounded overflow-hidden border shrink-0">
                       <Image src={item.image || '/placeholder.jpg'} alt={item.name} fill className="object-cover" />
                       <span className="absolute -top-1 -right-1 bg-gray-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full z-10 border border-white">
@@ -380,7 +396,20 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm truncate">{item.name}</p>
-                      <p className="text-xs text-[var(--text-secondary)] my-1">Size: {item.size}</p>
+                      <p className="text-xs text-[var(--text-secondary)] my-1">
+                        Size: {item.size}
+                        {item.color && (
+                          <>
+                            {' · '}
+                            <span className="inline-flex items-center gap-1">
+                              {item.colorHex && isValidHex(item.colorHex) && (
+                                <span className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300" style={{ backgroundColor: normalizeHex(item.colorHex) }} />
+                              )}
+                              {item.color}
+                            </span>
+                          </>
+                        )}
+                      </p>
                       <p className="font-bold text-sm">
                         {formatPrice(item.discountPrice > 0 ? item.discountPrice : item.price)}
                       </p>

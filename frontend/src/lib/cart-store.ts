@@ -2,12 +2,15 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { cartItemKey } from '@/lib/product-colors';
 
 export interface CartItem {
   productId: string;
   name: string;
   image: string;
   size: string;
+  color?: string;
+  colorHex?: string;
   quantity: number;
   price: number;
   discountPrice: number;
@@ -17,8 +20,8 @@ interface CartStore {
   items: CartItem[];
   cartToast: string | null;
   addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => void;
-  removeItem: (productId: string, size: string) => void;
-  updateQuantity: (productId: string, size: string, quantity: number) => void;
+  removeItem: (productId: string, size: string, color?: string) => void;
+  updateQuantity: (productId: string, size: string, quantity: number, color?: string) => void;
   clearCart: () => void;
   clearCartToast: () => void;
   getTotalAmount: () => number;
@@ -33,8 +36,9 @@ export const useCartStore = create<CartStore>()(
 
       addItem: (item, quantity = 1) => {
         set((state) => {
+          const key = cartItemKey(item.productId, item.size, item.color);
           const existingIndex = state.items.findIndex(
-            (i) => i.productId === item.productId && i.size === item.size
+            (i) => cartItemKey(i.productId, i.size, i.color) === key
           );
 
           if (existingIndex > -1) {
@@ -52,22 +56,24 @@ export const useCartStore = create<CartStore>()(
 
       clearCartToast: () => set({ cartToast: null }),
 
-      removeItem: (productId, size) => {
+      removeItem: (productId, size, color) => {
+        const key = cartItemKey(productId, size, color);
         set((state) => ({
           items: state.items.filter(
-            (i) => !(i.productId === productId && i.size === size)
+            (i) => cartItemKey(i.productId, i.size, i.color) !== key
           ),
         }));
       },
 
-      updateQuantity: (productId, size, quantity) => {
+      updateQuantity: (productId, size, quantity, color) => {
         if (quantity <= 0) {
-          get().removeItem(productId, size);
+          get().removeItem(productId, size, color);
           return;
         }
+        const key = cartItemKey(productId, size, color);
         set((state) => ({
           items: state.items.map((i) =>
-            i.productId === productId && i.size === size
+            cartItemKey(i.productId, i.size, i.color) === key
               ? { ...i, quantity }
               : i
           ),

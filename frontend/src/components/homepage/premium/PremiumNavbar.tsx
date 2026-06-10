@@ -196,14 +196,23 @@ export default function PremiumNavbar({ overHero = true }: { overHero?: boolean 
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <Link
-              href="/"
-              className={cn(
-                'font-cormorant text-[22px] md:text-[28px] font-light uppercase tracking-[0.18em]',
-                textClass
-              )}
-            >
-              SOWAAT
+            <Link href="/" className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+              <Image
+                src="/sowaatlogo.jpeg"
+                alt="Sowaat Menswear Logo"
+                width={40}
+                height={40}
+                className="object-contain h-8 w-auto md:h-9"
+                priority
+              />
+              <span
+                className={cn(
+                  'font-cormorant text-[22px] md:text-[28px] font-light uppercase tracking-[0.18em]',
+                  textClass
+                )}
+              >
+                SOWAAT
+              </span>
             </Link>
           </div>
 
@@ -298,7 +307,10 @@ export default function PremiumNavbar({ overHero = true }: { overHero?: boolean 
           )}
         >
           <div className="flex items-center justify-between p-5 border-b border-[#E8E4DF]">
-            <span className="text-lg font-bold uppercase tracking-widest">Menu</span>
+            <Link href="/" className="flex items-center gap-2" onClick={() => setMenuOpen(false)}>
+              <Image src="/sowaatlogo.jpeg" alt="Sowaat Menswear Logo" width={36} height={36} className="object-contain h-8 w-auto" />
+              <span className="font-cormorant text-lg font-light uppercase tracking-[0.18em]">SOWAAT</span>
+            </Link>
             <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu">
               <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />

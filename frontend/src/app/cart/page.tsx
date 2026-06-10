@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useCart } from '@/hooks/useCart';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatPrice } from '@/lib/utils';
+import { cartItemKey, isValidHex, normalizeHex } from '@/lib/product-colors';
 import { useEffect, useState } from 'react';
 
 export default function CartPage() {
@@ -66,7 +67,7 @@ export default function CartPage() {
                     const itemTotal = price * item.quantity;
                     
                     return (
-                      <div key={`${item.productId}-${item.size}`} className="p-4 md:p-6 flex flex-row md:grid md:grid-cols-12 gap-0 md:gap-4 items-center bg-white border-b border-[var(--border)] relative">
+                      <div key={cartItemKey(item.productId, item.size, item.color)} className="p-4 md:p-6 flex flex-row md:grid md:grid-cols-12 gap-0 md:gap-4 items-center bg-white border-b border-[var(--border)] relative">
                         {/* Product Info Mobile Combo */}
                         <div className="w-20 h-24 relative bg-gray-100 rounded border border-[var(--border)] overflow-hidden shrink-0 mr-4 md:hidden">
                           <Image src={item.image || '/placeholder.jpg'} alt={item.name} fill className="object-cover" />
@@ -76,9 +77,26 @@ export default function CartPage() {
                           <div className="flex justify-between items-start">
                             <div className="pr-2">
                               <Link href={`/products/${item.productId}`} className="font-bold text-sm leading-tight hover:text-[var(--gold)] line-clamp-2">{item.name}</Link>
-                              <p className="text-xs text-[var(--text-secondary)] mt-1">Size: <span className="font-bold text-black">{item.size}</span></p>
+                              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                                Size: <span className="font-bold text-black">{item.size}</span>
+                                {item.color && (
+                                  <>
+                                    {' · '}
+                                    Color:{' '}
+                                    <span className="inline-flex items-center gap-1 font-bold text-black">
+                                      {item.colorHex && isValidHex(item.colorHex) && (
+                                        <span
+                                          className="inline-block w-3 h-3 rounded-full border border-gray-300"
+                                          style={{ backgroundColor: normalizeHex(item.colorHex) }}
+                                        />
+                                      )}
+                                      {item.color}
+                                    </span>
+                                  </>
+                                )}
+                              </p>
                             </div>
-                            <button onClick={() => removeItem(item.productId, item.size)} className="p-2 -mr-2 -mt-2 text-gray-400 hover:text-[var(--sale-red)] shrink-0">
+                            <button onClick={() => removeItem(item.productId, item.size, item.color)} className="p-2 -mr-2 -mt-2 text-gray-400 hover:text-[var(--sale-red)] shrink-0">
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
                           </div>
@@ -87,9 +105,9 @@ export default function CartPage() {
                             <span className="font-bold">{formatPrice(price)}</span>
                             
                             <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
-                              <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">-</button>
+                              <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1, item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">-</button>
                               <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">+</button>
+                              <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1, item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">+</button>
                             </div>
                           </div>
                         </div>
@@ -101,7 +119,24 @@ export default function CartPage() {
                           </div>
                           <div>
                             <Link href={`/products/${item.productId}`} className="font-bold text-lg hover:text-[var(--gold)] transition-colors">{item.name}</Link>
-                            <p className="text-sm text-[var(--text-secondary)] mt-1">Size: <span className="font-bold text-black">{item.size}</span></p>
+                            <p className="text-sm text-[var(--text-secondary)] mt-1">
+                              Size: <span className="font-bold text-black">{item.size}</span>
+                              {item.color && (
+                                <>
+                                  {' · '}
+                                  Color:{' '}
+                                  <span className="inline-flex items-center gap-1.5 font-bold text-black">
+                                    {item.colorHex && isValidHex(item.colorHex) && (
+                                      <span
+                                        className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300"
+                                        style={{ backgroundColor: normalizeHex(item.colorHex) }}
+                                      />
+                                    )}
+                                    {item.color}
+                                  </span>
+                                </>
+                              )}
+                            </p>
                           </div>
                         </div>
 
@@ -111,15 +146,15 @@ export default function CartPage() {
 
                         <div className="col-span-2 hidden md:flex justify-center w-full md:w-auto">
                           <div className="flex items-center border border-[var(--border)] rounded">
-                            <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1)} className="px-3 py-1 hover:bg-gray-100">-</button>
+                            <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1, item.color)} className="px-3 py-1 hover:bg-gray-100">-</button>
                             <span className="px-3 font-medium text-sm">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1)} className="px-3 py-1 hover:bg-gray-100">+</button>
+                            <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1, item.color)} className="px-3 py-1 hover:bg-gray-100">+</button>
                           </div>
                         </div>
 
                         <div className="col-span-2 text-right hidden md:block">
                           <span className="font-bold text-lg">{formatPrice(itemTotal)}</span>
-                          <button onClick={() => removeItem(item.productId, item.size)} className="block mt-2 text-xs text-[var(--text-secondary)] underline hover:text-[var(--sale-red)] ml-auto">Remove</button>
+                          <button onClick={() => removeItem(item.productId, item.size, item.color)} className="block mt-2 text-xs text-[var(--text-secondary)] underline hover:text-[var(--sale-red)] ml-auto">Remove</button>
                         </div>
                       </div>
                     );

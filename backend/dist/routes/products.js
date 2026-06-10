@@ -133,9 +133,8 @@ router.get('/', async (req, res) => {
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 50;
         const skip = (pageNum - 1) * limitNum;
-        const isAdmin = isAdminRequest(req);
         let products = await Product_1.default.find(filter).sort(sortObj).lean();
-        let expandedProducts = isAdmin ? products : await (0, ecommerce_product_variants_1.expandProductsForEcommerce)(products);
+        let expandedProducts = await (0, ecommerce_product_variants_1.expandProductsForEcommerce)(products);
         // Post-query discount filter (computed field)
         if (discount) {
             const discountMin = parseInt(discount);

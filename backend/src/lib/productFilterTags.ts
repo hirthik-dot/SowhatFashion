@@ -11,6 +11,7 @@ export function computeAutoFilterTags(
     subCategory?: string;
     sizes?: string[];
     tags?: string[];
+    colors?: { name?: string; hex?: string }[];
     price?: number;
     discountPrice?: number;
     isNewArrival?: boolean;
@@ -45,6 +46,9 @@ export function computeAutoFilterTags(
 
   const productTags = (product.tags || []).map((t) => String(t).trim().toLowerCase()).filter(Boolean);
   const sub = String(product.subCategory || '').trim().toLowerCase();
+  const colorNames = (product.colors || [])
+    .map((c) => String(c.name || '').trim().toLowerCase())
+    .filter(Boolean);
 
   for (const f of sidebarFilters) {
     const key = f.filterKey;
@@ -57,12 +61,20 @@ export function computeAutoFilterTags(
         productTags.includes(val) ||
         productTags.includes(lab) ||
         sub === val ||
-        (sub && (sub.includes(val) || val.includes(sub)))
+        (sub && (sub.includes(val) || val.includes(sub))) ||
+        (key === 'color' &&
+          colorNames.some(
+            (cn) => cn === val || cn === lab || cn.includes(val) || val.includes(cn) || lab.includes(cn)
+          ))
       ) {
         matches.push(opt.value);
       }
     }
-    if (matches.length) out[key] = [...new Set(matches)];
+    if (key === 'color' && colorNames.length && !matches.length) {
+      out.color = [...new Set(colorNames.map((n) => n.replace(/\s+/g, '-')))];
+    } else if (matches.length) {
+      out[key] = [...new Set(matches)];
+    }
   }
 
   return out;

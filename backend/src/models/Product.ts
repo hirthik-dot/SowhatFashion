@@ -3,6 +3,12 @@ import slugify from 'slugify';
 import SidebarConfig from './SidebarConfig';
 import { mergeFilterTags, type FilterTagsMap } from '../lib/productFilterTags';
 
+export interface IProductColor {
+  name: string;
+  hex: string;
+  imageIndex?: number;
+}
+
 export interface IProduct extends Document {
   name: string;
   billingName?: string;
@@ -10,6 +16,7 @@ export interface IProduct extends Document {
   category: string;
   subCategory: string;
   images: string[];
+  colors?: IProductColor[];
   price: number;
   discountPrice: number;
   sizes: string[];
@@ -45,6 +52,13 @@ const ProductSchema = new Schema<IProduct>(
     },
     subCategory: { type: String, default: '' },
     images: [{ type: String }],
+    colors: [
+      {
+        name: { type: String, required: true, trim: true },
+        hex: { type: String, required: true, trim: true },
+        imageIndex: { type: Number, min: 0 },
+      },
+    ],
     price: { type: Number, required: true, min: 0 },
     discountPrice: { type: Number, default: 0, min: 0 },
     sizes: [{ type: String, trim: true }],
@@ -97,6 +111,7 @@ ProductSchema.pre('save', async function (next) {
       this.isModified('discountPrice') ||
       this.isModified('isNewArrival') ||
       this.isModified('isFeatured') ||
+      this.isModified('colors') ||
       this.isModified('filterTags');
 
     if (!relevant) return next();
@@ -119,6 +134,7 @@ ProductSchema.pre('save', async function (next) {
         discountPrice: this.discountPrice,
         isNewArrival: this.isNewArrival,
         isFeatured: this.isFeatured,
+        colors: this.colors,
       },
       manual,
       config?.filters || []

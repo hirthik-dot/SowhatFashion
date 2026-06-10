@@ -1,13 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatPrice, calculateDiscount } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import ColorSwatches from '@/components/shared/ColorSwatches';
+import type { ProductColor } from '@/lib/product-colors';
+import { getDisplayImages } from '@/lib/product-colors';
 
 export default function ProductDetailClient({ product }: { product: any }) {
+  const colors: ProductColor[] = product.colors || [];
+  const hasColors = colors.length > 0;
+
+  const [selectedColorIndex, setSelectedColorIndex] = useState(0);
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] || '');
   const [quantity, setQuantity] = useState(1);
@@ -19,35 +26,55 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const router = useRouter();
   const [currentUrl, setCurrentUrl] = useState('');
 
+  const displayImages = useMemo(
+    () => getDisplayImages(product.images || [], colors, selectedColorIndex),
+    [product.images, colors, selectedColorIndex]
+  );
+
   useEffect(() => {
     setCurrentUrl(window.location.href);
   }, []);
+
+  useEffect(() => {
+    setSelectedImage(0);
+  }, [selectedColorIndex]);
+
+  const handleColorSelect = (index: number) => {
+    setSelectedColorIndex(index);
+  };
 
   const handleTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
   const handleTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
   const handleTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    if (distance > 50) setSelectedImage((s) => (s === product.images.length - 1 ? 0 : s + 1));
-    if (distance < -50) setSelectedImage((s) => (s === 0 ? product.images.length - 1 : s - 1));
+    if (distance > 50) setSelectedImage((s) => (s === displayImages.length - 1 ? 0 : s + 1));
+    if (distance < -50) setSelectedImage((s) => (s === 0 ? displayImages.length - 1 : s - 1));
     setTouchStart(0); setTouchEnd(0);
   };
 
   const discount = calculateDiscount(product.price, product.discountPrice);
   const hasDiscount = discount > 0;
   const isOutOfStock = product.stock <= 0;
+  const selectedColor = colors[selectedColorIndex];
 
   const handleAddToCart = () => {
     if (!selectedSize) {
       alert('Please select a size');
       return;
     }
+    if (hasColors && !selectedColor) {
+      alert('Please select a color');
+      return;
+    }
     addItem(
       {
         productId: product._id,
         name: product.name,
-        image: product.images[0] || '',
+        image: displayImages[0] || product.images[0] || '',
         size: selectedSize,
+        color: selectedColor?.name,
+        colorHex: selectedColor?.hex,
         price: product.price,
         discountPrice: product.discountPrice,
       },
@@ -64,16 +91,14 @@ export default function ProductDetailClient({ product }: { product: any }) {
     }
   };
 
-  const inStockSizes = product.sizes; // Assuming all listed are in stock for now unless we track per-size inventory
-
   return (
     <div className="flex flex-col md:flex-row gap-10 md:gap-16">
       {/* Left: Image Gallery */}
       <div className="w-full md:w-1/2 flex flex-col-reverse md:flex-row gap-4">
         {/* Thumbnails */}
         <div className="flex md:flex-col gap-4 overflow-x-auto md:overflow-y-auto no-scrollbar md:w-20 shrink-0">
-          {product.images.length > 0 ? (
-            product.images.map((img: string, i: number) => (
+          {displayImages.length > 0 ? (
+            displayImages.map((img: string, i: number) => (
               <button
                 key={i}
                 onClick={() => setSelectedImage(i)}
@@ -97,17 +122,16 @@ export default function ProductDetailClient({ product }: { product: any }) {
           onTouchEnd={handleTouchEnd}
         >
           <Image
-            src={product.images[selectedImage] || '/placeholder.jpg'}
+            src={displayImages[selectedImage] || product.images[0] || '/placeholder.jpg'}
             alt={product.name}
             fill
             className="object-cover"
             priority
             sizes="(max-width: 768px) 100vw, 50vw"
           />
-          {/* Mobile swipe indicators */}
-          {product.images.length > 1 && (
+          {displayImages.length > 1 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 md:hidden">
-              {product.images.map((_: any, i: number) => (
+              {displayImages.map((_: any, i: number) => (
                 <div key={i} className={`w-2 h-2 rounded-full ${selectedImage === i ? 'bg-[var(--gold)]' : 'bg-gray-300'}`} />
               ))}
             </div>
@@ -163,6 +187,20 @@ export default function ProductDetailClient({ product }: { product: any }) {
           </div>
         ) : (
           <>
+            {/* Color Selector */}
+            {hasColors && (
+              <div className="mb-8 border-t border-[var(--border)] pt-8">
+                <span className="font-semibold uppercase tracking-wider text-sm block mb-4">Select Color</span>
+                <ColorSwatches
+                  colors={colors}
+                  selectedIndex={selectedColorIndex}
+                  onSelect={handleColorSelect}
+                  size="md"
+                  showLabels
+                />
+              </div>
+            )}
+
             {/* Size Selector */}
             <div className="mb-8 border-t border-[var(--border)] pt-8">
               <div className="flex justify-between items-center mb-4">

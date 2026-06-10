@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage, adminGetCategories } from '@/lib/api';
 import ProductFilterAssignments from '@/components/admin/ProductFilterAssignments';
-import { formatPrice } from '@/lib/utils';
+import ProductColorEditor from '@/components/admin/ProductColorEditor';
+import type { ProductColor } from '@/lib/product-colors';
+import { formatPrice, productListKey } from '@/lib/utils';
 import Image from 'next/image';
 
 export default function AdminProductsPage() {
@@ -29,6 +31,7 @@ export default function AdminProductsPage() {
     stock: 0,
     tags: '',
     images: [] as string[],
+    colors: [] as ProductColor[],
     isFeatured: false,
     isNewArrival: false,
     isActive: true,
@@ -55,7 +58,7 @@ export default function AdminProductsPage() {
 
   const handleOpenModal = (product?: any) => {
     if (product) {
-      setEditingId(product._id);
+      setEditingId(resolveProductId(product));
       const ft = product.filterTags;
       const filterTags: Record<string, string[]> =
         ft instanceof Map
@@ -65,8 +68,10 @@ export default function AdminProductsPage() {
             : {};
       setFormData({
         ...product,
+        name: resolveEditName(product),
         subCategory: product.subCategory || '',
         tags: product.tags?.join(', ') || '',
+        colors: product.colors || [],
         filterTags,
       });
     } else {
@@ -118,6 +123,7 @@ export default function AdminProductsPage() {
         tags: typeof formData.tags === 'string'
           ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
           : formData.tags,
+        colors: (formData.colors || []).filter((c: ProductColor) => c.name.trim() && c.hex.trim()),
         filterTags: formData.filterTags || {},
       };
 
@@ -134,11 +140,15 @@ export default function AdminProductsPage() {
   };
 
   const handleToggleVisibility = async (product: any) => {
-    setTogglingId(product._id);
+    const productId = resolveProductId(product);
+    const listKey = productListKey(product);
+    setTogglingId(listKey);
     try {
-      await adminUpdateProduct(product._id, { isActive: !product.isActive });
+      await adminUpdateProduct(productId, { isActive: !product.isActive });
       setProducts((prev) =>
-        prev.map((p) => (p._id === product._id ? { ...p, isActive: !product.isActive } : p))
+        prev.map((p) =>
+          resolveProductId(p) === productId ? { ...p, isActive: !product.isActive } : p
+        )
       );
     } catch {
       alert('Failed to update product visibility');
@@ -159,6 +169,14 @@ export default function AdminProductsPage() {
   };
 
   const availableSizes = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
+  const resolveProductId = (product: any) => String(product.parentProductId || product._id);
+  const resolveEditName = (product: any) => {
+    if (product.isPriceVariant && product.name) {
+      return String(product.name).replace(/ \(₹[\d,]+\)$/, '');
+    }
+    return product.name;
+  };
 
   const uniqueCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
 
@@ -230,7 +248,7 @@ export default function AdminProductsPage() {
               ) : filteredProducts.length === 0 ? (
                 <tr><td colSpan={6} className="px-6 py-8 text-center text-[var(--text-secondary)]">No products found matching the current filters.</td></tr>
               ) : filteredProducts.map((product) => (
-                <tr key={product._id} className="hover:bg-gray-50 transition-colors">
+                <tr key={productListKey(product)} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="w-12 h-16 relative rounded overflow-hidden border border-[var(--border)] bg-gray-100">
                       <Image src={product.images?.[0] || '/placeholder.jpg'} alt={product.name} fill className="object-cover" />
@@ -239,7 +257,10 @@ export default function AdminProductsPage() {
                   <td className="px-6 py-4">
                     <div className="font-semibold text-black">{product.name}</div>
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)] mt-1">{product.category}</div>
-                    <div className="flex gap-1 mt-1">
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {product.isPriceVariant ? (
+                        <span className="bg-red-50 text-red-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Price batch</span>
+                      ) : null}
                       {product.isFeatured && <span className="bg-[var(--gold-light)] text-black text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Featured</span>}
                       {product.isNewArrival && <span className="bg-[var(--sale-red)] text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">New</span>}
                     </div>
@@ -255,7 +276,7 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility(product)}
-                      disabled={togglingId === product._id}
+                      disabled={togglingId === productListKey(product)}
                       title={product.isActive ? 'Visible to customers — click to hide' : 'Hidden from customers — click to show'}
                       className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors disabled:opacity-50 ${
                         product.isActive
@@ -263,7 +284,7 @@ export default function AdminProductsPage() {
                           : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'
                       }`}
                     >
-                      {togglingId === product._id ? (
+                      {togglingId === productListKey(product) ? (
                         <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                       ) : product.isActive ? (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -282,7 +303,7 @@ export default function AdminProductsPage() {
                   </td>
                   <td className="px-6 py-4 text-right space-x-3">
                     <button onClick={() => handleOpenModal(product)} className="text-[var(--gold-hover)] hover:underline font-semibold">Edit</button>
-                    <button onClick={() => handleDelete(product._id)} className="text-[var(--sale-red)] hover:underline font-semibold">Delete</button>
+                    <button onClick={() => handleDelete(resolveProductId(product))} className="text-[var(--sale-red)] hover:underline font-semibold">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -412,6 +433,14 @@ export default function AdminProductsPage() {
                           <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploading} />
                         </label>
                       </div>
+                    </div>
+
+                    <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)]">
+                      <ProductColorEditor
+                        colors={formData.colors || []}
+                        images={formData.images}
+                        onChange={(colors) => setFormData({ ...formData, colors })}
+                      />
                     </div>
 
                     <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)] grid grid-cols-1 md:grid-cols-3 gap-4">

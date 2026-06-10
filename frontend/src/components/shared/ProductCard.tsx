@@ -6,6 +6,9 @@ import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatPrice, calculateDiscount } from '@/lib/utils';
 import { useState, useMemo } from 'react';
+import ColorSwatches from '@/components/shared/ColorSwatches';
+import type { ProductColor } from '@/lib/product-colors';
+import { getDisplayImages } from '@/lib/product-colors';
 
 interface ProductCardProps {
   product: {
@@ -16,6 +19,7 @@ interface ProductCardProps {
     price: number;
     discountPrice: number;
     sizes: string[];
+    colors?: ProductColor[];
     isNewArrival: boolean;
     category: string;
   };
@@ -26,11 +30,15 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
   const addItem = useCartStore((s) => s.addItem);
   const { wishlist, toggleWishlist, isLoggedIn, openAuthModal } = useAuthStore();
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
+  const [selectedColorIndex, setSelectedColorIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
+  const colors = product.colors || [];
+  const displayImages = getDisplayImages(product.images || [], colors, selectedColorIndex);
   const discount = calculateDiscount(product.price, product.discountPrice);
   const hasDiscount = discount > 0;
-  const imageUrl = product.images?.[0] || '/placeholder.jpg';
+  const imageUrl = displayImages[0] || product.images?.[0] || '/placeholder.jpg';
+  const selectedColor = colors[selectedColorIndex];
   
   const wishlisted = useMemo(() => wishlist.includes(product._id), [wishlist, product._id]);
 
@@ -42,6 +50,8 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
       name: product.name,
       image: imageUrl,
       size: selectedSize,
+      color: selectedColor?.name,
+      colorHex: selectedColor?.hex,
       price: product.price,
       discountPrice: product.discountPrice,
     });
@@ -118,9 +128,9 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             className="object-cover group-hover:scale-105 transition-transform duration-700"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
-          {product.images?.[1] && (
+          {(displayImages[1] || product.images?.[1]) && (
             <Image
-              src={product.images[1]}
+              src={displayImages[1] || product.images[1]}
               alt={product.name}
               fill
               className={`object-cover group-hover:scale-105 transition-all duration-500 ease-in-out ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
@@ -183,6 +193,17 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
           <h3 className="text-sm font-medium text-[var(--text-primary)] truncate group-hover:text-[var(--gold)] transition-colors">
             {product.name}
           </h3>
+          {colors.length > 0 && (
+            <div className="mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+              <ColorSwatches
+                colors={colors}
+                selectedIndex={selectedColorIndex}
+                onSelect={setSelectedColorIndex}
+                size="sm"
+                showLabels={false}
+              />
+            </div>
+          )}
           <div className="flex items-center gap-2 mt-1.5">
             {hasDiscount ? (
               <>
