@@ -3,7 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clawbackPointsOnReturn = exports.applyPointsLedger = exports.getOrCreatePointsAccount = exports.validatePointsForBill = exports.maxRedeemablePoints = exports.calcPointsDiscountRupees = exports.calcPointsEarned = exports.normalizeBillingPhone = exports.MIN_REDEEM_POINTS = exports.REDEEM_RUPEES_PER_POINT = exports.EARN_RUPEES_PER_POINT = void 0;
 exports.EARN_RUPEES_PER_POINT = 10;
-exports.REDEEM_RUPEES_PER_POINT = 0.5;
+exports.REDEEM_RUPEES_PER_POINT = 0.25;
 exports.MIN_REDEEM_POINTS = 100;
 const normalizeBillingPhone = (phone) => {
     const digits = String(phone || '').replace(/\D/g, '');
@@ -17,7 +17,7 @@ exports.calcPointsEarned = calcPointsEarned;
 const calcPointsDiscountRupees = (pointsRedeemed) => Math.max(0, pointsRedeemed) * exports.REDEEM_RUPEES_PER_POINT;
 exports.calcPointsDiscountRupees = calcPointsDiscountRupees;
 const maxRedeemablePoints = (prePointsTotalRupees, balance) => {
-    const byBill = Math.floor(Math.max(0, prePointsTotalRupees) / exports.REDEEM_RUPEES_PER_POINT);
+    const byBill = Math.floor((Math.max(0, prePointsTotalRupees) * 0.5) / exports.REDEEM_RUPEES_PER_POINT);
     return Math.max(0, Math.min(Math.max(0, balance), byBill));
 };
 exports.maxRedeemablePoints = maxRedeemablePoints;

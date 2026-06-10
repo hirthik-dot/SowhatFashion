@@ -77,6 +77,7 @@ const ProductSchema = new mongoose_1.Schema({
     ],
     totalStock: { type: Number, min: 0, default: 0 },
     isBillingProduct: { type: Boolean, default: false, index: true },
+    isEcommerceProduct: { type: Boolean, default: true, index: true },
     notes: { type: String, trim: true, default: '' },
 }, { timestamps: true });
 ProductSchema.pre('save', function (next) {

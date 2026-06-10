@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.breakdownToProductCounts = exports.buildBreakdownFromAggregateRows = exports.compareSizes = exports.BILLABLE_STATUSES = exports.IN_SHOP_STATUSES = void 0;
 exports.getProductStockBreakdown = getProductStockBreakdown;
+exports.getProductPriceVariantsByProducts = getProductPriceVariantsByProducts;
+exports.getProductPriceVarianceByProducts = getProductPriceVarianceByProducts;
 exports.getInShopCountsByProducts = getInShopCountsByProducts;
 exports.getBillingInShopSummary = getBillingInShopSummary;
 const mongoose_1 = __importDefault(require("mongoose"));
@@ -90,6 +92,84 @@ async function getProductStockBreakdown(productId) {
         },
     ]);
     return (0, exports.buildBreakdownFromAggregateRows)(rows);
+}
+async function getProductPriceVariantsByProducts(productIds) {
+    const ids = productIds
+        .filter(Boolean)
+        .map((id) => new mongoose_1.default.Types.ObjectId(String(id)));
+    const result = new Map();
+    if (!ids.length)
+        return result;
+    const rows = await StockItem_1.default.aggregate([
+        { $match: { product: { $in: ids }, status: { $in: [...exports.BILLABLE_STATUSES] } } },
+        {
+            $group: {
+                _id: { product: '$product', sellingPrice: '$sellingPrice', size: '$size' },
+                count: { $sum: 1 },
+                incomingPrice: { $first: '$incomingPrice' },
+            },
+        },
+    ]);
+    const byProduct = new Map();
+    for (const row of rows) {
+        const productKey = String(row._id?.product || '');
+        const sellingPrice = Number(row._id?.sellingPrice || 0);
+        const size = String(row._id?.size || '').trim() || '-';
+        const count = Number(row.count || 0);
+        if (!productKey)
+            continue;
+        if (!byProduct.has(productKey))
+            byProduct.set(productKey, new Map());
+        const priceMap = byProduct.get(productKey);
+        if (!priceMap.has(sellingPrice)) {
+            priceMap.set(sellingPrice, {
+                sellingPrice,
+                incomingPrice: Number(row.incomingPrice || 0),
+                stock: 0,
+                sizeStock: [],
+            });
+        }
+        const variant = priceMap.get(sellingPrice);
+        variant.stock += count;
+        const sizeRow = variant.sizeStock.find((entry) => entry.size === size);
+        if (sizeRow)
+            sizeRow.stock += count;
+        else
+            variant.sizeStock.push({ size, stock: count });
+    }
+    for (const id of ids) {
+        const key = String(id);
+        const priceMap = byProduct.get(key);
+        const variants = priceMap
+            ? [...priceMap.values()]
+                .map((variant) => ({
+                ...variant,
+                sizeStock: [...variant.sizeStock].sort((a, b) => (0, exports.compareSizes)(a.size, b.size)),
+            }))
+                .sort((a, b) => a.sellingPrice - b.sellingPrice)
+            : [];
+        result.set(key, variants);
+    }
+    return result;
+}
+async function getProductPriceVarianceByProducts(productIds) {
+    const variantsByProduct = await getProductPriceVariantsByProducts(productIds);
+    const result = new Map();
+    for (const [productId, priceVariants] of variantsByProduct.entries()) {
+        const sellingPrices = priceVariants.map((variant) => variant.sellingPrice);
+        result.set(productId, {
+            hasMultiplePrices: sellingPrices.length > 1,
+            sellingPrices,
+            priceVariants,
+        });
+    }
+    for (const id of productIds) {
+        const key = String(id);
+        if (!result.has(key)) {
+            result.set(key, { hasMultiplePrices: false, sellingPrices: [], priceVariants: [] });
+        }
+    }
+    return result;
 }
 async function getInShopCountsByProducts(productIds) {
     const ids = productIds

@@ -275,6 +275,7 @@ router.get('/next-barcode', async (req, res) => {
     if (!productId || !mongoose_1.default.Types.ObjectId.isValid(productId)) {
         return res.status(400).json({ message: 'Valid productId is required' });
     }
+    const sellingPrice = req.query.sellingPrice;
     const match = {
         product: new mongoose_1.default.Types.ObjectId(productId),
         status: { $in: [...stock_inventory_counts_1.BILLABLE_STATUSES] },
@@ -282,6 +283,9 @@ router.get('/next-barcode', async (req, res) => {
     };
     if (size)
         match.size = size;
+    if (sellingPrice !== undefined && sellingPrice !== '') {
+        match.sellingPrice = Number(sellingPrice);
+    }
     const stockItem = await StockItem_1.default.findOne(match)
         .sort({ barcode: 1 })
         .populate('product', 'name category billingSubCategory');
@@ -335,7 +339,7 @@ router.get('/search', billingAuthMiddleware_1.billingAuthMiddleware, async (req,
         },
         {
             $group: {
-                _id: { product: '$productData._id', size: '$size' },
+                _id: { product: '$productData._id', size: '$size', sellingPrice: '$sellingPrice' },
                 productId: { $first: '$productData._id' },
                 name: { $first: { $ifNull: ['$productData.billingName', '$productData.name'] } },
                 category: { $first: '$productData.category' },

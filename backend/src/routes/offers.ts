@@ -4,6 +4,7 @@ import Offer from '../models/Offer';
 import authMiddleware from '../middleware/authMiddleware';
 import { isAdminRequest } from '../lib/authToken';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
+import { expandProductsForEcommerce } from '../lib/ecommerce-product-variants';
 
 const router = Router();
 
@@ -48,8 +49,16 @@ router.get('/', async (req: Request, res: Response) => {
       filter.showOnHomepage = true;
     }
 
-    const offers = await Offer.find(filter).populate('products').sort({ order: 1, createdAt: -1 });
-    res.json(offers);
+    const offers = await Offer.find(filter).populate('products').sort({ order: 1, createdAt: -1 }).lean();
+    const expandedOffers = await Promise.all(
+      offers.map(async (offer: any) => ({
+        ...offer,
+        products: await expandProductsForEcommerce(
+          (offer.products || []).filter((product: any) => product && product.isActive !== false)
+        ),
+      }))
+    );
+    res.json(expandedOffers);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
@@ -156,7 +165,11 @@ router.get('/:slugOrId', async (req: Request, res: Response) => {
     if (!offer) {
       return res.status(404).json({ message: 'Offer not found' });
     }
-    res.json(offer);
+    const offerObj = offer.toObject ? offer.toObject() : offer;
+    const products = await expandProductsForEcommerce(
+      (offerObj.products || []).filter((product: any) => product && product.isActive !== false)
+    );
+    res.json({ ...offerObj, products });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }

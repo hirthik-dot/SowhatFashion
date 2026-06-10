@@ -9,6 +9,7 @@ const Offer_1 = __importDefault(require("../models/Offer"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
 const authToken_1 = require("../lib/authToken");
 const revalidateFrontend_1 = require("../lib/revalidateFrontend");
+const ecommerce_product_variants_1 = require("../lib/ecommerce-product-variants");
 const router = (0, express_1.Router)();
 function activeEndTimeCond() {
     return {
@@ -48,8 +49,12 @@ router.get('/', async (req, res) => {
         if (req.query.showOnHomepage === 'true') {
             filter.showOnHomepage = true;
         }
-        const offers = await Offer_1.default.find(filter).populate('products').sort({ order: 1, createdAt: -1 });
-        res.json(offers);
+        const offers = await Offer_1.default.find(filter).populate('products').sort({ order: 1, createdAt: -1 }).lean();
+        const expandedOffers = await Promise.all(offers.map(async (offer) => ({
+            ...offer,
+            products: await (0, ecommerce_product_variants_1.expandProductsForEcommerce)((offer.products || []).filter((product) => product && product.isActive !== false)),
+        })));
+        res.json(expandedOffers);
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -155,7 +160,9 @@ router.get('/:slugOrId', async (req, res) => {
         if (!offer) {
             return res.status(404).json({ message: 'Offer not found' });
         }
-        res.json(offer);
+        const offerObj = offer.toObject ? offer.toObject() : offer;
+        const products = await (0, ecommerce_product_variants_1.expandProductsForEcommerce)((offerObj.products || []).filter((product) => product && product.isActive !== false));
+        res.json({ ...offerObj, products });
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });

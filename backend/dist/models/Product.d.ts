@@ -29,6 +29,7 @@ export interface IProduct extends Document {
     totalStock?: number;
     isBillingProduct?: boolean;
     notes?: string;
+    isEcommerceProduct?: boolean;
     createdAt: Date;
 }
 declare const _default: mongoose.Model<IProduct, {}, {}, {}, mongoose.Document<unknown, {}, IProduct, {}, {}> & IProduct & Required<{

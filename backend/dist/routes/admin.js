@@ -126,7 +126,7 @@ router.get('/customers', async (req, res) => {
                     _id: 1,
                     name: 1,
                     email: 1,
-                    phone: 1,
+                    phone: { $ifNull: ["$phone", { $arrayElemAt: ["$orders.customer.phone", 0] }] },
                     avatar: 1,
                     createdAt: 1,
                     totalOrders: { $size: "$orders" },

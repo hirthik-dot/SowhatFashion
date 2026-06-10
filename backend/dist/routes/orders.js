@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const Order_1 = __importDefault(require("../models/Order"));
+const User_1 = require("../models/User");
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const router = (0, express_1.Router)();
@@ -41,13 +42,15 @@ router.get('/my-orders', async (req, res) => {
 // GET /api/orders - all orders with pagination (protected)
 router.get('/', authMiddleware_1.default, async (req, res) => {
     try {
-        const { page, limit, status } = req.query;
+        const { page, limit, status, paymentStatus } = req.query;
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 20;
         const skip = (pageNum - 1) * limitNum;
         const filter = {};
         if (status)
             filter.orderStatus = status;
+        if (paymentStatus)
+            filter.paymentStatus = paymentStatus;
         const [orders, total] = await Promise.all([
             Order_1.default.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
             Order_1.default.countDocuments(filter),
@@ -137,6 +140,15 @@ router.post('/', async (req, res) => {
             paymentStatus: 'pending',
         });
         await order.save();
+        // Update user phone number if email exists and phone is provided
+        if (req.body.customer && req.body.customer.email && req.body.customer.phone) {
+            try {
+                await User_1.User.findOneAndUpdate({ email: req.body.customer.email }, { $set: { phone: req.body.customer.phone } });
+            }
+            catch (err) {
+                console.error('Failed to update user phone:', err);
+            }
+        }
         res.status(201).json(order);
     }
     catch (error) {
@@ -169,6 +181,23 @@ router.put('/:id/status', authMiddleware_1.default, async (req, res) => {
             return res.status(400).json({ message: 'Invalid order status' });
         }
         const order = await Order_1.default.findByIdAndUpdate(req.params.id, { orderStatus }, { new: true });
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+        res.json(order);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+// PUT /api/orders/:id/payment-status - update payment status (protected)
+router.put('/:id/payment-status', authMiddleware_1.default, async (req, res) => {
+    try {
+        const { paymentStatus } = req.body;
+        if (!['pending', 'paid', 'failed'].includes(paymentStatus)) {
+            return res.status(400).json({ message: 'Invalid payment status' });
+        }
+        const order = await Order_1.default.findByIdAndUpdate(req.params.id, { paymentStatus }, { new: true });
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }

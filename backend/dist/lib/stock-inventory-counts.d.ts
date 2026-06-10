@@ -36,6 +36,22 @@ export declare const buildBreakdownFromAggregateRows: (rows: Array<{
 }>) => ProductStockBreakdown;
 export declare const breakdownToProductCounts: (breakdown: ProductStockBreakdown) => ProductInShopCounts;
 export declare function getProductStockBreakdown(productId: mongoose.Types.ObjectId | string): Promise<ProductStockBreakdown>;
+export type ProductPriceVariant = {
+    sellingPrice: number;
+    incomingPrice: number;
+    stock: number;
+    sizeStock: {
+        size: string;
+        stock: number;
+    }[];
+};
+export type ProductPriceVariance = {
+    hasMultiplePrices: boolean;
+    sellingPrices: number[];
+    priceVariants: ProductPriceVariant[];
+};
+export declare function getProductPriceVariantsByProducts(productIds: Array<mongoose.Types.ObjectId | string>): Promise<Map<string, ProductPriceVariant[]>>;
+export declare function getProductPriceVarianceByProducts(productIds: Array<mongoose.Types.ObjectId | string>): Promise<Map<string, ProductPriceVariance>>;
 export declare function getInShopCountsByProducts(productIds: Array<mongoose.Types.ObjectId | string>): Promise<Map<string, ProductInShopCounts>>;
 export declare function getBillingInShopSummary(): Promise<{
     totalProducts: number;

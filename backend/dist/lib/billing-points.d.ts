@@ -1,6 +1,6 @@
 /** Loyalty points rules — earn on pre-points bill total; redeem before payment. */
 export declare const EARN_RUPEES_PER_POINT = 10;
-export declare const REDEEM_RUPEES_PER_POINT = 0.5;
+export declare const REDEEM_RUPEES_PER_POINT = 0.25;
 export declare const MIN_REDEEM_POINTS = 100;
 export type PointsMode = 'earn' | 'redeem' | 'none';
 export declare const normalizeBillingPhone: (phone: string) => string;

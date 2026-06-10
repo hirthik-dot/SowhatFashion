@@ -112,27 +112,24 @@ export function applyEcommerceVariant(product: any, variant: EcommercePriceVaria
   };
 }
 
+const normalizeProduct = (product: any) =>
+  typeof product?.toObject === 'function' ? product.toObject() : { ...product };
+
 export async function expandProductsForEcommerce(products: any[]): Promise<any[]> {
-  const billingIds = products.filter((product) => product.isBillingProduct).map((product) => product._id);
-  const variantsByProduct = await getEcommerceVariantsByProducts(billingIds);
+  const productIds = products.map((product) => product._id).filter(Boolean);
+  const variantsByProduct = await getEcommerceVariantsByProducts(productIds);
   const expanded: any[] = [];
 
   for (const product of products) {
-    if (!product.isBillingProduct) {
-      expanded.push(typeof product.toObject === 'function' ? product.toObject() : product);
-      continue;
-    }
-
     const variants = variantsByProduct.get(String(product._id)) || [];
     const inStockVariants = variants.filter((variant) => variant.stock > 0);
 
-    if (inStockVariants.length === 0) {
-      expanded.push(typeof product.toObject === 'function' ? product.toObject() : product);
-      continue;
-    }
-
-    if (inStockVariants.length === 1) {
-      expanded.push(applyEcommerceVariant(product, inStockVariants[0], false));
+    if (inStockVariants.length <= 1) {
+      if (inStockVariants.length === 1) {
+        expanded.push(applyEcommerceVariant(product, inStockVariants[0], false));
+      } else {
+        expanded.push(normalizeProduct(product));
+      }
       continue;
     }
 
@@ -142,4 +139,9 @@ export async function expandProductsForEcommerce(products: any[]): Promise<any[]
   }
 
   return expanded;
+}
+
+export async function expandPopulatedProductsForEcommerce(products: any[]): Promise<any[]> {
+  if (!products?.length) return [];
+  return expandProductsForEcommerce(products.filter(Boolean));
 }

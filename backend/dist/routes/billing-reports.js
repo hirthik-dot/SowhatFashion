@@ -208,6 +208,9 @@ router.get('/summary', async (req, res) => {
     const bills = await Bill_1.default.find(query).populate('salesman', 'name phone').lean();
     const returnsCount = await Return_1.default.countDocuments(startDate || endDate ? { createdAt: query.createdAt || {} } : {});
     const totalRevenue = bills.reduce((sum, bill) => sum + (0, billing_revenue_1.billRevenueExGst)(bill), 0);
+    const totalPointsCost = bills.reduce((sum, bill) => sum + Number(bill.pointsDiscountAmount || 0), 0);
+    const totalPointsRedeemed = bills.reduce((sum, bill) => sum + Number(bill.pointsRedeemed || 0), 0);
+    const totalCashCollected = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
     const totalBills = bills.length;
     const totalItems = bills.reduce((sum, bill) => sum + (bill.items || []).reduce((x, i) => x + Number(i.quantity || 0), 0), 0);
     const totalDiscount = bills.reduce((sum, bill) => sum + Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0), 0);
@@ -268,6 +271,9 @@ router.get('/summary', async (req, res) => {
         .sort((a, b) => a.day.localeCompare(b.day));
     return res.json({
         totalRevenue,
+        totalPointsCost,
+        totalPointsRedeemed,
+        totalCashCollected,
         totalBills,
         totalItems,
         totalReturns: returnsCount,
@@ -289,8 +295,13 @@ router.get('/bills', async (req, res) => {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 20);
     const skip = (page - 1) * limit;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, search } = req.query;
     const query = getDateFilter(startDate, endDate);
+    const trimmedSearch = String(search || '').trim();
+    if (trimmedSearch) {
+        const regex = new RegExp(trimmedSearch, 'i');
+        query.$or = [{ billNumber: regex }, { 'customer.name': regex }, { 'customer.phone': regex }];
+    }
     const [data, total] = await Promise.all([
         Bill_1.default.find(query).populate('salesman', 'name phone').populate('createdBy', 'name').sort({ createdAt: -1 }).skip(skip).limit(limit),
         Bill_1.default.countDocuments(query),
@@ -464,11 +475,15 @@ router.get('/bill-profit', async (req, res) => {
                         status: 1,
                         paymentMethod: 1,
                         totalAmount: 1,
+                        pointsRedeemed: 1,
+                        pointsDiscountAmount: 1,
                         subtotal: 1,
                         totalItemDiscount: 1,
                         billDiscountAmount: 1,
                         gstAmount: 1,
                         revenue: 1,
+                        pointsCost: { $ifNull: ['$pointsDiscountAmount', 0] },
+                        cashCollected: { $ifNull: ['$totalAmount', 0] },
                         cost: 1,
                         profit: 1,
                         margin: 1,
@@ -503,6 +518,8 @@ router.get('/bill-profit', async (req, res) => {
                     $addFields: {
                         revenue: billRevenueFromItemsMongoExpr,
                         cost: { $ifNull: [{ $arrayElemAt: ['$costDoc.cost', 0] }, 0] },
+                        pointsCost: { $ifNull: ['$pointsDiscountAmount', 0] },
+                        cashCollected: { $ifNull: ['$totalAmount', 0] },
                     },
                 },
                 {
@@ -511,6 +528,8 @@ router.get('/bill-profit', async (req, res) => {
                         totalBills: { $sum: 1 },
                         totalRevenue: { $sum: '$revenue' },
                         totalCost: { $sum: '$cost' },
+                        totalPointsCost: { $sum: '$pointsCost' },
+                        totalCashCollected: { $sum: '$cashCollected' },
                     },
                 },
                 {
@@ -538,6 +557,8 @@ router.get('/bill-profit', async (req, res) => {
             totalCost: 0,
             totalProfit: 0,
             profitMargin: 0,
+            totalPointsCost: 0,
+            totalCashCollected: 0,
         };
         res.json({
             data: rows,
@@ -550,6 +571,8 @@ router.get('/bill-profit', async (req, res) => {
                 totalCost: Number(summary.totalCost || 0),
                 totalProfit: Number(summary.totalProfit || 0),
                 profitMargin: Number(summary.profitMargin || 0),
+                totalPointsCost: Number(summary.totalPointsCost || 0),
+                totalCashCollected: Number(summary.totalCashCollected || 0),
             },
         });
     }
@@ -587,6 +610,10 @@ router.get('/bill-profit/:id', async (req, res) => {
                 billDiscountAmount: bill.billDiscountAmount,
                 gstAmount: bill.gstAmount,
                 totalAmount: bill.totalAmount,
+                pointsRedeemed: Number(bill.pointsRedeemed || 0),
+                pointsDiscountAmount: Number(bill.pointsDiscountAmount || 0),
+                pointsCost: Number(bill.pointsDiscountAmount || 0),
+                cashCollected: Number(bill.totalAmount || 0),
             },
             ...metrics,
         });
@@ -851,6 +878,9 @@ router.get('/export', async (req, res) => {
         { header: 'GST', key: 'gst', width: 12 },
         { header: 'Payment', key: 'payment', width: 15 },
         { header: 'Status', key: 'status', width: 14 },
+        { header: 'Points Redeemed', key: 'pointsRedeemed', width: 16 },
+        { header: 'Points Cost', key: 'pointsCost', width: 14 },
+        { header: 'Cash Collected', key: 'cashCollected', width: 14 },
         { header: 'Total', key: 'total', width: 14 },
     ];
     bills.forEach((bill) => {
@@ -864,6 +894,9 @@ router.get('/export', async (req, res) => {
             gst: bill.gstAmount || 0,
             payment: bill.paymentMethod || '',
             status: bill.status || '',
+            pointsRedeemed: Number(bill.pointsRedeemed || 0),
+            pointsCost: Number(bill.pointsDiscountAmount || 0),
+            cashCollected: Number(bill.totalAmount || 0),
             total: bill.totalAmount || 0,
         });
     });
@@ -1162,10 +1195,20 @@ router.get('/profit', (0, billingRoleMiddleware_1.requirePermission)('canViewRep
         const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
         const skip = (page - 1) * limit;
         const sortMode = String(req.query.sort || 'entryDate');
-        const { supplier: supplierQuery, startDate, endDate } = req.query;
+        const { supplier: supplierQuery, startDate, endDate, search: searchRaw } = req.query;
         const entryMatch = buildStockEntryMatch(supplierQuery, startDate, endDate);
         if (entryMatch === null) {
             return res.status(400).json({ message: 'Invalid supplier id' });
+        }
+        const searchTrimmed = String(searchRaw || '').trim();
+        if (searchTrimmed) {
+            const regex = new RegExp(searchTrimmed, 'i');
+            entryMatch.$or = [
+                { productName: regex },
+                { size: regex },
+                { notes: regex },
+                { $expr: { $regexMatch: { input: { $toString: '$_id' }, regex: searchTrimmed, options: 'i' } } }
+            ];
         }
         const StockEntry = req.app.get('mongoose')?.model('StockEntry') || require('../models/StockEntry').default;
         const entryMatchStage = Object.keys(entryMatch).length ? [{ $match: entryMatch }] : [];

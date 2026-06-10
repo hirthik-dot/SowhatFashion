@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import NewArrival from '../models/NewArrival';
 import authMiddleware from '../middleware/authMiddleware';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
+import { expandProductsForEcommerce } from '../lib/ecommerce-product-variants';
 
 const publicRouter = Router();
 const adminRouter = Router();
@@ -22,13 +23,26 @@ publicRouter.get('/', async (req: Request, res: Response) => {
       NewArrival.countDocuments({ isActive: true }),
     ]);
 
-    const items = raw.filter(
-      (row: any) => row.product && row.product.isActive !== false
-    );
+    const activeItems = raw.filter((row: any) => row.product && row.product.isActive !== false);
+    const baseProducts = activeItems.map((row: any) => row.product);
+    const expandedProducts = await expandProductsForEcommerce(baseProducts);
+    const expandedByParentId = new Map<string, any[]>();
+
+    for (const product of expandedProducts) {
+      const parentId = String(product.parentProductId || product._id);
+      if (!expandedByParentId.has(parentId)) expandedByParentId.set(parentId, []);
+      expandedByParentId.get(parentId)!.push(product);
+    }
+
+    const items = activeItems.flatMap((row: any) => {
+      const variants = expandedByParentId.get(String(row.product._id));
+      if (!variants?.length) return [row];
+      return variants.map((product) => ({ ...row, product }));
+    });
 
     res.json({
       items,
-      total,
+      total: items.length,
       hasMore: skip + raw.length < total,
     });
   } catch (error) {

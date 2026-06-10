@@ -8,12 +8,14 @@ const Product_1 = __importDefault(require("../models/Product"));
 const StockEntry_1 = __importDefault(require("../models/StockEntry"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
+const BillingCategory_1 = __importDefault(require("../models/BillingCategory"));
+const billing_ecommerce_category_1 = require("../lib/billing-ecommerce-category");
 const stock_inventory_counts_1 = require("../lib/stock-inventory-counts");
 const router = express_1.default.Router();
 const productStockEntryFilter = (productId) => ({
     $or: [{ productId }, { productIds: productId }],
 });
-/** Latest purchase batch for a product size (inventory edits attach new units here). */
+/** Latest purchase batch for a product size (exact match only). */
 const findLatestStockEntryForSize = async (productId, size) => {
     const sizeNorm = String(size).trim();
     const entries = await StockEntry_1.default.find(productStockEntryFilter(productId))
@@ -21,10 +23,58 @@ const findLatestStockEntryForSize = async (productId, size) => {
         .select('_id size')
         .lean();
     const sized = entries.find((e) => String(e.size || '').trim() === sizeNorm);
-    return sized?._id ?? entries[0]?._id ?? null;
+    return sized?._id ?? null;
+};
+/** Create a purchase batch for a size when stock entry did not already introduce it. */
+const ensureStockEntryForSize = async (product, size, enteredBy) => {
+    const existing = await findLatestStockEntryForSize(product._id, size);
+    if (existing)
+        return existing;
+    let supplier = product.supplier;
+    let category = product.billingCategory;
+    let subCategory = product.billingSubCategory;
+    let gstPercent = 5;
+    if (!supplier || !category || !subCategory) {
+        const template = await StockEntry_1.default.findOne(productStockEntryFilter(product._id))
+            .sort({ entryDate: -1, createdAt: -1 })
+            .select('supplier category subCategory gstPercent')
+            .lean();
+        if (template) {
+            supplier = supplier || template.supplier;
+            category = category || template.category;
+            subCategory = subCategory || template.subCategory;
+            gstPercent = template.gstPercent ?? 5;
+        }
+    }
+    if (!supplier || !category || !subCategory)
+        return null;
+    const stockEntry = await StockEntry_1.default.create({
+        supplier,
+        category,
+        subCategory,
+        productName: product.billingName || product.name || '',
+        quantity: 1,
+        incomingPrice: product.incomingPrice ?? 0,
+        sellingPrice: product.price ?? 0,
+        size: String(size).trim(),
+        gstPercent,
+        notes: 'Added via inventory',
+        barcodes: [],
+        stockItemIds: [],
+        productId: product._id,
+        productIds: [product._id],
+        enteredBy,
+        entryDate: new Date(),
+    });
+    return stockEntry._id;
 };
 /** Items created from admin inventory have no batch until linked. */
-const linkOrphanItemsToBatches = async (productId) => {
+const linkOrphanItemsToBatches = async (productId, enteredBy) => {
+    const product = await Product_1.default.findById(productId)
+        .select('supplier billingCategory billingSubCategory billingName name incomingPrice price')
+        .lean();
+    if (!product)
+        return;
     const orphans = await StockItem_1.default.find({
         product: productId,
         $or: [{ stockEntry: null }, { stockEntry: { $exists: false } }],
@@ -39,15 +89,15 @@ const linkOrphanItemsToBatches = async (productId) => {
         bySize.get(size).push(item._id);
     }
     for (const [size, itemIds] of bySize) {
-        const entryId = await findLatestStockEntryForSize(productId, size);
+        const entryId = await ensureStockEntryForSize(product, size, enteredBy);
         if (!entryId || !itemIds.length)
             continue;
         await StockItem_1.default.updateMany({ _id: { $in: itemIds } }, { $set: { stockEntry: entryId } });
     }
 };
 /** Keep purchase/profit batch rows in sync with live stock (qty + cost/MRP). */
-const syncProductPurchaseBatches = async (productId, priceUpdates) => {
-    await linkOrphanItemsToBatches(productId);
+const syncProductPurchaseBatches = async (productId, priceUpdates, enteredBy) => {
+    await linkOrphanItemsToBatches(productId, enteredBy);
     const entries = await StockEntry_1.default.find(productStockEntryFilter(productId)).select('_id').lean();
     for (const entry of entries) {
         const items = await StockItem_1.default.find({ stockEntry: entry._id }).select('_id barcode').lean();
@@ -112,23 +162,36 @@ router.get('/products', async (req, res) => {
             .lean(),
         Product_1.default.countDocuments(query),
     ]);
-    const soldCounts = await StockItem_1.default.aggregate([
-        { $match: { status: 'sold', product: { $in: data.map((d) => d._id) } } },
-        { $group: { _id: '$product', count: { $sum: 1 } } },
+    const productIds = data.map((d) => d._id);
+    const [soldCounts, inShopByProduct, priceVarianceByProduct] = await Promise.all([
+        StockItem_1.default.aggregate([
+            { $match: { status: 'sold', product: { $in: productIds } } },
+            { $group: { _id: '$product', count: { $sum: 1 } } },
+        ]),
+        (0, stock_inventory_counts_1.getInShopCountsByProducts)(productIds),
+        (0, stock_inventory_counts_1.getProductPriceVarianceByProducts)(productIds),
     ]);
     const soldMap = new Map(soldCounts.map((s) => [String(s._id), Number(s.count || 0)]));
-    const inShopByProduct = await (0, stock_inventory_counts_1.getInShopCountsByProducts)(data.map((d) => d._id));
     const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
     return res.json({
         data: data.map((product) => {
-            const inShop = inShopByProduct.get(String(product._id)) || { stockInShop: 0, sizeStockInShop: [] };
+            const productKey = String(product._id);
+            const inShop = inShopByProduct.get(productKey) || { stockInShop: 0, sizeStockInShop: [] };
+            const priceVariance = priceVarianceByProduct.get(productKey) || {
+                hasMultiplePrices: false,
+                sellingPrices: [],
+                priceVariants: [],
+            };
             const row = {
                 ...product,
                 name: product.billingName || product.name,
-                sold: soldMap.get(String(product._id)) || 0,
+                sold: soldMap.get(productKey) || 0,
                 stockInShop: inShop.stockInShop,
                 sizeStockInShop: inShop.sizeStockInShop,
                 stock: inShop.stockInShop,
+                hasMultiplePrices: priceVariance.hasMultiplePrices,
+                sellingPrices: priceVariance.sellingPrices,
+                priceVariants: priceVariance.priceVariants,
             };
             if (!isSuperAdmin) {
                 delete row.incomingPrice;
@@ -184,10 +247,9 @@ router.put('/products/:id', async (req, res) => {
         if (updates.billingCategory !== undefined) {
             if (updates.billingCategory && String(updates.billingCategory).match(/^[0-9a-fA-F]{24}$/)) {
                 product.billingCategory = updates.billingCategory;
-                const BillingCategory = require('../models/BillingCategory').default;
-                const catDoc = await BillingCategory.findById(updates.billingCategory).select('name').lean();
+                const catDoc = await BillingCategory_1.default.findById(updates.billingCategory).select('name').lean();
                 if (catDoc)
-                    product.category = catDoc.name;
+                    product.category = (0, billing_ecommerce_category_1.toEcommerceCategorySlug)(catDoc.name);
             }
         }
         else if (updates.category !== undefined) {
@@ -197,10 +259,9 @@ router.put('/products/:id', async (req, res) => {
         if (updates.billingSubCategory !== undefined) {
             if (updates.billingSubCategory && String(updates.billingSubCategory).match(/^[0-9a-fA-F]{24}$/)) {
                 product.billingSubCategory = updates.billingSubCategory;
-                const BillingCategory = require('../models/BillingCategory').default;
-                const subDoc = await BillingCategory.findById(updates.billingSubCategory).select('name').lean();
+                const subDoc = await BillingCategory_1.default.findById(updates.billingSubCategory).select('name').lean();
                 if (subDoc)
-                    product.subCategory = subDoc.name;
+                    product.subCategory = (0, billing_ecommerce_category_1.toEcommerceSubCategorySlug)(subDoc.name);
             }
         }
         else if (updates.subCategory !== undefined) {
@@ -266,7 +327,7 @@ router.put('/products/:id', async (req, res) => {
                 const diff = desiredQuantity - currentTotalStockForSize;
                 if (diff > 0) {
                     const barcodes = await generateBarcodes(diff);
-                    const stockEntryId = await findLatestStockEntryForSize(product._id, size);
+                    const stockEntryId = await ensureStockEntryForSize(product, size, req.billingAdminId);
                     await StockItem_1.default.insertMany(barcodes.map((barcode) => ({
                         barcode,
                         product: product._id,
@@ -299,7 +360,11 @@ router.put('/products/:id', async (req, res) => {
             product.totalStock = newSizeStock.reduce((sum, s) => sum + s.stock, 0);
             product.stock = product.totalStock;
             product.sizes = newSizeStock.map((s) => s.size);
-            product.isActive = product.stock > 0;
+            // Billing products: don't auto-activate based on stock.
+            // Admin must manually toggle visibility after adding images etc.
+            if (!product.isBillingProduct) {
+                product.isActive = product.stock > 0;
+            }
         }
         await product.save();
         const priceUpdates = {};
@@ -311,7 +376,7 @@ router.put('/products/:id', async (req, res) => {
             updates.incomingPrice !== undefined ||
             updates.price !== undefined;
         if (shouldSyncBatches) {
-            await syncProductPurchaseBatches(product._id, Object.keys(priceUpdates).length ? priceUpdates : undefined);
+            await syncProductPurchaseBatches(product._id, Object.keys(priceUpdates).length ? priceUpdates : undefined, req.billingAdminId);
         }
         res.json(product);
     }

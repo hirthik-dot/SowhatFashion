@@ -12,6 +12,7 @@ const Supplier_1 = __importDefault(require("../models/Supplier"));
 const billingRoleMiddleware_1 = require("../middleware/billingRoleMiddleware");
 const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const slugify_1 = __importDefault(require("slugify"));
+const billing_ecommerce_category_1 = require("../lib/billing-ecommerce-category");
 const stock_inventory_counts_1 = require("../lib/stock-inventory-counts");
 const router = express_1.default.Router();
 const getBarcodePrefix = (date = new Date()) => {
@@ -75,14 +76,16 @@ router.post('/entry', (0, billingRoleMiddleware_1.requirePermission)('canManageS
             isBillingProduct: true,
             billingName: { $regex: `^${cleanProductName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
         });
+        const ecommerceCategory = { category: '', subCategory: '' };
+        (0, billing_ecommerce_category_1.applyBillingCategoriesToProduct)(ecommerceCategory, categoryDoc.name, subCategoryDoc.name);
         // 2) If not found, create master product
         const masterProduct = existingMaster ||
             (await Product_1.default.create({
                 name: cleanProductName,
                 billingName: cleanProductName,
                 slug: `${(0, slugify_1.default)(cleanProductName, { lower: true, strict: true })}-${Date.now()}`,
-                category: categoryDoc.name,
-                subCategory: subCategoryDoc.name,
+                category: ecommerceCategory.category,
+                subCategory: ecommerceCategory.subCategory,
                 billingCategory: categoryDoc._id,
                 billingSubCategory: subCategoryDoc._id,
                 supplier: supplierDoc._id,
@@ -128,6 +131,9 @@ router.post('/entry', (0, billingRoleMiddleware_1.requirePermission)('canManageS
             supplier: supplierDoc._id,
             status: 'available',
         })), { ordered: true });
+        (0, billing_ecommerce_category_1.applyBillingCategoriesToProduct)(masterProduct, categoryDoc.name, subCategoryDoc.name);
+        masterProduct.billingCategory = categoryDoc._id;
+        masterProduct.billingSubCategory = subCategoryDoc._id;
         // 5) Update master Product aggregates
         const sizeStock = Array.isArray(masterProduct.sizeStock) ? masterProduct.sizeStock : [];
         const existingSize = sizeStock.find((s) => String(s.size) === cleanSize);
@@ -192,13 +198,15 @@ router.post('/entry/bulk', (0, billingRoleMiddleware_1.requirePermission)('canMa
             isBillingProduct: true,
             billingName: { $regex: `^${cleanProductName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
         });
+        const ecommerceCategory = { category: '', subCategory: '' };
+        (0, billing_ecommerce_category_1.applyBillingCategoriesToProduct)(ecommerceCategory, categoryDoc.name, subCategoryDoc.name);
         const masterProduct = existingMaster ||
             (await Product_1.default.create({
                 name: cleanProductName,
                 billingName: cleanProductName,
                 slug: `${(0, slugify_1.default)(cleanProductName, { lower: true, strict: true })}-${Date.now()}`,
-                category: categoryDoc.name,
-                subCategory: subCategoryDoc.name,
+                category: ecommerceCategory.category,
+                subCategory: ecommerceCategory.subCategory,
                 billingCategory: categoryDoc._id,
                 billingSubCategory: subCategoryDoc._id,
                 supplier: supplierDoc._id,
@@ -212,6 +220,9 @@ router.post('/entry/bulk', (0, billingRoleMiddleware_1.requirePermission)('canMa
                 isActive: false,
                 isBillingProduct: true,
             }));
+        (0, billing_ecommerce_category_1.applyBillingCategoriesToProduct)(masterProduct, categoryDoc.name, subCategoryDoc.name);
+        masterProduct.billingCategory = categoryDoc._id;
+        masterProduct.billingSubCategory = subCategoryDoc._id;
         const createdEntries = [];
         // Create a separate batch for each size
         for (const { size: cleanSize, quantity: qty } of validatedEntries) {
@@ -348,15 +359,24 @@ router.get('/inventory', async (req, res) => {
         .lean();
     // Sold = total StockItems sold (for this product). We compute per product for correctness.
     const productIds = products.map((p) => p._id);
-    const soldCounts = await StockItem_1.default.aggregate([
-        { $match: { product: { $in: productIds }, status: 'sold' } },
-        { $group: { _id: '$product', count: { $sum: 1 } } },
+    const [soldCounts, inShopByProduct, priceVarianceByProduct] = await Promise.all([
+        StockItem_1.default.aggregate([
+            { $match: { product: { $in: productIds }, status: 'sold' } },
+            { $group: { _id: '$product', count: { $sum: 1 } } },
+        ]),
+        (0, stock_inventory_counts_1.getInShopCountsByProducts)(productIds),
+        (0, stock_inventory_counts_1.getProductPriceVarianceByProducts)(productIds),
     ]);
     const soldByProduct = new Map(soldCounts.map((d) => [String(d._id), Number(d.count || 0)]));
-    const inShopByProduct = await (0, stock_inventory_counts_1.getInShopCountsByProducts)(productIds);
     const isSuperAdmin = req.billingAdmin?.role === 'superadmin';
     const data = products.map((p) => {
-        const inShop = inShopByProduct.get(String(p._id)) || { stockInShop: 0, sizeStockInShop: [] };
+        const productKey = String(p._id);
+        const inShop = inShopByProduct.get(productKey) || { stockInShop: 0, sizeStockInShop: [] };
+        const priceVariance = priceVarianceByProduct.get(productKey) || {
+            hasMultiplePrices: false,
+            sellingPrices: [],
+            priceVariants: [],
+        };
         return {
             _id: p._id,
             name: p.billingName || p.name,
@@ -370,8 +390,11 @@ router.get('/inventory', async (req, res) => {
             sizeStockInShop: inShop.sizeStockInShop,
             totalStock: Number(p.totalStock ?? p.stock ?? 0),
             stockInShop: inShop.stockInShop,
-            sold: soldByProduct.get(String(p._id)) || 0,
+            sold: soldByProduct.get(productKey) || 0,
             mrp: Number(p.price || 0),
+            hasMultiplePrices: priceVariance.hasMultiplePrices,
+            sellingPrices: priceVariance.sellingPrices,
+            priceVariants: priceVariance.priceVariants,
             status: p.isActive ? 'active' : 'inactive',
             notes: p.notes || '',
             incomingPrice: isSuperAdmin ? Number(p.incomingPrice || 0) : undefined,
