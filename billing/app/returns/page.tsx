@@ -13,12 +13,7 @@ import ReplacementReceipt, { type ReturnDocument } from "@/components/returns/Re
 import { useRole } from "@/hooks/useRole";
 import type { BillItem, DiscountType } from "@/lib/bill-store";
 import { expandSelectedToReturnedItems, returnableBillItems } from "@/lib/return-utils";
-
-const itemDiscountPerUnit = (mrp: number, type: DiscountType, value: number) => {
-  if (type === "percent") return (mrp * value) / 100;
-  if (type === "amount") return value;
-  return 0;
-};
+import { BILLING_GST_RATE, itemDiscountPerUnit } from "@/lib/billing-totals";
 
 const computeReplacementTotals = (
   items: BillItem[],
@@ -37,14 +32,17 @@ const computeReplacementTotals = (
     0
   );
   const afterItemDiscount = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+  const grossWithGst = afterItemDiscount * (1 + BILLING_GST_RATE);
   let billDiscountAmount = 0;
-  if (billDiscountType === "percent") billDiscountAmount = (afterItemDiscount * billDiscountValue) / 100;
+  if (billDiscountType === "percent") billDiscountAmount = (grossWithGst * billDiscountValue) / 100;
   else if (billDiscountType === "amount") billDiscountAmount = billDiscountValue;
-  billDiscountAmount = Math.min(afterItemDiscount, Math.max(0, billDiscountAmount));
-  const replacementTotal = afterItemDiscount - billDiscountAmount;
+  billDiscountAmount = Math.min(grossWithGst, Math.max(0, billDiscountAmount));
+  const replacementTotal = grossWithGst - billDiscountAmount;
   const apiItems = lines.map(({ item, lineTotal }) => {
-    const share = afterItemDiscount > 0 ? (lineTotal / afterItemDiscount) * billDiscountAmount : 0;
-    const netLine = lineTotal - share;
+    const lineGross = lineTotal * (1 + BILLING_GST_RATE);
+    const share = grossWithGst > 0 ? (lineGross / grossWithGst) * billDiscountAmount : 0;
+    const netLineGross = Math.max(0, lineGross - share);
+    const netLine = Number((netLineGross / (1 + BILLING_GST_RATE)).toFixed(2));
     const sellingPrice = netLine / Math.max(1, item.quantity);
     const discountPerUnit = itemDiscountPerUnit(item.mrp, item.itemDiscountType, item.itemDiscountValue);
     return {

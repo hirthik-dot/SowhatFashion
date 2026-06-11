@@ -44,7 +44,7 @@ const seedData = async () => {
             announcementText: 'FREE DELIVERY ABOVE ₹999 | SALE UP TO 50% OFF',
             instagramHandle: '@sowaatmenswear',
             freeDeliveryAbove: 999,
-            whatsappNumber: '+919876543210',
+            whatsappNumber: '+917871163597',
         });
         console.log('✅ Settings created, active homepage:', settings.activeHomepage);
         // 3. Create 12 sample products

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { billingApi } from "@/lib/api";
 import { calcPointsDiscountRupees, type PointsMode } from "@/lib/points";
+import { computeBillTotals as computeBillTotalsCore } from "@/lib/billing-totals";
 
 export type PaymentMethod = "cash" | "gpay" | "upi" | "card" | "partial";
 export type PaymentSplitMethod = "cash" | "gpay" | "upi" | "card";
@@ -25,9 +26,6 @@ export type BillItem = {
 };
 
 export type AddItemResult = { added: boolean; message?: string };
-
-/** GST is added on MRP subtotal; discounts reduce (subtotal + GST). */
-const BILLING_GST_RATE = 0.05;
 
 const lineKey = (productId: string, size?: string, mrp?: number) =>
   `${productId}|${size || ""}|${mrp ?? ""}`;
@@ -126,42 +124,32 @@ const makeTab = (): BillTab => ({
 
 const computeTotals = (tab?: BillTab): BillTotals => {
   const items = tab?.items || [];
-  const subtotal = items.reduce((sum, item) => sum + item.mrp * item.quantity, 0);
-  const totalItemDiscount = items.reduce((sum, item) => {
-    if (item.itemDiscountType === "percent") {
-      return sum + ((item.mrp * item.itemDiscountValue) / 100) * item.quantity;
-    }
-    if (item.itemDiscountType === "amount") {
-      return sum + item.itemDiscountValue * item.quantity;
-    }
-    return sum;
-  }, 0);
-  const afterItemDiscount = Math.max(0, subtotal - totalItemDiscount);
-  let billDiscountAmount = 0;
-  if (tab?.billDiscountType === "percent") {
-    billDiscountAmount = (afterItemDiscount * tab.billDiscountValue) / 100;
-  } else if (tab?.billDiscountType === "amount") {
-    billDiscountAmount = tab.billDiscountValue;
-  }
-  billDiscountAmount = Math.min(afterItemDiscount, Math.max(0, billDiscountAmount));
-  const taxableAmount = Math.max(0, subtotal);
-  const gstAmount = taxableAmount * BILLING_GST_RATE;
-  const cgst = gstAmount / 2;
-  const sgst = gstAmount / 2;
-  const grossWithGst = taxableAmount + gstAmount;
-  const totalDiscount = totalItemDiscount + billDiscountAmount;
-  const netInclusive = Math.max(0, grossWithGst - totalDiscount);
-  const prePointsRaw = netInclusive;
-  const prePointsTotalAmount = Math.round(prePointsRaw);
   const pointsRedeemed =
     tab?.pointsMode === "redeem" ? Math.floor(Math.max(0, Number(tab.pointsToRedeem || 0))) : 0;
-  const pointsDiscountAmount =
-    pointsRedeemed > 0
-      ? Math.min(prePointsTotalAmount, calcPointsDiscountRupees(pointsRedeemed))
-      : 0;
-  const raw = Math.max(0, prePointsRaw - pointsDiscountAmount);
-  const roundOff = Math.round(raw) - raw;
-  const totalAmount = Math.round(raw);
+  const pointsDiscountInput =
+    pointsRedeemed > 0 ? calcPointsDiscountRupees(pointsRedeemed) : 0;
+  const core = computeBillTotalsCore(
+    items,
+    tab?.billDiscountType || "none",
+    Number(tab?.billDiscountValue || 0),
+    pointsDiscountInput
+  );
+  const {
+    subtotal,
+    totalItemDiscount,
+    afterItemDiscount,
+    billDiscountAmount,
+    grossWithGst,
+    netInclusive,
+    taxableAmount,
+    gstAmount,
+    cgst,
+    sgst,
+    roundOff,
+    prePointsTotalAmount,
+    pointsDiscountAmount,
+    totalAmount,
+  } = core;
   const cashPortion =
     tab?.paymentMethod === "partial"
       ? (tab.paymentBreakdown || [])

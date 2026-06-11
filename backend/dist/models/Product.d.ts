@@ -1,4 +1,9 @@
 import mongoose, { Document } from 'mongoose';
+export interface IProductColor {
+    name: string;
+    hex: string;
+    imageIndex?: number;
+}
 export interface IProduct extends Document {
     name: string;
     billingName?: string;
@@ -6,6 +11,7 @@ export interface IProduct extends Document {
     category: string;
     subCategory: string;
     images: string[];
+    colors?: IProductColor[];
     price: number;
     discountPrice: number;
     sizes: string[];

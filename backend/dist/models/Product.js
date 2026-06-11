@@ -50,6 +50,13 @@ const ProductSchema = new mongoose_1.Schema({
     },
     subCategory: { type: String, default: '' },
     images: [{ type: String }],
+    colors: [
+        {
+            name: { type: String, required: true, trim: true },
+            hex: { type: String, required: true, trim: true },
+            imageIndex: { type: Number, min: 0 },
+        },
+    ],
     price: { type: Number, required: true, min: 0 },
     discountPrice: { type: Number, default: 0, min: 0 },
     sizes: [{ type: String, trim: true }],
@@ -97,6 +104,7 @@ ProductSchema.pre('save', async function (next) {
             this.isModified('discountPrice') ||
             this.isModified('isNewArrival') ||
             this.isModified('isFeatured') ||
+            this.isModified('colors') ||
             this.isModified('filterTags');
         if (!relevant)
             return next();
@@ -117,6 +125,7 @@ ProductSchema.pre('save', async function (next) {
             discountPrice: this.discountPrice,
             isNewArrival: this.isNewArrival,
             isFeatured: this.isFeatured,
+            colors: this.colors,
         }, manual, config?.filters || []);
         this.set('filterTags', new Map(Object.entries(merged).filter(([, v]) => Array.isArray(v) && v.length > 0)));
         next();

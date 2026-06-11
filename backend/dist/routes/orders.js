@@ -140,13 +140,36 @@ router.post('/', async (req, res) => {
             paymentStatus: 'pending',
         });
         await order.save();
-        // Update user phone number if email exists and phone is provided
-        if (req.body.customer && req.body.customer.email && req.body.customer.phone) {
+        // Update user phone and save shipping address when customer email matches an account
+        if (req.body.customer?.email) {
             try {
-                await User_1.User.findOneAndUpdate({ email: req.body.customer.email }, { $set: { phone: req.body.customer.phone } });
+                const user = await User_1.User.findOne({ email: req.body.customer.email });
+                if (user) {
+                    if (req.body.customer.phone) {
+                        user.phone = req.body.customer.phone;
+                    }
+                    const addr = req.body.customer.address;
+                    if (addr?.line1 && addr?.pincode) {
+                        const exists = user.savedAddresses.some((a) => a.line1 === addr.line1 && a.pincode === addr.pincode);
+                        if (!exists) {
+                            user.savedAddresses.forEach((saved) => {
+                                saved.isDefault = false;
+                            });
+                            user.savedAddresses.push({
+                                label: 'Home',
+                                line1: addr.line1,
+                                city: addr.city,
+                                state: addr.state,
+                                pincode: addr.pincode,
+                                isDefault: true,
+                            });
+                        }
+                    }
+                    await user.save();
+                }
             }
             catch (err) {
-                console.error('Failed to update user phone:', err);
+                console.error('Failed to update user profile from order:', err);
             }
         }
         res.status(201).json(order);

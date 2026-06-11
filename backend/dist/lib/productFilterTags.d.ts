@@ -6,6 +6,10 @@ export declare function computeAutoFilterTags(product: {
     subCategory?: string;
     sizes?: string[];
     tags?: string[];
+    colors?: {
+        name?: string;
+        hex?: string;
+    }[];
     price?: number;
     discountPrice?: number;
     isNewArrival?: boolean;

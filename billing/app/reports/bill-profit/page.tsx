@@ -422,13 +422,10 @@ export default function BillWiseProfitPage() {
                             <div className="text-xs text-[var(--text-secondary)]">
                               {line.category || "-"} • Size {line.size || "-"}
                             </div>
-                            {Number(line.itemDiscountAmount || 0) > 0 || Number(line.billDiscountShare || 0) > 0 ? (
+                            {Number(line.itemDiscountAmount || 0) > 0 ? (
                               <div className="text-xs text-red-300 mt-0.5">
-                                Disc: ₹
-                                {(
-                                  Number(line.itemDiscountAmount || 0) * Number(line.quantity || 1) +
-                                  Number(line.billDiscountShare || 0)
-                                ).toFixed(2)}
+                                Item Disc: ₹
+                                {(Number(line.itemDiscountAmount || 0) * Number(line.quantity || 1)).toFixed(2)}
                               </div>
                             ) : null}
                           </td>
@@ -452,10 +449,9 @@ export default function BillWiseProfitPage() {
 
                 <div className="mt-4 pt-3 border-t border-[var(--border)] text-right text-sm space-y-1">
                   <p className="text-[var(--text-secondary)]">
-                    Subtotal: {formatCurrency(detail.bill?.subtotal)} • Discount: -
-                    {formatCurrency(
-                      Number(detail.bill?.totalItemDiscount || 0) + Number(detail.bill?.billDiscountAmount || 0)
-                    )}
+                    Subtotal: {formatCurrency(detail.bill?.subtotal)} 
+                    {Number(detail.bill?.totalItemDiscount || 0) > 0 && ` • Item Disc: -${formatCurrency(detail.bill.totalItemDiscount)}`}
+                    {Number(detail.bill?.billDiscountAmount || 0) > 0 && ` • Customer Disc: -${formatCurrency(detail.bill.billDiscountAmount)}`}
                   </p>
                   <p className="text-[var(--text-secondary)]">GST on bill: {formatCurrency(detail.bill?.gstAmount)}</p>
                 </div>

@@ -4,6 +4,8 @@ export interface IOrderItem {
     name: string;
     image: string;
     size: string;
+    color?: string;
+    colorHex?: string;
     quantity: number;
     price: number;
 }

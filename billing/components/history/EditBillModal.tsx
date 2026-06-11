@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { billingApi, searchProducts } from "@/lib/api";
 import { activeBillItems } from "@/lib/return-utils";
+import { billGrossWithGst, computeBillTotals } from "@/lib/billing-totals";
 
 type DiscountType = "percent" | "amount" | "none";
 type PaymentMethod = "cash" | "gpay" | "upi" | "card" | "partial";
@@ -70,12 +71,12 @@ const deriveBillDiscount = (bill: any): { billDiscountType: DiscountType; billDi
   if (billDiscountType === "none" || billDiscountValue <= 0) {
     const subtotal = Number(bill.subtotal || 0);
     const totalItemDiscount = Number(bill.totalItemDiscount || 0);
-    const afterItemDiscount = Math.max(0, subtotal - totalItemDiscount);
+    const grossWithGst = billGrossWithGst(subtotal, totalItemDiscount);
 
-    if (billDiscountType === "percent" && afterItemDiscount > 0) {
-      billDiscountValue = Math.round((billDiscountAmount / afterItemDiscount) * 100);
-    } else if (afterItemDiscount > 0) {
-      const asPercent = (billDiscountAmount / afterItemDiscount) * 100;
+    if (billDiscountType === "percent" && grossWithGst > 0) {
+      billDiscountValue = Math.round((billDiscountAmount / grossWithGst) * 100);
+    } else if (grossWithGst > 0) {
+      const asPercent = (billDiscountAmount / grossWithGst) * 100;
       const roundedPercent = Math.round(asPercent * 100) / 100;
       if (Math.abs(roundedPercent - Math.round(roundedPercent)) < 0.01) {
         billDiscountType = "percent";
@@ -145,26 +146,8 @@ const normalizeItem = (item: any): BillItem => {
 };
 
 const computeTotals = (items: BillItem[], billDiscountType: DiscountType, billDiscountValue: number) => {
-  const subtotal = items.reduce((sum, item) => sum + item.mrp * item.quantity, 0);
-  const totalItemDiscount = items.reduce((sum, item) => {
-    if (item.itemDiscountType === "percent") {
-      return sum + (item.mrp * item.itemDiscountValue * item.quantity) / 100;
-    }
-    if (item.itemDiscountType === "amount") {
-      return sum + item.itemDiscountValue * item.quantity;
-    }
-    return sum;
-  }, 0);
-  const afterItemDiscount = Math.max(0, subtotal - totalItemDiscount);
-  const billDiscountAmount =
-    billDiscountType === "percent"
-      ? (afterItemDiscount * Number(billDiscountValue || 0)) / 100
-      : billDiscountType === "amount"
-      ? Number(billDiscountValue || 0)
-      : 0;
-  const grossWithGst = Math.max(0, subtotal) * 1.05;
-  const totalAmount = Math.round(Math.max(0, grossWithGst - totalItemDiscount - Math.max(0, billDiscountAmount)));
-  return { totalAmount };
+  const totals = computeBillTotals(items, billDiscountType, billDiscountValue);
+  return { totalAmount: totals.totalAmount };
 };
 
 export default function EditBillModal({

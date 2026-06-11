@@ -97,11 +97,13 @@ const applyReplacementToBill = (bill, returnedItems, replacementItems) => {
         const mrp = Number(rep.mrp ?? rep.sellingPrice ?? 0);
         const itemDiscountAmount = Number(rep.itemDiscountAmount || 0);
         const billDiscountShare = Number(rep.billDiscountShare || 0);
+        const lineAfterItem = Math.max(0, mrp * qty - itemDiscountAmount * qty);
+        const lineGross = lineAfterItem * 1.05;
         const netLine = Number(rep.netLineTotal || 0) > 0
             ? Number(rep.netLineTotal)
             : Number(rep.lineTotal || 0) > 0
                 ? Number(rep.lineTotal)
-                : Math.max(0, mrp * qty - itemDiscountAmount * qty - billDiscountShare);
+                : Math.max(0, (lineGross - billDiscountShare) / 1.05);
         const sellingPrice = Number(rep.sellingPrice || 0) > 0 ? Number(rep.sellingPrice) : netLine / qty;
         updated.push({
             product: rep.product || rep.productId,

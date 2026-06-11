@@ -7,6 +7,7 @@ import BillingShell from "@/components/layout/BillingShell";
 import { billingApi } from "@/lib/api";
 import { activeBillItems } from "@/lib/return-utils";
 import { billRevenueExGst, lineRevenueExGst } from "@/lib/billing-revenue";
+import { BILLING_GST_RATE, billGrossWithGst } from "@/lib/billing-totals";
 import { Cell, Pie, PieChart, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip, Bar, ResponsiveContainer } from "recharts";
 import * as XLSX from "xlsx";
 import { useRole } from "@/hooks/useRole";
@@ -859,20 +860,37 @@ export default function ReportsPage() {
                 {(
                   Number(selectedBill.gstAmount || 0) > 0
                     ? Number(selectedBill.gstAmount)
-                    : Number(selectedBill.subtotal || 0) * 0.05
+                    : Math.max(0, Number(selectedBill.subtotal || 0) - Number(selectedBill.totalItemDiscount || 0)) *
+                      BILLING_GST_RATE
                 ).toFixed(2)}{" "}
                 = ₹
                 {(
-                  Number(selectedBill.subtotal || 0) +
-                  (Number(selectedBill.gstAmount || 0) > 0
-                    ? Number(selectedBill.gstAmount)
-                    : Number(selectedBill.subtotal || 0) * 0.05)
+                  Number(selectedBill.gstAmount || 0) > 0 && Number(selectedBill.taxableAmount || 0) > 0
+                    ? Number(selectedBill.taxableAmount) + Number(selectedBill.gstAmount)
+                    : billGrossWithGst(
+                        Number(selectedBill.subtotal || 0),
+                        Number(selectedBill.totalItemDiscount || 0)
+                      )
                 ).toFixed(2)}{" "}
                 before discount
               </p>
               <p className="text-[var(--text-secondary)]">
-                CGST / SGST: ₹{Number(selectedBill.cgst || (Number(selectedBill.subtotal || 0) * 0.05) / 2).toFixed(2)} / ₹
-                {Number(selectedBill.sgst || (Number(selectedBill.subtotal || 0) * 0.05) / 2).toFixed(2)}
+                CGST / SGST: ₹
+                {Number(
+                  selectedBill.cgst ||
+                    (Number(selectedBill.gstAmount || 0) > 0
+                      ? Number(selectedBill.gstAmount)
+                      : Math.max(0, Number(selectedBill.subtotal || 0) - Number(selectedBill.totalItemDiscount || 0)) *
+                        BILLING_GST_RATE) / 2
+                ).toFixed(2)}{" "}
+                / ₹
+                {Number(
+                  selectedBill.sgst ||
+                    (Number(selectedBill.gstAmount || 0) > 0
+                      ? Number(selectedBill.gstAmount)
+                      : Math.max(0, Number(selectedBill.subtotal || 0) - Number(selectedBill.totalItemDiscount || 0)) *
+                        BILLING_GST_RATE) / 2
+                ).toFixed(2)}
               </p>
               <h2 className="text-2xl font-bold text-[var(--gold)] mt-2">Cash Collected: ₹{selectedBill.totalAmount?.toLocaleString()}</h2>
             </div>

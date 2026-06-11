@@ -71,7 +71,11 @@ export const ReceiptPrint = forwardRef<
   const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
   const totalItemDiscount = Number(bill.totalItemDiscount || 0);
   const billDiscountAmount = Number(bill.billDiscountAmount || 0);
-  const taxableAmount = Math.max(0, Number(bill.taxableAmount || 0) > 0 ? Number(bill.taxableAmount) : subtotal);
+  const afterItemDiscount = Math.max(0, subtotal - totalItemDiscount);
+  const taxableAmount = Math.max(
+    0,
+    Number(bill.taxableAmount || 0) > 0 ? Number(bill.taxableAmount) : afterItemDiscount
+  );
   const gstAmount =
     Number(bill.gstAmount || 0) > 0 ? Number(bill.gstAmount) : taxableAmount * 0.05;
   const cgst = Number(bill.cgst || 0) > 0 ? Number(bill.cgst) : gstAmount / 2;
@@ -90,7 +94,7 @@ export const ReceiptPrint = forwardRef<
   const rawGrandTotal =
     Number(bill.totalAmount || 0) > 0
       ? Number(bill.totalAmount)
-      : Math.max(0, grossWithGst - totalSavings);
+      : Math.max(0, grossWithGst - billDiscountAmount - pointsDiscountAmount);
   const billGrandTotal = Math.round(rawGrandTotal);
   const receiptRoundOff =
     Number(bill.roundOff || 0) !== 0 ? Number(bill.roundOff) : billGrandTotal - rawGrandTotal;

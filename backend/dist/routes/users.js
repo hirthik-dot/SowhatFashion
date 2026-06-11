@@ -24,6 +24,10 @@ router.post('/addresses', async (req, res) => {
         if (!user)
             return res.status(404).json({ success: false, error: 'User not found' });
         const newAddress = req.body;
+        const duplicate = user.savedAddresses.some((a) => a.line1 === newAddress.line1 && a.pincode === newAddress.pincode);
+        if (duplicate) {
+            return res.json({ success: true, addresses: user.savedAddresses });
+        }
         if (newAddress.isDefault) {
             user.savedAddresses.forEach(addr => {
                 // Need to cast to any since subdocument typing can be tricky

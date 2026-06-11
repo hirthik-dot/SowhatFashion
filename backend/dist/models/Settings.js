@@ -46,7 +46,7 @@ const SettingsSchema = new mongoose_1.Schema({
     },
     instagramHandle: { type: String, default: '@sowaatmenswear' },
     freeDeliveryAbove: { type: Number, default: 999 },
-    whatsappNumber: { type: String, default: '+919876543210' },
+    whatsappNumber: { type: String, default: '+917871163597' },
     heroMediaType: {
         type: String,
         enum: ['video', 'image'],

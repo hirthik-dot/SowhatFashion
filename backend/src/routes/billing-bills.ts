@@ -17,11 +17,9 @@ import {
 } from '../lib/billing-points';
 import { activeBillItems } from '../lib/billing-replacements';
 import { BILLABLE_STATUSES } from '../lib/stock-inventory-counts';
+import { computeBillTotals as computeBillTotalsCore } from '../lib/billing-totals';
 
 const router = express.Router();
-
-/** GST is added on top of MRP subtotal; shop discounts are then subtracted from (subtotal + GST). */
-const BILLING_GST_RATE = 0.05;
 
 const canEditBills = (admin: any) =>
   admin?.role === 'superadmin' || Boolean(admin?.permissions?.canEditBills);
@@ -137,82 +135,7 @@ const calculateBillTotals = (
   billDiscountType: string,
   billDiscountValue: number,
   pointsDiscountAmount = 0
-) => {
-  const normalizedItems = (items || []).map((item) => {
-    const mrp = Number(item.mrp ?? item.price ?? 0);
-    const quantity = Math.max(1, Number(item.quantity || 1));
-    const discountType = item.itemDiscountType || 'none';
-    const discountValue = Number(item.itemDiscountValue || 0);
-    const itemDiscountAmount =
-      discountType === 'percent' ? (mrp * discountValue) / 100 : discountType === 'amount' ? discountValue : 0;
-    const sellingPrice = Math.max(0, mrp - itemDiscountAmount);
-    const lineTotal = sellingPrice * quantity;
-    return {
-      ...item,
-      mrp,
-      quantity,
-      itemDiscountType: discountType,
-      itemDiscountValue: discountValue,
-      itemDiscountAmount,
-      billDiscountShare: 0,
-      sellingPrice,
-      lineTotal,
-      netLineTotal: lineTotal,
-    };
-  });
-
-  const subtotal = normalizedItems.reduce((sum, item) => sum + item.mrp * item.quantity, 0);
-  const totalItemDiscount = normalizedItems.reduce((sum, item) => sum + item.itemDiscountAmount * item.quantity, 0);
-  const afterItemDiscount = subtotal - totalItemDiscount;
-  const safeBillDiscountValue = Number(billDiscountValue || 0);
-  const billDiscountAmount =
-    billDiscountType === 'percent'
-      ? (afterItemDiscount * safeBillDiscountValue) / 100
-      : billDiscountType === 'amount'
-      ? safeBillDiscountValue
-      : 0;
-  const effectiveBillDiscount = Math.min(Math.max(0, billDiscountAmount), Math.max(0, afterItemDiscount));
-  const withBillDiscount = normalizedItems.map((item) => ({ ...item }));
-  if (withBillDiscount.length > 0 && effectiveBillDiscount > 0 && afterItemDiscount > 0) {
-    let assigned = 0;
-    withBillDiscount.forEach((item, index) => {
-      const proportionalShare =
-        index === withBillDiscount.length - 1
-          ? effectiveBillDiscount - assigned
-          : Number(((item.lineTotal / afterItemDiscount) * effectiveBillDiscount).toFixed(2));
-      const safeShare = Math.max(0, Math.min(item.lineTotal, proportionalShare));
-      item.billDiscountShare = safeShare;
-      item.netLineTotal = Math.max(0, Number((item.lineTotal - safeShare).toFixed(2)));
-      assigned += safeShare;
-    });
-  }
-  const taxableAmount = Math.max(0, subtotal);
-  const gstAmount = taxableAmount * BILLING_GST_RATE;
-  const cgst = gstAmount / 2;
-  const sgst = gstAmount / 2;
-  const grossWithGst = taxableAmount + gstAmount;
-  const totalDiscount = totalItemDiscount + effectiveBillDiscount;
-  const prePointsRaw = Math.max(0, grossWithGst - totalDiscount);
-  const prePointsTotal = Math.round(prePointsRaw);
-  const safePointsDiscount = Math.min(Math.max(0, pointsDiscountAmount), prePointsTotal);
-  const rawTotal = Math.max(0, prePointsRaw - safePointsDiscount);
-  const roundOff = Math.round(rawTotal) - rawTotal;
-  const totalAmount = Math.round(rawTotal);
-  return {
-    normalizedItems: withBillDiscount,
-    subtotal,
-    totalItemDiscount,
-    billDiscountAmount: effectiveBillDiscount,
-    taxableAmount,
-    gstAmount,
-    cgst,
-    sgst,
-    roundOff,
-    prePointsTotal,
-    pointsDiscountAmount: safePointsDiscount,
-    totalAmount,
-  };
-};
+) => computeBillTotalsCore(items, billDiscountType, billDiscountValue, pointsDiscountAmount);
 
 const resolvePointsForPayload = async (payload: any, prePointsTotal: number) => {
   const phone = String(payload?.customer?.phone || '');

@@ -87,15 +87,7 @@ export default function DashboardPage() {
   ];
   const paymentData = Object.entries(summary?.paymentMethodBreakdown || {}).map(([name, value]) => ({ name, value }));
   const categoryData = Object.entries(summary?.categoryBreakdown || {}).map(([name, value]) => ({ name, value }));
-  const cashierRevenue = bills.reduce(
-    (sum, bill) =>
-      sum +
-      Math.max(
-        0,
-        Number(bill.subtotal || 0) - Number(bill.totalItemDiscount || 0) - Number(bill.billDiscountAmount || 0)
-      ),
-    0
-  );
+  const cashierRevenue = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
 
   return (
     <BillingShell title="Dashboard">
