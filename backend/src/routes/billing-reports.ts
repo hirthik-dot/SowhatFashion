@@ -221,7 +221,12 @@ router.get('/summary', async (req, res: Response) => {
   const totalPointsRedeemed = bills.reduce((sum, bill) => sum + Number(bill.pointsRedeemed || 0), 0);
   const totalCashCollected = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
   const totalBills = bills.length;
-  const totalItems = bills.reduce((sum, bill) => sum + (bill.items || []).reduce((x: number, i: any) => x + Number(i.quantity || 0), 0), 0);
+  const totalItems = bills.reduce(
+    (sum, bill) =>
+      sum +
+      activeBillItems(bill).reduce((x: number, i: any) => x + Number(i.quantity || 0), 0),
+    0
+  );
   const totalDiscount = bills.reduce((sum, bill) => sum + Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0), 0);
   // GST is 5% added on MRP subtotal (before shop discounts).
   const totalGst = bills.reduce((sum, bill) => sum + gstOnSubtotal(Number(bill.subtotal || 0)).gstAmount, 0);
@@ -237,7 +242,7 @@ router.get('/summary', async (req, res: Response) => {
   }, {});
 
   const categoryBreakdown = bills.reduce((acc: any, bill: any) => {
-    (bill.items || []).forEach((item: any) => {
+    activeBillItems(bill).forEach((item: any) => {
       const key = item.category || 'Uncategorized';
       acc[key] = (acc[key] || 0) + lineRevenueExGst(item);
     });
@@ -969,9 +974,10 @@ router.get('/export', async (req, res: Response) => {
     { header: 'Selling Price', key: 'sellingPrice', width: 14 },
     { header: 'Qty', key: 'qty', width: 8 },
     { header: 'Line Total', key: 'lineTotal', width: 14 },
+    { header: 'Replacement', key: 'isReplacement', width: 12 },
   ];
   bills.forEach((bill: any) => {
-    (bill.items || []).forEach((item: any) => {
+    activeBillItems(bill).forEach((item: any) => {
       itemSheet.addRow({
         billNumber: bill.billNumber || '',
         date: new Date(bill.createdAt).toISOString(),
@@ -984,6 +990,7 @@ router.get('/export', async (req, res: Response) => {
         sellingPrice: item.sellingPrice || 0,
         qty: item.quantity || 0,
         lineTotal: item.lineTotal || 0,
+        isReplacement: item.isReplacement ? 'Yes' : 'No',
       });
     });
   });
@@ -1067,7 +1074,13 @@ const profitSoldMetricsStages: any[] = [
               '$$value',
               {
                 $map: {
-                  input: { $ifNull: ['$$this.items', []] },
+                  input: {
+                    $filter: {
+                      input: { $ifNull: ['$$this.items', []] },
+                      as: 'billItem',
+                      cond: { $ne: [{ $ifNull: ['$$billItem.replacedOut', false] }, true] },
+                    },
+                  },
                   as: 'billItem',
                   in: billItemRowFields,
                 },

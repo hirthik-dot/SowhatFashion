@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BillingShell from "@/components/layout/BillingShell";
 import { billingApi } from "@/lib/api";
+import { activeBillItems } from "@/lib/return-utils";
+import { billRevenueExGst, lineRevenueExGst } from "@/lib/billing-revenue";
 import { Cell, Pie, PieChart, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip, Bar, ResponsiveContainer } from "recharts";
 import * as XLSX from "xlsx";
 import { useRole } from "@/hooks/useRole";
@@ -185,7 +187,7 @@ export default function ReportsPage() {
         Customer: bill.customer?.name,
         Phone: bill.customer?.phone,
         Salesman: bill.salesmanName || bill.salesman?.name || "",
-        Items: bill.items?.length || 0,
+        Items: activeBillItems(bill.items).length,
         Subtotal: bill.subtotal,
         Discount: (bill.totalItemDiscount || 0) + (bill.billDiscountAmount || 0),
         GST: bill.gstAmount,
@@ -199,7 +201,7 @@ export default function ReportsPage() {
     );
     XLSX.utils.book_append_sheet(workbook, billsSheet, "Bills");
     const items = bills.flatMap((bill) =>
-      (bill.items || []).map((item: any) => ({
+      activeBillItems(bill.items).map((item: any) => ({
         Bill: bill.billNumber,
         Date: new Date(bill.createdAt).toLocaleString(),
         Barcode: item.barcode,
@@ -211,6 +213,7 @@ export default function ReportsPage() {
         SellingPrice: item.sellingPrice,
         Qty: item.quantity,
         LineTotal: item.lineTotal,
+        Replacement: item.isReplacement ? "Yes" : "No",
       }))
     );
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(items), "Items");
@@ -219,7 +222,7 @@ export default function ReportsPage() {
       const key = bill.salesmanName || "Unknown";
       if (!salesmanMap[key]) salesmanMap[key] = { Name: key, Bills: 0, Revenue: 0, AvgBill: 0, Returns: 0, GSTCollected: 0 };
       salesmanMap[key].Bills += 1;
-      salesmanMap[key].Revenue += billExGst(bill);
+      salesmanMap[key].Revenue += billRevenueExGst(bill);
       salesmanMap[key].GSTCollected += Number(bill.gstAmount || 0);
       if (bill.status?.includes("return")) salesmanMap[key].Returns += 1;
     });
@@ -255,23 +258,21 @@ export default function ReportsPage() {
 
   const paymentData = Object.entries(summary?.paymentMethodBreakdown || {}).map(([name, value]) => ({ name, value }));
   const categoryData = Object.entries(summary?.categoryBreakdown || {}).map(([name, value]) => ({ name, value }));
-  const billExGst = (bill: any) =>
-    Math.max(
-      0,
-      Number(bill.subtotal || 0) - Number(bill.totalItemDiscount || 0) - Number(bill.billDiscountAmount || 0)
-    );
   const revenueBars = (summary?.dailyRevenue || []).length
     ? (summary.dailyRevenue || []).map((row: any) => ({
         label: row.label || row.day || "",
         value: Number(row.value || 0),
       }))
-    : bills.map((bill) => ({ label: new Date(bill.createdAt).toLocaleDateString(), value: billExGst(bill) }));
+    : bills.map((bill) => ({
+        label: new Date(bill.createdAt).toLocaleDateString(),
+        value: billRevenueExGst(bill),
+      }));
   const topProducts = Object.values(
-    bills.flatMap((bill) => bill.items || []).reduce((acc: any, item: any) => {
+    bills.flatMap((bill) => activeBillItems(bill.items)).reduce((acc: any, item: any) => {
       const key = `${item.name}-${item.category || ""}`;
       if (!acc[key]) acc[key] = { product: item.name, category: item.category || "-", qty: 0, revenue: 0, returns: 0 };
       acc[key].qty += Number(item.quantity || 0);
-      acc[key].revenue += Number(item.netLineTotal ?? item.lineTotal ?? 0);
+      acc[key].revenue += lineRevenueExGst(item);
       return acc;
     }, {})
   )
@@ -282,7 +283,7 @@ export default function ReportsPage() {
       const key = bill.salesmanName || "Unknown";
       if (!acc[key]) acc[key] = { name: key, bills: 0, revenue: 0, avg: 0, returns: 0, bestDay: "-" };
       acc[key].bills += 1;
-      acc[key].revenue += billExGst(bill);
+      acc[key].revenue += billRevenueExGst(bill);
       if (bill.status?.includes("return")) acc[key].returns += 1;
       const day = new Date(bill.createdAt).toLocaleDateString(undefined, { weekday: "short" });
       acc[key].bestDay = day;

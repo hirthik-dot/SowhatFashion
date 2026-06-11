@@ -143,13 +143,30 @@ export default function AdminInventoryPage() {
     setSavingProduct(true);
     try {
       const supplierId = resolveSupplierId(editingProduct);
+      const hasMultiplePrices =
+        Boolean(editingProduct.hasMultiplePrices) && (editingProduct.priceVariants?.length || 0) > 1;
       const payload: any = {
         name: editingProduct.name,
-        price: editingProduct.mrp,
-        incomingPrice: editingProduct.incomingPrice,
         notes: editingProduct.notes,
         sizeEntries: editingProduct.sizeEntries,
       };
+      if (hasMultiplePrices) {
+        const variantEdits = editingProduct._priceVariantEdits || [];
+        payload.priceVariantUpdates = variantEdits
+          .filter(
+            (variant: any) =>
+              Number(variant.toSellingPrice) !== Number(variant.fromSellingPrice) ||
+              Number(variant.toIncomingPrice) !== Number(variant.fromIncomingPrice)
+          )
+          .map((variant: any) => ({
+            fromSellingPrice: Number(variant.fromSellingPrice),
+            toSellingPrice: Number(variant.toSellingPrice),
+            toIncomingPrice: Number(variant.toIncomingPrice),
+          }));
+      } else {
+        payload.price = editingProduct.mrp;
+        payload.incomingPrice = editingProduct.incomingPrice;
+      }
       if (supplierId) payload.supplier = supplierId;
       // Send ObjectId references if user picked from dropdown
       if (editingProduct._editCategoryId) {
@@ -293,6 +310,13 @@ export default function AdminInventoryPage() {
                               _editSupplierId: row.supplierId || "",
                               _editCategoryId: row.billingCategory || "",
                               _editSubCategoryId: row.billingSubCategory || "",
+                              _priceVariantEdits: (row.priceVariants || []).map((variant: any) => ({
+                                fromSellingPrice: Number(variant.sellingPrice),
+                                toSellingPrice: Number(variant.sellingPrice),
+                                fromIncomingPrice: Number(variant.incomingPrice || 0),
+                                toIncomingPrice: Number(variant.incomingPrice || 0),
+                                stock: Number(variant.stock || 0),
+                              })),
                             })
                           }
                         >

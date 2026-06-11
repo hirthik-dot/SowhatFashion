@@ -11,6 +11,7 @@ import {
   getBillingInShopSummary,
   getInShopCountsByProducts,
   getProductPriceVarianceByProducts,
+  getProductPriceVariantsByProducts,
 } from '../lib/stock-inventory-counts';
 
 const router = express.Router();
@@ -274,11 +275,74 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
       product.billingName = String(updates.name).trim(); // Keep billingName in sync so it reflects in the UI
     }
     if (updates.billingName !== undefined) product.billingName = String(updates.billingName).trim();
-    if (updates.price !== undefined) {
+    const varianceMap = await getProductPriceVarianceByProducts([product._id]);
+    const priceVariance = varianceMap.get(String(product._id));
+    const hasMultiplePrices = Boolean(priceVariance?.hasMultiplePrices);
+    const variantUpdates = Array.isArray(updates.priceVariantUpdates) ? updates.priceVariantUpdates : [];
+    let variantPricesChanged = false;
+
+    if (variantUpdates.length > 0) {
+      for (const variant of variantUpdates) {
+        const fromSellingPrice = Number(variant.fromSellingPrice);
+        const toSellingPrice = Number(variant.toSellingPrice);
+        if (!Number.isFinite(fromSellingPrice) || !Number.isFinite(toSellingPrice)) continue;
+        if (fromSellingPrice === toSellingPrice && variant.toIncomingPrice === undefined) continue;
+
+        const stockPatch: Record<string, number> = { sellingPrice: toSellingPrice };
+        if (variant.toIncomingPrice !== undefined && Number.isFinite(Number(variant.toIncomingPrice))) {
+          stockPatch.incomingPrice = Number(variant.toIncomingPrice);
+        }
+
+        const stockFilter = {
+          product: product._id,
+          sellingPrice: fromSellingPrice,
+          status: { $in: ['available', 'returned'] },
+        };
+
+        const affectedItems = await StockItem.find(stockFilter).select('_id stockEntry').lean();
+        if (!affectedItems.length) continue;
+
+        await StockItem.updateMany(stockFilter, { $set: stockPatch });
+        variantPricesChanged = true;
+
+        const entryIds = [
+          ...new Set(
+            affectedItems
+              .map((item) => item.stockEntry?.toString())
+              .filter((id): id is string => Boolean(id))
+          ),
+        ];
+        for (const entryId of entryIds) {
+          const entryPatch: Record<string, number> = { sellingPrice: toSellingPrice };
+          if (stockPatch.incomingPrice !== undefined) entryPatch.incomingPrice = stockPatch.incomingPrice;
+          await StockEntry.updateOne({ _id: entryId }, { $set: entryPatch });
+        }
+      }
+
+      const variantMap = await getProductPriceVariantsByProducts([product._id]);
+      const variants = variantMap.get(String(product._id)) || [];
+      if (variants.length) {
+        const topVariant = [...variants].sort((a, b) => b.stock - a.stock)[0];
+        product.price = topVariant.sellingPrice;
+        product.incomingPrice = topVariant.incomingPrice;
+      }
+    }
+
+    if (updates.price !== undefined && variantUpdates.length === 0) {
+      if (hasMultiplePrices) {
+        return res.status(400).json({
+          message: 'This product has multiple prices. Edit each price variant individually.',
+        });
+      }
       product.price = Number(updates.price);
       await StockItem.updateMany({ product: product._id }, { $set: { sellingPrice: product.price } });
     }
-    if (updates.incomingPrice !== undefined) {
+    if (updates.incomingPrice !== undefined && variantUpdates.length === 0) {
+      if (hasMultiplePrices) {
+        return res.status(400).json({
+          message: 'This product has multiple prices. Edit each price variant individually.',
+        });
+      }
       product.incomingPrice = Number(updates.incomingPrice);
       await StockItem.updateMany({ product: product._id }, { $set: { incomingPrice: product.incomingPrice } });
     }
@@ -416,18 +480,24 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     await product.save();
 
     const priceUpdates: { incomingPrice?: number; sellingPrice?: number } = {};
-    if (updates.incomingPrice !== undefined) priceUpdates.incomingPrice = product.incomingPrice;
-    if (updates.price !== undefined) priceUpdates.sellingPrice = product.price;
+    if (updates.incomingPrice !== undefined && variantUpdates.length === 0) {
+      priceUpdates.incomingPrice = product.incomingPrice;
+    }
+    if (updates.price !== undefined && variantUpdates.length === 0) {
+      priceUpdates.sellingPrice = product.price;
+    }
     const shouldSyncBatches =
       Boolean(updates.sizeEntries) ||
-      updates.incomingPrice !== undefined ||
-      updates.price !== undefined;
+      (updates.incomingPrice !== undefined && variantUpdates.length === 0) ||
+      (updates.price !== undefined && variantUpdates.length === 0);
     if (shouldSyncBatches) {
       await syncProductPurchaseBatches(
         product._id,
         Object.keys(priceUpdates).length ? priceUpdates : undefined,
         req.billingAdminId
       );
+    } else if (variantPricesChanged) {
+      await linkOrphanItemsToBatches(product._id, req.billingAdminId);
     }
 
     res.json(product);

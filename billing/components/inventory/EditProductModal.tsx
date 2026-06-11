@@ -208,6 +208,26 @@ export default function EditProductModal({
     }));
   };
 
+  const hasMultiplePrices =
+    Boolean(editingProduct?.hasMultiplePrices) && (editingProduct?.priceVariants?.length || 0) > 1;
+  const priceVariantEdits: Array<{
+    fromSellingPrice: number;
+    toSellingPrice: number;
+    fromIncomingPrice: number;
+    toIncomingPrice: number;
+    stock: number;
+  }> = editingProduct?._priceVariantEdits || [];
+
+  const updatePriceVariantEdit = (
+    fromSellingPrice: number,
+    patch: Partial<{ toSellingPrice: number; toIncomingPrice: number }>
+  ) => {
+    const next = priceVariantEdits.map((row) =>
+      row.fromSellingPrice === fromSellingPrice ? { ...row, ...patch } : row
+    );
+    setEditingProduct({ ...editingProduct, _priceVariantEdits: next });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[80] grid place-items-center p-4">
       <div className="pos-card p-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -402,33 +422,109 @@ export default function EditProductModal({
           </div>
 
           {/* Prices */}
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[var(--border)]">
-            <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-1">MRP (Selling Price)</label>
-              <input
-                required
-                type="number"
-                min="0"
-                step="0.01"
-                className="pos-input w-full"
-                value={editingProduct.mrp || 0}
-                onChange={(e) => setEditingProduct({ ...editingProduct, mrp: Number(e.target.value) })}
-              />
-              <p className="text-xs text-[var(--text-secondary)] mt-1">Updates all available items</p>
-            </div>
-            {isSuperAdmin && (
-              <div>
-                <label className="block text-sm text-[var(--text-secondary)] mb-1">Incoming Price</label>
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="pos-input w-full"
-                  value={editingProduct.incomingPrice || 0}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, incomingPrice: Number(e.target.value) })}
-                />
-                <p className="text-xs text-[var(--text-secondary)] mt-1">Updates all available items</p>
+          <div className="pt-2 border-t border-[var(--border)]">
+            {hasMultiplePrices ? (
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-sm text-[var(--text-secondary)] mb-1">Price Variants</label>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    This product has multiple MRPs in stock. Edit each price tier individually.
+                  </p>
+                </div>
+                <div className="overflow-x-auto rounded border border-[var(--border)]">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[var(--card-bg)] text-[var(--text-secondary)]">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Current MRP</th>
+                        <th className="px-3 py-2 text-left font-medium">Stock</th>
+                        {isSuperAdmin ? (
+                          <>
+                            <th className="px-3 py-2 text-left font-medium">Current Cost</th>
+                            <th className="px-3 py-2 text-left font-medium">New Cost</th>
+                          </>
+                        ) : null}
+                        <th className="px-3 py-2 text-left font-medium">New MRP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priceVariantEdits.map((variant) => (
+                        <tr key={variant.fromSellingPrice} className="border-t border-[var(--border)]">
+                          <td className="px-3 py-2 font-medium text-[var(--error)]">
+                            ₹{Number(variant.fromSellingPrice).toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2">{variant.stock}</td>
+                          {isSuperAdmin ? (
+                            <>
+                              <td className="px-3 py-2">₹{Number(variant.fromIncomingPrice).toFixed(2)}</td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  className="pos-input w-full min-w-[90px]"
+                                  value={variant.toIncomingPrice}
+                                  onChange={(e) =>
+                                    updatePriceVariantEdit(variant.fromSellingPrice, {
+                                      toIncomingPrice: Number(e.target.value),
+                                    })
+                                  }
+                                />
+                              </td>
+                            </>
+                          ) : null}
+                          <td className="px-3 py-2">
+                            <input
+                              required
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className="pos-input w-full min-w-[90px]"
+                              value={variant.toSellingPrice}
+                              onChange={(e) =>
+                                updatePriceVariantEdit(variant.fromSellingPrice, {
+                                  toSellingPrice: Number(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-[var(--text-secondary)] mb-1">MRP (Selling Price)</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="pos-input w-full"
+                    value={editingProduct.mrp || 0}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, mrp: Number(e.target.value) })}
+                  />
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">Updates all available items</p>
+                </div>
+                {isSuperAdmin && (
+                  <div>
+                    <label className="block text-sm text-[var(--text-secondary)] mb-1">Incoming Price</label>
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="pos-input w-full"
+                      value={editingProduct.incomingPrice || 0}
+                      onChange={(e) =>
+                        setEditingProduct({ ...editingProduct, incomingPrice: Number(e.target.value) })
+                      }
+                    />
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Updates all available items</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
