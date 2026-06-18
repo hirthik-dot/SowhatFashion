@@ -125,7 +125,8 @@ router.delete('/admins/:id', requireSuperAdmin, async (req, res: Response) => {
   return res.json({ message: 'Admin deactivated' });
 });
 
-router.get('/salesmen', requirePermission('canManageAdmins'), async (_req, res: Response) => {
+// Read-only list for billing/history dropdowns — any authenticated billing user.
+router.get('/salesmen', async (_req, res: Response) => {
   const salesmen = await Salesman.find({ isActive: true }).sort({ createdAt: -1 });
   res.json(salesmen);
 });
