@@ -16,6 +16,8 @@ export interface IStockEntry extends Document {
     entryDate: Date;
     enteredBy?: mongoose.Types.ObjectId;
     notes?: string;
+    createdAt: Date;
+    updatedAt: Date;
 }
 declare const _default: mongoose.Model<IStockEntry, {}, {}, {}, mongoose.Document<unknown, {}, IStockEntry, {}, {}> & IStockEntry & Required<{
     _id: mongoose.Types.ObjectId;

@@ -17,6 +17,8 @@ export interface IBillingReturn extends Document {
     refundAmount: number;
     refundMethod: 'none';
     processedBy?: mongoose.Types.ObjectId;
+    createdAt: Date;
+    updatedAt: Date;
 }
 declare const _default: mongoose.Model<IBillingReturn, {}, {}, {}, mongoose.Document<unknown, {}, IBillingReturn, {}, {}> & IBillingReturn & Required<{
     _id: mongoose.Types.ObjectId;

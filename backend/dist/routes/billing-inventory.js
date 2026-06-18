@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const Product_1 = __importDefault(require("../models/Product"));
 const StockEntry_1 = __importDefault(require("../models/StockEntry"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
@@ -207,8 +208,27 @@ router.get('/entries', async (req, res) => {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 20);
     const skip = (page - 1) * limit;
+    const enteredBy = String(req.query.enteredBy || '').trim();
+    const query = {};
+    if (enteredBy && mongoose_1.default.Types.ObjectId.isValid(enteredBy)) {
+        const canFilter = req.billingAdmin?.role === 'superadmin' ||
+            Boolean(req.billingAdmin?.permissions?.canManageAdmins);
+        if (!canFilter) {
+            return res.status(403).json({ message: 'Permission denied to filter by staff' });
+        }
+        query.enteredBy = new mongoose_1.default.Types.ObjectId(enteredBy);
+    }
+    const startDate = String(req.query.startDate || '').trim();
+    const endDate = String(req.query.endDate || '').trim();
+    if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate)
+            query.createdAt.$gte = new Date(`${startDate}T00:00:00.000Z`);
+        if (endDate)
+            query.createdAt.$lte = new Date(`${endDate}T23:59:59.999Z`);
+    }
     const [data, total] = await Promise.all([
-        StockEntry_1.default.find({})
+        StockEntry_1.default.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
@@ -217,7 +237,7 @@ router.get('/entries', async (req, res) => {
             .populate('subCategory', 'name')
             .populate('enteredBy', 'name email')
             .lean(),
-        StockEntry_1.default.countDocuments({}),
+        StockEntry_1.default.countDocuments(query),
     ]);
     return res.json({ data, total, page, limit });
 });

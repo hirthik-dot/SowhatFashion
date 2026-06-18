@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const Bill_1 = __importDefault(require("../models/Bill"));
 const Return_1 = __importDefault(require("../models/Return"));
 const Product_1 = __importDefault(require("../models/Product"));
@@ -147,14 +148,23 @@ router.post('/', (0, billingRoleMiddleware_1.requirePermission)('canReturn'), as
         return res.status(500).json({ message: error.message || 'Return processing failed' });
     }
 });
-router.get('/history', (0, billingRoleMiddleware_1.requireAnyPermission)('canReturn', 'canViewReports'), async (req, res) => {
+router.get('/history', (0, billingRoleMiddleware_1.requireAnyPermission)('canReturn', 'canViewReports', 'canManageAdmins'), async (req, res) => {
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
     const skip = (page - 1) * limit;
     const search = String(req.query.search || '').trim();
     const startDate = String(req.query.startDate || '').trim();
     const endDate = String(req.query.endDate || '').trim();
+    const processedBy = String(req.query.processedBy || '').trim();
     const query = {};
+    if (processedBy && mongoose_1.default.Types.ObjectId.isValid(processedBy)) {
+        const canFilter = req.billingAdmin?.role === 'superadmin' ||
+            Boolean(req.billingAdmin?.permissions?.canManageAdmins);
+        if (!canFilter) {
+            return res.status(403).json({ message: 'Permission denied to filter by staff' });
+        }
+        query.processedBy = new mongoose_1.default.Types.ObjectId(processedBy);
+    }
     if (search) {
         const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
         query.$or = [{ returnNumber: regex }, { billNumber: regex }, { 'customer.name': regex }, { 'customer.phone': regex }];

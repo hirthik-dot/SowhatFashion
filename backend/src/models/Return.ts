@@ -47,6 +47,8 @@ export interface IBillingReturn extends Document {
   refundAmount: number;
   refundMethod: 'none';
   processedBy?: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const ReturnSchema = new Schema<IBillingReturn>(

@@ -17,6 +17,8 @@ export interface IStockEntry extends Document {
   entryDate: Date;
   enteredBy?: mongoose.Types.ObjectId;
   notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const StockEntrySchema = new Schema<IStockEntry>(

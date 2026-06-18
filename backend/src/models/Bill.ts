@@ -52,6 +52,8 @@ export interface IBill extends Document {
   pointsBalanceAfter?: number;
   status: 'draft' | 'held' | 'completed' | 'replaced' | 'partial_replaced';
   createdBy?: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
   completedAt?: Date;
   editHistory?: Array<{
     editedAt: Date;
