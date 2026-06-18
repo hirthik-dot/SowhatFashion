@@ -318,9 +318,7 @@ export default function StaffRecordsPage() {
         </div>
       </div>
 
-      {reprintBill ? (
-        <ReceiptPrintModal bill={reprintBill} onClose={() => setReprintBill(null)} />
-      ) : null}
+      <ReceiptPrintModal open={Boolean(reprintBill)} bill={reprintBill} onClose={() => setReprintBill(null)} />
     </BillingShell>
   );
 }

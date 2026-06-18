@@ -107,7 +107,7 @@ export default function StaffPage() {
                 <td className="space-x-2">
                   <button onClick={() => router.push(`/admin/staff/${member._id}/records`)}>Records</button>
                   <button onClick={() => { setEditing(member); setForm({ ...member, password: "" }); }}>Edit</button>
-                  {member._id !== currentAdmin?._id &&
+                  {member._id !== currentAdmin?.id &&
                   (isSuperAdmin || member.role !== "superadmin") ? (
                     <button
                       onClick={async () => {
