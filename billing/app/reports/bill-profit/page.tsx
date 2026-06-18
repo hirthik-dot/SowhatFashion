@@ -35,6 +35,7 @@ export default function BillWiseProfitPage() {
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
 
   const [selectedBillId, setSelectedBillId] = useState("");
@@ -101,12 +102,31 @@ export default function BillWiseProfitPage() {
     }
   };
 
+  const buildExportQuery = (exportPage: number) => {
+    const params = new URLSearchParams(appliedQuery || queryString);
+    params.set("page", String(exportPage));
+    params.set("limit", "100");
+    return params.toString();
+  };
+
   const exportExcel = async () => {
+    setExporting(true);
+    setError("");
     try {
-      const exportData = await billingApi.reportBillProfit(
-        `${appliedQuery || queryString}&page=1&limit=10000`
-      );
-      const sheetRows = (exportData.data || []).map((row: any) => ({
+      const allRows: any[] = [];
+      let exportPage = 1;
+      let totalCount = 0;
+
+      while (true) {
+        const exportData = await billingApi.reportBillProfit(buildExportQuery(exportPage));
+        const batch = exportData.data || [];
+        if (exportPage === 1) totalCount = Number(exportData.total || 0);
+        allRows.push(...batch);
+        if (!batch.length || allRows.length >= totalCount) break;
+        exportPage += 1;
+      }
+
+      const sheetRows = allRows.map((row: any) => ({
         "Bill #": row.billNumber || "-",
         Date: formatDate(row.createdAt),
         Customer: row.customer?.name || "-",
@@ -130,6 +150,8 @@ export default function BillWiseProfitPage() {
       XLSX.writeFile(workbook, `bill-wise-profit-${Date.now()}.xlsx`);
     } catch (e: any) {
       setError(e.message || "Export failed");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -156,8 +178,12 @@ export default function BillWiseProfitPage() {
               <span className="text-[var(--gold)]">💰 Bill Wise Profit</span>
             </div>
           </div>
-          <button className="h-10 px-3 rounded bg-[var(--gold)] text-black w-full sm:w-auto" onClick={exportExcel}>
-            ⬇ Export Excel
+          <button
+            className="h-10 px-3 rounded bg-[var(--gold)] text-black w-full sm:w-auto disabled:opacity-60"
+            onClick={exportExcel}
+            disabled={exporting}
+          >
+            {exporting ? "Exporting..." : "⬇ Export Excel"}
           </button>
         </div>
 

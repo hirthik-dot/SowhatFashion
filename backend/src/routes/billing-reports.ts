@@ -286,6 +286,8 @@ router.get('/bills', async (req, res: Response) => {
         lineTotal: item.lineTotal,
         category: item.category,
         itemDiscountAmount: item.itemDiscountAmount,
+        replacedOut: Boolean(item.replacedOut),
+        isReplacement: Boolean(item.isReplacement),
       })),
     })),
     total,

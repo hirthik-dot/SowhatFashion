@@ -21,7 +21,7 @@ export const lineRevenueExGst = (item: any, _gstRate = BILLING_GST_RATE) => {
 };
 
 export const billRevenueExGst = (bill: any, gstRate = BILLING_GST_RATE) => {
-  const items = activeBillItems(bill?.items);
+  const items = activeBillItems(bill?.items, bill?.returns);
   if (items.length) {
     return items.reduce((sum, item) => sum + lineRevenueExGst(item, gstRate), 0);
   }

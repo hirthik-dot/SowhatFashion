@@ -188,7 +188,7 @@ export default function ReportsPage() {
         Customer: bill.customer?.name,
         Phone: bill.customer?.phone,
         Salesman: bill.salesmanName || bill.salesman?.name || "",
-        Items: activeBillItems(bill.items).length,
+        Items: activeBillItems(bill.items, bill.returns).length,
         Subtotal: bill.subtotal,
         Discount: (bill.totalItemDiscount || 0) + (bill.billDiscountAmount || 0),
         GST: bill.gstAmount,
@@ -202,7 +202,7 @@ export default function ReportsPage() {
     );
     XLSX.utils.book_append_sheet(workbook, billsSheet, "Bills");
     const items = bills.flatMap((bill) =>
-      activeBillItems(bill.items).map((item: any) => ({
+      activeBillItems(bill.items, bill.returns).map((item: any) => ({
         Bill: bill.billNumber,
         Date: new Date(bill.createdAt).toLocaleString(),
         Barcode: item.barcode,
@@ -269,7 +269,7 @@ export default function ReportsPage() {
         value: billRevenueExGst(bill),
       }));
   const topProducts = Object.values(
-    bills.flatMap((bill) => activeBillItems(bill.items)).reduce((acc: any, item: any) => {
+    bills.flatMap((bill) => activeBillItems(bill.items, bill.returns)).reduce((acc: any, item: any) => {
       const key = `${item.name}-${item.category || ""}`;
       if (!acc[key]) acc[key] = { product: item.name, category: item.category || "-", qty: 0, revenue: 0, returns: 0 };
       acc[key].qty += Number(item.quantity || 0);
@@ -440,7 +440,7 @@ export default function ReportsPage() {
                   <tbody>
                     {bills.map((bill) => (
                       <tr key={bill._id} className="border-t border-[var(--border)] group hover:bg-[var(--surface-2)]">
-                        <td className="py-2">{bill.billNumber}</td><td>{bill.customer?.name}</td><td>{bill.salesmanName || "-"}</td><td>{bill.items?.length || 0}</td><td>{Number(bill.pointsDiscountAmount || 0) > 0 ? `₹${bill.pointsDiscountAmount}` : "-"}</td><td className="font-semibold text-[var(--gold)]">₹{bill.totalAmount}</td><td>{bill.paymentMethod}</td><td>{bill.status}</td>
+                        <td className="py-2">{bill.billNumber}</td><td>{bill.customer?.name}</td><td>{bill.salesmanName || "-"}</td><td>{activeBillItems(bill.items, bill.returns).length}</td><td>{Number(bill.pointsDiscountAmount || 0) > 0 ? `₹${bill.pointsDiscountAmount}` : "-"}</td><td className="font-semibold text-[var(--gold)]">₹{bill.totalAmount}</td><td>{bill.paymentMethod}</td><td>{bill.status}</td>
                         <td><button className="text-[var(--info)] hover:underline" onClick={() => setSelectedBill(bill)}>View</button></td>
                       </tr>
                     ))}
@@ -829,9 +829,9 @@ export default function ReportsPage() {
                <p><strong className="text-white">Date:</strong> {new Date(selectedBill.createdAt).toLocaleString()}</p>
             </div>
             
-            <p className="font-bold mb-2 text-white uppercase text-xs tracking-wider">Purchased Items ({selectedBill.items?.length || 0})</p>
+            <p className="font-bold mb-2 text-white uppercase text-xs tracking-wider">Purchased Items ({activeBillItems(selectedBill.items, selectedBill.returns).length})</p>
             <div className="flex-1 overflow-auto bg-[var(--surface-2)] rounded-lg p-2 border border-[var(--border)]">
-              {(selectedBill.items || []).map((item: any, index: number) => (
+              {activeBillItems(selectedBill.items, selectedBill.returns).map((item: any, index: number) => (
                 <div key={`${item.barcode}-${index}`} className="p-3 border-b last:border-b-0 border-[var(--border)] bg-[var(--surface)] mb-2 rounded border border-[var(--border)]/50">
                   <div className="flex justify-between items-start">
                     <div>
