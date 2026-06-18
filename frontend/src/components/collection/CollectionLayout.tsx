@@ -218,16 +218,16 @@ function CollectionLayoutInner({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const isTabActive = (tab: (typeof SHOP_CATEGORY_TABS)[number]) => {
-    if (tab.match.collection) {
+    if ('collection' in tab.match && tab.match.collection) {
       return collectionSlug === tab.match.collection;
     }
-    if (tab.match.newArrival) {
+    if ('newArrival' in tab.match && tab.match.newArrival) {
       return newArrival && !category && !collectionSlug;
     }
-    if (tab.match.featured === false && tab.label === 'All') {
+    if ('featured' in tab.match && tab.match.featured === false && tab.label === 'All') {
       return !category && !newArrival && !featured && !collectionSlug && !search;
     }
-    if (tab.match.category) {
+    if ('category' in tab.match && tab.match.category) {
       return category.toLowerCase() === tab.match.category && !collectionSlug;
     }
     return false;

@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { getOrderStatusLabel, getOrderStatusColors, getPaymentStatusLabel, getPaymentStatusColors } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
 import { WHATSAPP_LINK } from '@/lib/contact';
-
+import { IconInbox } from '@/components/icons/PremiumIcons';
 function TrackerStep({ label, completed, active, failed }: { label: string, completed: boolean, active: boolean, failed?: boolean }) {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-start group relative">
