@@ -45,6 +45,7 @@ export default function BillingPage() {
   const addPaymentSplit = useBillStore((s) => s.addPaymentSplit);
   const removePaymentSplit = useBillStore((s) => s.removePaymentSplit);
   const updatePaymentSplit = useBillStore((s) => s.updatePaymentSplit);
+  const updatePaymentSplitMethod = useBillStore((s) => s.updatePaymentSplitMethod);
   const totalPaid = useBillStore((s) => s.totalPaid);
   const remainingAmount = useBillStore((s) => s.remainingAmount);
   const holdBill = useBillStore((s) => s.holdBill);
@@ -284,6 +285,7 @@ export default function BillingPage() {
                 addPaymentSplit={addPaymentSplit}
                 removePaymentSplit={removePaymentSplit}
                 updatePaymentSplit={updatePaymentSplit}
+                updatePaymentSplitMethod={updatePaymentSplitMethod}
                 totalPaid={paidAmount}
                 remainingAmount={pendingAmount}
               />

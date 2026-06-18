@@ -58,6 +58,14 @@ const money = (value: number) =>
     maximumFractionDigits: 2,
   });
 
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "Cash",
+  gpay: "GPay",
+  upi: "UPI",
+  card: "Card",
+  partial: "Partial",
+};
+
 export const ReceiptPrint = forwardRef<
   HTMLDivElement,
   { bill: ReceiptPrintBill; logoSrc?: string }
@@ -65,7 +73,7 @@ export const ReceiptPrint = forwardRef<
   { bill, logoSrc = "/1775556627469.png" },
   ref
 ) {
-  const createdAt = new Date();
+  const createdAt = bill.createdAt ? new Date(bill.createdAt) : new Date();
   const items = (bill.items || []).filter((item: any) => !item.replacedOut);
   const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const subtotal = Number(bill.subtotal ?? bill.totalAmount ?? 0);
@@ -98,8 +106,24 @@ export const ReceiptPrint = forwardRef<
   const billGrandTotal = Math.round(rawGrandTotal);
   const receiptRoundOff =
     Number(bill.roundOff || 0) !== 0 ? Number(bill.roundOff) : billGrandTotal - rawGrandTotal;
-  const received = Number(bill.cashReceived ?? billGrandTotal);
-  const balance = Math.max(0, Number(bill.changeReturned ?? 0));
+  const paymentMethod = String(bill.paymentMethod || "cash").toLowerCase();
+  const paymentBreakdown = (bill.paymentBreakdown || []).filter((entry) => Number(entry.amount || 0) > 0);
+  const totalPaidFromBreakdown = paymentBreakdown.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const storedCashReceived = Number(bill.cashReceived || 0);
+  const storedChange = Math.max(0, Number(bill.changeReturned ?? 0));
+
+  let received: number;
+  let balance: number;
+  if (paymentMethod === "partial" && paymentBreakdown.length > 0) {
+    received = totalPaidFromBreakdown;
+    balance = storedChange;
+  } else if (paymentMethod === "cash") {
+    received = storedCashReceived > 0 ? storedCashReceived : billGrandTotal;
+    balance = storedChange > 0 ? storedChange : Math.max(0, received - billGrandTotal);
+  } else {
+    received = billGrandTotal;
+    balance = 0;
+  }
   const customerPhone = formatPhone(
     bill.customer?.phone || bill.customer?.mobile || bill.customer?.mobileNumber || ""
   );
@@ -118,6 +142,7 @@ export const ReceiptPrint = forwardRef<
       <div className="center">Railway road (near Indian Bank) sirkali</div>
       <div className="center">Ph.No.: 9360838193</div>
       <div className="center">Email: sowaatmenswear@gmail.com</div>
+      <div className="center">GST No.: 33CLRPB9946G1ZQ</div>
       <div className="line" />
 
       <div className="title">Tax Invoice</div>
@@ -149,7 +174,8 @@ export const ReceiptPrint = forwardRef<
 
       <div className="table-head">
         <div className="col-num">#</div>
-        <div className="col-item">Item Name<br />Qty</div>
+        <div className="col-item">Item</div>
+        <div className="col-qty">Qty</div>
         <div className="col-price">MRP/SP</div>
         <div className="col-amt">Amount</div>
       </div>
@@ -165,12 +191,12 @@ export const ReceiptPrint = forwardRef<
             <div className="col-num">{index + 1}</div>
             <div className="col-item">
               <div className="item-name">{item.name || "Item"}</div>
-              <div className="item-qty">{`Size: ${item.size || "-"}`}</div>
-              <div className="item-qty">{`${quantity}Nos`}</div>
+              <div className="item-size">{`Size: ${item.size || "-"}`}</div>
               {hasItemDiscount ? (
                 <div className="item-discount-tag">{`Disc: -${money(mrpPrice - sellingPrice)}`}</div>
               ) : null}
             </div>
+            <div className="col-qty">{quantity}</div>
             <div className="col-price">
               {hasItemDiscount ? (
                 <>
@@ -267,6 +293,30 @@ export const ReceiptPrint = forwardRef<
         <span>:</span>
         <span>{money(billGrandTotal)}</span>
       </div>
+
+      {paymentMethod === "partial" && paymentBreakdown.length > 0 ? (
+        <>
+          <div className="amount-row">
+            <span>Payment</span>
+            <span>:</span>
+            <span>Partial</span>
+          </div>
+          {paymentBreakdown.map((entry, index) => (
+            <div key={`${entry.method || "split"}-${index}`} className="amount-row">
+              <span>{PAYMENT_LABELS[String(entry.method || "").toLowerCase()] || entry.method || "Split"}</span>
+              <span>:</span>
+              <span>{money(Number(entry.amount || 0))}</span>
+            </div>
+          ))}
+        </>
+      ) : paymentMethod !== "partial" ? (
+        <div className="amount-row">
+          <span>Payment</span>
+          <span>:</span>
+          <span>{PAYMENT_LABELS[paymentMethod] || paymentMethod}</span>
+        </div>
+      ) : null}
+
       <div className="amount-row">
         <span>Received</span>
         <span>:</span>

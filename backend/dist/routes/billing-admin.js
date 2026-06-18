@@ -124,7 +124,8 @@ router.delete('/admins/:id', billingRoleMiddleware_1.requireSuperAdmin, async (r
         return res.status(404).json({ message: 'Admin not found' });
     return res.json({ message: 'Admin deactivated' });
 });
-router.get('/salesmen', (0, billingRoleMiddleware_1.requirePermission)('canManageAdmins'), async (_req, res) => {
+// Read-only list for billing/history dropdowns — any authenticated billing user.
+router.get('/salesmen', async (_req, res) => {
     const salesmen = await Salesman_1.default.find({ isActive: true }).sort({ createdAt: -1 });
     res.json(salesmen);
 });

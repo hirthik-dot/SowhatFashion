@@ -89,6 +89,7 @@ type BillState = {
   addPaymentSplit: (tabId: string, method: PaymentSplitMethod, amount: number) => void;
   removePaymentSplit: (tabId: string, index: number) => void;
   updatePaymentSplit: (tabId: string, index: number, amount: number) => void;
+  updatePaymentSplitMethod: (tabId: string, index: number, method: PaymentSplitMethod) => void;
   setBillDiscount: (tabId: string, type: DiscountType, value: number) => void;
   setCashReceived: (tabId: string, amount: number) => void;
   setPointsMode: (tabId: string, mode: PointsMode) => void;
@@ -402,6 +403,22 @@ export const useBillStore = create<BillState>((set, get) => ({
           ...tab,
           paymentBreakdown: tab.paymentBreakdown.map((entry, entryIndex) =>
             entryIndex === index ? { ...entry, amount: Math.max(0, Number(amount || 0)) } : entry
+          ),
+        };
+      }),
+    })),
+  updatePaymentSplitMethod: (tabId, index, method) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        if (tab.paymentMethod !== "partial") return tab;
+        if (tab.paymentBreakdown.some((entry, entryIndex) => entryIndex !== index && entry.method === method)) {
+          return tab;
+        }
+        return {
+          ...tab,
+          paymentBreakdown: tab.paymentBreakdown.map((entry, entryIndex) =>
+            entryIndex === index ? { ...entry, method } : entry
           ),
         };
       }),

@@ -104,6 +104,17 @@ const billRevenueFromItemsMongoExpr = {
   },
 };
 
+/** Count of active bill lines (excludes replaced-out originals). */
+const activeBillItemCountMongoExpr = {
+  $size: {
+    $filter: {
+      input: { $ifNull: ['$items', []] },
+      as: 'item',
+      cond: { $ne: [{ $ifNull: ['$$item.replacedOut', false] }, true] },
+    },
+  },
+};
+
 /** Profit batch: per sold stock unit (not full bill line qty).
  *  Revenue per unit = mrp - itemDiscount (customer/bill discount NOT subtracted). */
 const profitLineRevenueExpr = {
@@ -416,7 +427,7 @@ router.get('/bill-profit', async (req, res: Response) => {
             revenue: billRevenueFromItemsMongoExpr,
             cost: { $ifNull: [{ $arrayElemAt: ['$costDoc.cost', 0] }, 0] },
             stockUnits: { $ifNull: [{ $arrayElemAt: ['$costDoc.stockUnits', 0] }, 0] },
-            itemCount: { $size: { $ifNull: ['$items', []] } },
+            itemCount: activeBillItemCountMongoExpr,
           },
         },
         {

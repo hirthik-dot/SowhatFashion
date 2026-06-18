@@ -120,18 +120,22 @@ export default function ReceiptPrintModal({
                 width: 6%;
               }
               .col-item {
-                width: 49%;
+                width: 36%;
+              }
+              .col-qty {
+                width: 8%;
+                text-align: center;
               }
               .col-price {
-                width: 20%;
+                width: 22%;
                 text-align: right;
               }
               .col-amt {
-                width: 25%;
+                width: 28%;
                 text-align: right;
               }
               .item-name,
-              .item-qty {
+              .item-size {
                 word-break: break-word;
               }
               .item-discount-tag {

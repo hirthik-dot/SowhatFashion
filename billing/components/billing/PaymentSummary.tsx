@@ -27,6 +27,7 @@ type Props = {
   addPaymentSplit: (tabId: string, method: PaymentSplitMethod, amount: number) => void;
   removePaymentSplit: (tabId: string, index: number) => void;
   updatePaymentSplit: (tabId: string, index: number, amount: number) => void;
+  updatePaymentSplitMethod: (tabId: string, index: number, method: PaymentSplitMethod) => void;
   totalPaid: number;
   remainingAmount: number;
 };
@@ -39,6 +40,7 @@ export default function PaymentSummary({
   addPaymentSplit,
   removePaymentSplit,
   updatePaymentSplit,
+  updatePaymentSplitMethod,
   totalPaid,
   remainingAmount,
 }: Props) {
@@ -71,9 +73,13 @@ export default function PaymentSummary({
           <p className="font-medium text-sm">Split Payment</p>
           {(tab.paymentBreakdown || []).map((entry, index) => (
             <div key={`${entry.method}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-              <select className="pos-input h-9 min-h-0" value={entry.method} disabled>
+              <select
+                className="pos-input h-9 min-h-0"
+                value={entry.method}
+                onChange={(e) => updatePaymentSplitMethod(tab.id, index, e.target.value as PaymentSplitMethod)}
+              >
                 {SPLIT_METHOD_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option key={option.value} value={option.value} disabled={selectedMethods.has(option.value) && option.value !== entry.method}>
                     {option.label}
                   </option>
                 ))}
