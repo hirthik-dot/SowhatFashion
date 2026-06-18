@@ -1,4 +1,5 @@
 import express, { Response } from 'express';
+import mongoose from 'mongoose';
 import Bill from '../models/Bill';
 import BillingReturn from '../models/Return';
 import Product from '../models/Product';
@@ -182,16 +183,26 @@ router.post('/', requirePermission('canReturn'), async (req: BillingAuthRequest,
 
 router.get(
   '/history',
-  requireAnyPermission('canReturn', 'canViewReports'),
-  async (req, res: Response) => {
+  requireAnyPermission('canReturn', 'canViewReports', 'canManageAdmins'),
+  async (req: BillingAuthRequest, res: Response) => {
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
     const skip = (page - 1) * limit;
     const search = String(req.query.search || '').trim();
     const startDate = String(req.query.startDate || '').trim();
     const endDate = String(req.query.endDate || '').trim();
+    const processedBy = String(req.query.processedBy || '').trim();
 
     const query: Record<string, unknown> = {};
+    if (processedBy && mongoose.Types.ObjectId.isValid(processedBy)) {
+      const canFilter =
+        req.billingAdmin?.role === 'superadmin' ||
+        Boolean(req.billingAdmin?.permissions?.canManageAdmins);
+      if (!canFilter) {
+        return res.status(403).json({ message: 'Permission denied to filter by staff' });
+      }
+      query.processedBy = new mongoose.Types.ObjectId(processedBy);
+    }
     if (search) {
       const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       query.$or = [{ returnNumber: regex }, { billNumber: regex }, { 'customer.name': regex }, { 'customer.phone': regex }];

@@ -239,13 +239,32 @@ router.get('/products', async (req: BillingAuthRequest, res: Response) => {
   });
 });
 
-router.get('/entries', async (req, res: Response) => {
+router.get('/entries', async (req: BillingAuthRequest, res: Response) => {
   const page = Number(req.query.page || 1);
   const limit = Number(req.query.limit || 20);
   const skip = (page - 1) * limit;
+  const enteredBy = String(req.query.enteredBy || '').trim();
+
+  const query: Record<string, unknown> = {};
+  if (enteredBy && mongoose.Types.ObjectId.isValid(enteredBy)) {
+    const canFilter =
+      req.billingAdmin?.role === 'superadmin' ||
+      Boolean(req.billingAdmin?.permissions?.canManageAdmins);
+    if (!canFilter) {
+      return res.status(403).json({ message: 'Permission denied to filter by staff' });
+    }
+    query.enteredBy = new mongoose.Types.ObjectId(enteredBy);
+  }
+  const startDate = String(req.query.startDate || '').trim();
+  const endDate = String(req.query.endDate || '').trim();
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) (query.createdAt as any).$gte = new Date(`${startDate}T00:00:00.000Z`);
+    if (endDate) (query.createdAt as any).$lte = new Date(`${endDate}T23:59:59.999Z`);
+  }
 
   const [data, total] = await Promise.all([
-    StockEntry.find({})
+    StockEntry.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -254,7 +273,7 @@ router.get('/entries', async (req, res: Response) => {
       .populate('subCategory', 'name')
       .populate('enteredBy', 'name email')
       .lean(),
-    StockEntry.countDocuments({}),
+    StockEntry.countDocuments(query),
   ]);
 
   return res.json({ data, total, page, limit });

@@ -174,8 +174,7 @@ export const ReceiptPrint = forwardRef<
 
       <div className="table-head">
         <div className="col-num">#</div>
-        <div className="col-item">Item</div>
-        <div className="col-qty">Qty</div>
+        <div className="col-item">Item Name<br />Qty</div>
         <div className="col-price">MRP/SP</div>
         <div className="col-amt">Amount</div>
       </div>
@@ -191,12 +190,12 @@ export const ReceiptPrint = forwardRef<
             <div className="col-num">{index + 1}</div>
             <div className="col-item">
               <div className="item-name">{item.name || "Item"}</div>
-              <div className="item-size">{`Size: ${item.size || "-"}`}</div>
+              <div className="item-qty">{`Size: ${item.size || "-"}`}</div>
+              <div className="item-qty">{`${quantity}Nos`}</div>
               {hasItemDiscount ? (
                 <div className="item-discount-tag">{`Disc: -${money(mrpPrice - sellingPrice)}`}</div>
               ) : null}
             </div>
-            <div className="col-qty">{quantity}</div>
             <div className="col-price">
               {hasItemDiscount ? (
                 <>
@@ -217,6 +216,7 @@ export const ReceiptPrint = forwardRef<
         <span>{`Qty: ${totalQty}`}</span>
         <span>{money(subtotal)}</span>
       </div>
+      <div>{`Item: ${items.length}`}</div>
 
       <div className="amount-row">
         <span>Total MRP</span>

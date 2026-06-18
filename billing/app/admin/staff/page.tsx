@@ -46,7 +46,7 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, Record<string, boolean | number>>
 
 export default function StaffPage() {
   const router = useRouter();
-  const { isSuperAdmin, can, permissions: ownPermissions } = useRole();
+  const { isSuperAdmin, can, permissions: ownPermissions, admin: currentAdmin } = useRole();
   const canAccess = can("canManageAdmins");
   const [staff, setStaff] = useState<any[]>([]);
   const [editing, setEditing] = useState<any>(null);
@@ -105,8 +105,22 @@ export default function StaffPage() {
               <tr key={member._id} className="border-t border-[var(--border)]">
                 <td>{member.name}</td><td>{member.email}</td><td>{member.role}</td><td>{member.lastLogin ? new Date(member.lastLogin).toLocaleString() : "-"}</td><td>{member.isActive ? "Active" : "Inactive"}</td>
                 <td className="space-x-2">
+                  <button onClick={() => router.push(`/admin/staff/${member._id}/records`)}>Records</button>
                   <button onClick={() => { setEditing(member); setForm({ ...member, password: "" }); }}>Edit</button>
-                  <button onClick={async () => { if (window.confirm("Deactivate staff?")) { await billingApi.deleteAdmin(member._id); load(); } }}>Deactivate</button>
+                  {member._id !== currentAdmin?._id &&
+                  (isSuperAdmin || member.role !== "superadmin") ? (
+                    <button
+                      onClick={async () => {
+                        const action = member.isActive ? "Deactivate" : "Activate";
+                        if (window.confirm(`${action} this staff member?`)) {
+                          await billingApi.deleteAdmin(member._id);
+                          load();
+                        }
+                      }}
+                    >
+                      {member.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                  ) : null}
                 </td>
               </tr>
             ))}

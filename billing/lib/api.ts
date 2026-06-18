@@ -137,6 +137,7 @@ export const billingApi = {
     request(`/api/billing/admin/salesmen/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteSalesman: (id: string) => request(`/api/billing/admin/salesmen/${id}`, { method: "DELETE" }),
   admins: () => request("/api/billing/admin/admins"),
+  staffRecordsSummary: (id: string) => request(`/api/billing/admin/admins/${id}/records/summary`),
   createAdmin: (payload: any) =>
     request("/api/billing/admin/admins", { method: "POST", body: JSON.stringify(payload) }),
   updateAdmin: (id: string, payload: any) =>

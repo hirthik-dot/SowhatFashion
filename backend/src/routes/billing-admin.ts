@@ -1,8 +1,12 @@
 import express, { Response } from 'express';
+import mongoose from 'mongoose';
 import BillingAdmin from '../models/BillingAdmin';
+import Bill from '../models/Bill';
+import BillingReturn from '../models/Return';
+import StockEntry from '../models/StockEntry';
 import Salesman from '../models/Salesman';
 import { BillingAuthRequest } from '../middleware/billingAuthMiddleware';
-import { requirePermission, requireSuperAdmin } from '../middleware/billingRoleMiddleware';
+import { requirePermission } from '../middleware/billingRoleMiddleware';
 
 const router = express.Router();
 
@@ -52,6 +56,47 @@ const normalizePermissions = (role: string, incoming: any = {}) => {
 router.get('/admins', requirePermission('canManageAdmins'), async (_req, res: Response) => {
   const admins = await BillingAdmin.find({}).select('-password').sort({ createdAt: -1 });
   res.json(admins);
+});
+
+router.get('/admins/:id/records/summary', requirePermission('canManageAdmins'), async (req, res: Response) => {
+  const staffId = req.params.id;
+  if (!mongoose.Types.ObjectId.isValid(staffId)) {
+    return res.status(400).json({ message: 'Invalid staff id' });
+  }
+
+  const staff = await BillingAdmin.findById(staffId).select('-password').lean();
+  if (!staff) return res.status(404).json({ message: 'Staff not found' });
+
+  const staffObjectId = new mongoose.Types.ObjectId(staffId);
+  const billQuery = {
+    createdBy: staffObjectId,
+    status: { $in: ['completed', 'replaced', 'partial_replaced'] },
+  };
+  const returnQuery = { processedBy: staffObjectId };
+  const stockQuery = { enteredBy: staffObjectId };
+
+  const [billCount, billRevenueAgg, returnCount, stockCount, lastBill, lastReturn, lastStock] = await Promise.all([
+    Bill.countDocuments(billQuery),
+    Bill.aggregate([{ $match: billQuery }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
+    BillingReturn.countDocuments(returnQuery),
+    StockEntry.countDocuments(stockQuery),
+    Bill.findOne(billQuery).sort({ createdAt: -1 }).select('createdAt').lean(),
+    BillingReturn.findOne(returnQuery).sort({ createdAt: -1 }).select('createdAt').lean(),
+    StockEntry.findOne(stockQuery).sort({ createdAt: -1 }).select('createdAt').lean(),
+  ]);
+
+  const activityDates = [lastBill?.createdAt, lastReturn?.createdAt, lastStock?.createdAt]
+    .filter(Boolean)
+    .map((date) => new Date(date as Date).getTime());
+  const lastActivity = activityDates.length ? new Date(Math.max(...activityDates)) : null;
+
+  return res.json({
+    staff,
+    bills: { count: billCount, revenue: billRevenueAgg[0]?.total || 0 },
+    returns: { count: returnCount },
+    stockEntries: { count: stockCount },
+    lastActivity,
+  });
 });
 
 router.post('/admins', requirePermission('canManageAdmins'), async (req: BillingAuthRequest, res: Response) => {
@@ -119,10 +164,27 @@ router.put('/admins/:id', requirePermission('canManageAdmins'), async (req: Bill
   return res.json(admin);
 });
 
-router.delete('/admins/:id', requireSuperAdmin, async (req, res: Response) => {
-  const admin = await BillingAdmin.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true }).select('-password');
-  if (!admin) return res.status(404).json({ message: 'Admin not found' });
-  return res.json({ message: 'Admin deactivated' });
+router.delete('/admins/:id', requirePermission('canManageAdmins'), async (req: BillingAuthRequest, res: Response) => {
+  const existing = await BillingAdmin.findById(req.params.id);
+  if (!existing) return res.status(404).json({ message: 'Admin not found' });
+
+  if (String(existing._id) === String(req.billingAdminId)) {
+    return res.status(403).json({ message: 'You cannot change your own status' });
+  }
+  if (existing.role === 'superadmin' && req.billingAdmin?.role !== 'superadmin') {
+    return res.status(403).json({ message: 'Only superadmin can change superadmin status' });
+  }
+
+  const admin = await BillingAdmin.findByIdAndUpdate(
+    req.params.id,
+    { isActive: !existing.isActive },
+    { new: true }
+  ).select('-password');
+
+  return res.json({
+    message: admin?.isActive ? 'Admin activated' : 'Admin deactivated',
+    admin,
+  });
 });
 
 // Read-only list for billing/history dropdowns — any authenticated billing user.

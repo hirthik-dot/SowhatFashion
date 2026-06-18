@@ -673,7 +673,20 @@ router.get('/history', billingAuthMiddleware, async (req: BillingAuthRequest, re
   const query: any = {
     status: { $in: ['completed', 'replaced', 'partial_replaced'] },
   };
-  if (req.billingAdmin?.role === 'cashier') query.createdBy = req.billingAdminId;
+  if (req.billingAdmin?.role === 'cashier') {
+    query.createdBy = req.billingAdminId;
+  } else {
+    const createdBy = String(req.query.createdBy || '').trim();
+    if (createdBy && mongoose.Types.ObjectId.isValid(createdBy)) {
+      const canFilter =
+        req.billingAdmin?.role === 'superadmin' ||
+        Boolean(req.billingAdmin?.permissions?.canManageAdmins);
+      if (!canFilter) {
+        return res.status(403).json({ message: 'Permission denied to filter by staff' });
+      }
+      query.createdBy = new mongoose.Types.ObjectId(createdBy);
+    }
+  }
 
   if (search) {
     const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
