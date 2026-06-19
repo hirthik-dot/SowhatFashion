@@ -8,6 +8,7 @@ const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "upi", label: "UPI" },
   { value: "card", label: "Card" },
   { value: "partial", label: "Partial" },
+  { value: "pending", label: "Pending (Pay Later)" },
 ];
 
 const SPLIT_METHOD_OPTIONS: Array<{ value: PaymentSplitMethod; label: string }> = [
@@ -28,6 +29,7 @@ type Props = {
   removePaymentSplit: (tabId: string, index: number) => void;
   updatePaymentSplit: (tabId: string, index: number, amount: number) => void;
   updatePaymentSplitMethod: (tabId: string, index: number, method: PaymentSplitMethod) => void;
+  setCompleteWithPending: (tabId: string, value: boolean) => void;
   totalPaid: number;
   remainingAmount: number;
 };
@@ -41,11 +43,15 @@ export default function PaymentSummary({
   removePaymentSplit,
   updatePaymentSplit,
   updatePaymentSplitMethod,
+  setCompleteWithPending,
   totalPaid,
   remainingAmount,
 }: Props) {
   const roundedRemaining = Math.round(remainingAmount);
   const isBalanced = roundedRemaining === 0;
+  const isPendingMethod = tab.paymentMethod === "pending";
+  const canKeepPending = tab.paymentMethod === "partial" && roundedRemaining > 0;
+  const effectivePending = isPendingMethod ? totals.totalAmount : tab.completeWithPending ? Math.max(0, roundedRemaining) : 0;
   const hasInvalidSplitAmount = (tab.paymentBreakdown || []).some((entry) => Number(entry.amount || 0) <= 0);
   const selectedMethods = new Set((tab.paymentBreakdown || []).map((entry) => entry.method));
   const availableMethods = SPLIT_METHOD_OPTIONS.filter((entry) => !selectedMethods.has(entry.value));
@@ -53,6 +59,8 @@ export default function PaymentSummary({
     .filter((entry) => entry.method === "cash")
     .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const cashChange = Math.max(0, Number(tab.cashReceived || 0) - cashSplitAmount);
+  const phoneDigits = String(tab.customer.phone || "").replace(/\D/g, "");
+  const hasPhone = phoneDigits.length >= 10;
 
   return (
     <div className="space-y-2">
@@ -67,6 +75,21 @@ export default function PaymentSummary({
           </option>
         ))}
       </select>
+
+      {isPendingMethod ? (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⏳</span>
+            <p className="font-semibold text-amber-200">Full amount on pending</p>
+          </div>
+          <p className="text-sm text-amber-100/90">
+            Customer will pay {formatMoney(totals.totalAmount)} later. Bill completes without payment now.
+          </p>
+          {!hasPhone ? (
+            <p className="text-sm text-red-400">Customer phone is required to track pending balance.</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {tab.paymentMethod === "partial" ? (
         <div className="rounded border border-[var(--border)] p-2 space-y-2">
@@ -141,14 +164,30 @@ export default function PaymentSummary({
             {hasInvalidSplitAmount ? (
               <p className="text-red-500">Each split amount must be greater than 0.</p>
             ) : null}
-            {!isBalanced ? (
-              <p className="text-red-500">₹{Math.abs(roundedRemaining).toLocaleString("en-IN")} remaining</p>
-            ) : (
+            {isBalanced ? (
               <p className="text-green-500">✓ Balanced</p>
-            )}
+            ) : null}
           </div>
-          {!isBalanced ? (
-            <p className="text-xs text-[var(--warning)]">Total paid must equal bill total.</p>
+
+          {canKeepPending ? (
+            <label className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1 accent-[var(--gold)]"
+                checked={tab.completeWithPending}
+                onChange={(e) => setCompleteWithPending(tab.id, e.target.checked)}
+              />
+              <span className="text-sm">
+                <span className="font-medium text-amber-200 block">Keep {formatMoney(roundedRemaining)} as pending</span>
+                <span className="text-amber-100/80">Customer pays the rest later. Phone number required.</span>
+              </span>
+            </label>
+          ) : !isBalanced && !tab.completeWithPending ? (
+            <p className="text-xs text-[var(--warning)]">Total paid must equal bill total, or mark remaining as pending.</p>
+          ) : null}
+
+          {tab.completeWithPending && !hasPhone ? (
+            <p className="text-sm text-red-400">Customer phone is required to track pending balance.</p>
           ) : null}
         </div>
       ) : tab.paymentMethod === "cash" ? (
@@ -167,6 +206,15 @@ export default function PaymentSummary({
             <span>{formatMoney(totals.changeReturned)}</span>
           </div>
         </>
+      ) : null}
+
+      {effectivePending > 0 ? (
+        <div className="rounded-lg border border-amber-500/50 bg-gradient-to-r from-amber-500/15 to-orange-500/10 px-3 py-2">
+          <div className="flex justify-between items-center text-sm">
+            <span className="font-medium text-amber-200">Pending on this bill</span>
+            <span className="font-bold text-amber-300 text-base">{formatMoney(effectivePending)}</span>
+          </div>
+        </div>
       ) : null}
     </div>
   );

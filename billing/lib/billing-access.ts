@@ -12,6 +12,7 @@ export const billingNavLinks: BillingNavLink[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/billing", label: "Billing" },
   { href: "/history", label: "History" },
+  { href: "/pending", label: "⏳ Pending" },
   { href: "/inventory", label: "Inventory", permissions: ["canManageStock", "canViewReports"] },
   { href: "/stock", label: "Stock Entry", permissions: ["canManageStock"] },
   { href: "/returns", label: "Returns", permissions: ["canReturn"] },

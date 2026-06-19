@@ -48,6 +48,7 @@ export type CustomerSearchResult = {
   totalBills?: number;
   lastVisit?: string;
   pointsBalance?: number;
+  pendingBalance?: number;
 };
 
 export const searchCustomers = async (q: string): Promise<CustomerSearchResult[]> => {
@@ -195,6 +196,14 @@ export const billingApi = {
   },
   reportBillProfit: (query = "") => request(`/api/billing/reports/bill-profit${query ? `?${query}` : ""}`),
   reportBillProfitDetail: (id: string) => request(`/api/billing/reports/bill-profit/${id}`),
+  pendingSummary: () => request("/api/billing/pending/summary"),
+  pendingBalance: (phone: string) =>
+    request(`/api/billing/pending/balance?phone=${encodeURIComponent(phone)}`),
+  pendingCustomer: (phone: string) =>
+    request(`/api/billing/pending/customer/${encodeURIComponent(phone)}`),
+  pendingSettlements: (limit = 50) => request(`/api/billing/pending/settlements?limit=${limit}`),
+  settlePending: (payload: { phone: string; amount: number; paymentMethod: string; note?: string; customerName?: string }) =>
+    request("/api/billing/pending/settle", { method: "POST", body: JSON.stringify(payload) }),
   qzCertificate: async () => {
     if (!API) throw new Error("NEXT_PUBLIC_API_URL is not set");
     const res = await fetch(`${API}/api/billing/qz/certificate`, { credentials: "include" });

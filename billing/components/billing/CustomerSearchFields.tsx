@@ -179,11 +179,13 @@ export default function CustomerSearchFields({
                 const isSelected = idx === selectedIndex;
                 const visits = Number(customer.totalBills || 0);
                 const lastVisit = formatLastVisit(customer.lastVisit);
+                const pendingBalance = Number(customer.pendingBalance || 0);
                 return (
                   <div
                     key={`${customer.phone}-${idx}`}
                     className={[
                       "px-3 py-2 cursor-pointer border-l-2",
+                      pendingBalance > 0 ? "bg-amber-500/10" : "",
                       isSelected
                         ? "bg-[color-mix(in_srgb,var(--gold)_20%,transparent)] border-l-[var(--gold)]"
                         : "border-l-transparent hover:bg-[var(--surface)]",
@@ -200,6 +202,9 @@ export default function CustomerSearchFields({
                         <div className="text-xs text-[var(--text-secondary)] mt-0.5">{customer.phone}</div>
                       </div>
                       <div className="shrink-0 text-right text-xs text-[var(--text-secondary)]">
+                        {pendingBalance > 0 ? (
+                          <div className="text-amber-400 font-semibold">⏳ ₹{pendingBalance.toLocaleString("en-IN")} pending</div>
+                        ) : null}
                         {visits > 0 ? <div>{visits} bill{visits === 1 ? "" : "s"}</div> : null}
                         {lastVisit ? <div>Last: {lastVisit}</div> : null}
                         {typeof customer.pointsBalance === "number" ? (

@@ -11,6 +11,7 @@ import ReceiptPrintModal from "@/components/billing/ReceiptPrintModal";
 import BarcodeScanner from "@/components/billing/BarcodeScanner";
 import PaymentSummary from "@/components/billing/PaymentSummary";
 import CustomerSearchFields from "@/components/billing/CustomerSearchFields";
+import CustomerPendingAlert from "@/components/billing/CustomerPendingAlert";
 import PointsPanel from "@/components/billing/PointsPanel";
 import { useRole } from "@/hooks/useRole";
 import { MIN_REDEEM_POINTS } from "@/lib/points";
@@ -43,6 +44,7 @@ export default function BillingPage() {
   const setPointsMode = useBillStore((s) => s.setPointsMode);
   const setAwardPoints = useBillStore((s) => s.setAwardPoints);
   const setPointsToRedeem = useBillStore((s) => s.setPointsToRedeem);
+  const setCompleteWithPending = useBillStore((s) => s.setCompleteWithPending);
   const addPaymentSplit = useBillStore((s) => s.addPaymentSplit);
   const removePaymentSplit = useBillStore((s) => s.removePaymentSplit);
   const updatePaymentSplit = useBillStore((s) => s.updatePaymentSplit);
@@ -69,14 +71,29 @@ export default function BillingPage() {
     activeTab.pointsToRedeem > 0 &&
     activeTab.pointsToRedeem < MIN_REDEEM_POINTS;
 
+  const customerPhoneDigits = String(activeTab?.customer.phone || "").replace(/\D/g, "");
+  const hasCustomerPhone = customerPhoneDigits.length >= 10;
+  const isPendingPayment = activeTab?.paymentMethod === "pending";
+  const isPartialWithPending = Boolean(
+    activeTab?.paymentMethod === "partial" && activeTab.completeWithPending && Math.round(pendingAmount) > 0
+  );
+
   const canComplete = Boolean(
     activeTab &&
       activeTab.customer.name.trim() &&
       activeTab.salesmanId &&
       !redeemInvalid &&
-      (activeTab.paymentMethod !== "partial"
+      (isPendingPayment
+        ? hasCustomerPhone
+        : isPartialWithPending
+        ? hasCustomerPhone &&
+          (activeTab.paymentBreakdown || []).length > 0 &&
+          !hasInvalidPartialSplit
+        : activeTab.paymentMethod !== "partial"
         ? true
-        : Math.round(paidAmount) === totals.totalAmount && !hasInvalidPartialSplit && (activeTab.paymentBreakdown || []).length > 0)
+        : Math.round(paidAmount) === totals.totalAmount &&
+          !hasInvalidPartialSplit &&
+          (activeTab.paymentBreakdown || []).length > 0)
   );
   const itemDiscountRows = useMemo(() => {
     return (activeTab?.items || [])
@@ -171,9 +188,16 @@ export default function BillingPage() {
       if ((activeTab.paymentBreakdown || []).some((entry) => Number(entry.amount || 0) <= 0)) {
         return setToast("Each payment split must be greater than 0");
       }
-      if (Math.round(paidAmount) !== totals.totalAmount) {
+      const keepingPending = activeTab.completeWithPending && Math.round(pendingAmount) > 0;
+      if (!keepingPending && Math.round(paidAmount) !== totals.totalAmount) {
         return setToast(`Payment must match total. ₹${Math.max(0, pendingAmount).toLocaleString("en-IN")} remaining`);
       }
+      if (keepingPending && !hasCustomerPhone) {
+        return setToast("Customer phone is required when keeping a pending balance");
+      }
+    }
+    if (activeTab.paymentMethod === "pending" && !hasCustomerPhone) {
+      return setToast("Customer phone is required for pending payment");
     }
     const maxAllowedDiscount = isSuperAdmin ? 100 : maxDiscount;
     if (activeTab.billDiscountType === "percent" && Number(activeTab.billDiscountValue || 0) > maxAllowedDiscount) {
@@ -182,7 +206,16 @@ export default function BillingPage() {
     if (activeTab.pointsMode === "redeem" && activeTab.pointsToRedeem > 0 && activeTab.pointsToRedeem < MIN_REDEEM_POINTS) {
       return setToast(`Minimum ${MIN_REDEEM_POINTS} points required to redeem`);
     }
-    const ok = window.confirm(`Complete bill for ₹${totals.totalAmount}?`);
+    const pendingOnBill =
+      activeTab.paymentMethod === "pending"
+        ? totals.totalAmount
+        : activeTab.completeWithPending
+        ? Math.max(0, Math.round(pendingAmount))
+        : 0;
+    const confirmMsg = pendingOnBill > 0
+      ? `Complete bill for ₹${totals.totalAmount}? ₹${pendingOnBill.toLocaleString("en-IN")} will be marked as pending.`
+      : `Complete bill for ₹${totals.totalAmount}?`;
+    const ok = window.confirm(confirmMsg);
     if (!ok) return;
     
     setIsCompleting(true);
@@ -192,6 +225,7 @@ export default function BillingPage() {
         salesman: activeTab.salesmanId,
         paymentMethod: activeTab.paymentMethod,
         paymentBreakdown: activeTab.paymentBreakdown,
+        completeWithPending: activeTab.completeWithPending || activeTab.paymentMethod === "pending",
         items: activeTab.items,
         billDiscountType: activeTab.billDiscountType,
         billDiscountValue: activeTab.billDiscountValue,
@@ -263,11 +297,14 @@ export default function BillingPage() {
           <div className="pos-card p-3 space-y-2">
             <h2 className="font-semibold">Customer & Payment</h2>
             {activeTab ? (
-              <CustomerSearchFields
-                name={activeTab.customer.name || ""}
-                phone={activeTab.customer.phone || ""}
-                onChange={(customerName, customerPhone) => setCustomer(activeTab.id, customerName, customerPhone)}
-              />
+              <>
+                <CustomerSearchFields
+                  name={activeTab.customer.name || ""}
+                  phone={activeTab.customer.phone || ""}
+                  onChange={(customerName, customerPhone) => setCustomer(activeTab.id, customerName, customerPhone)}
+                />
+                <CustomerPendingAlert phone={activeTab.customer.phone || ""} />
+              </>
             ) : null}
             {activeTab ? (
               <PointsPanel
@@ -295,6 +332,7 @@ export default function BillingPage() {
                 removePaymentSplit={removePaymentSplit}
                 updatePaymentSplit={updatePaymentSplit}
                 updatePaymentSplitMethod={updatePaymentSplitMethod}
+                setCompleteWithPending={setCompleteWithPending}
                 totalPaid={paidAmount}
                 remainingAmount={pendingAmount}
               />

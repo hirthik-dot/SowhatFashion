@@ -24,6 +24,7 @@ const PAYMENT_OPTIONS = [
   { value: "upi", label: "UPI" },
   { value: "card", label: "Card" },
   { value: "partial", label: "Partial" },
+  { value: "pending", label: "Pending" },
 ];
 
 const formatStatusLabel = (bill: any) => {
@@ -203,6 +204,7 @@ export default function HistoryPage() {
                 <th>Points Cost</th>
                 <th>Cash</th>
                 <th>Payment</th>
+                <th>Pending</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -222,6 +224,15 @@ export default function HistoryPage() {
                   </td>
                   <td>₹{Number(bill.totalAmount || 0).toLocaleString("en-IN")}</td>
                   <td>{String(bill.paymentMethod || "").toUpperCase()}</td>
+                  <td>
+                    {Number(bill.pendingAmount || 0) > 0 ? (
+                      <span className="text-amber-400 font-medium">
+                        ₹{Number(bill.pendingAmount).toLocaleString("en-IN")}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                   <td>
                     <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${statusBadgeClass(bill)}`}>
                       {formatStatusLabel(bill)}

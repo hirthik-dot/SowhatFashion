@@ -36,6 +36,7 @@ export type ReceiptPrintBill = {
   pointsRedeemed?: number;
   pointsDiscountAmount?: number;
   pointsBalanceAfter?: number;
+  pendingAmount?: number;
 };
 
 const formatBillDate = (d: Date) =>
@@ -64,6 +65,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   upi: "UPI",
   card: "Card",
   partial: "Partial",
+  pending: "Pending",
 };
 
 export const ReceiptPrint = forwardRef<
@@ -107,6 +109,7 @@ export const ReceiptPrint = forwardRef<
   const receiptRoundOff =
     Number(bill.roundOff || 0) !== 0 ? Number(bill.roundOff) : billGrandTotal - rawGrandTotal;
   const paymentMethod = String(bill.paymentMethod || "cash").toLowerCase();
+  const pendingAmount = Number(bill.pendingAmount || 0);
   const paymentBreakdown = (bill.paymentBreakdown || []).filter((entry) => Number(entry.amount || 0) > 0);
   const totalPaidFromBreakdown = paymentBreakdown.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const storedCashReceived = Number(bill.cashReceived || 0);
@@ -116,7 +119,10 @@ export const ReceiptPrint = forwardRef<
   let balance: number;
   if (paymentMethod === "partial" && paymentBreakdown.length > 0) {
     received = totalPaidFromBreakdown;
-    balance = storedChange;
+    balance = pendingAmount > 0 ? pendingAmount : storedChange;
+  } else if (paymentMethod === "pending") {
+    received = 0;
+    balance = pendingAmount > 0 ? pendingAmount : billGrandTotal;
   } else if (paymentMethod === "cash") {
     received = storedCashReceived > 0 ? storedCashReceived : billGrandTotal;
     balance = storedChange > 0 ? storedChange : Math.max(0, received - billGrandTotal);
@@ -314,6 +320,14 @@ export const ReceiptPrint = forwardRef<
           <span>Payment</span>
           <span>:</span>
           <span>{PAYMENT_LABELS[paymentMethod] || paymentMethod}</span>
+        </div>
+      ) : null}
+
+      {pendingAmount > 0 ? (
+        <div className="amount-row">
+          <span>Pending Due</span>
+          <span>:</span>
+          <span>{money(pendingAmount)}</span>
         </div>
       ) : null}
 

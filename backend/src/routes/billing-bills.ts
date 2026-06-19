@@ -15,6 +15,7 @@ import {
   validatePointsForBill,
   type PointsMode,
 } from '../lib/billing-points';
+import { getPendingBalancesByPhones } from '../lib/billing-pending';
 import { activeBillItems } from '../lib/billing-replacements';
 import { BILLABLE_STATUSES } from '../lib/stock-inventory-counts';
 import { computeBillTotals as computeBillTotalsCore } from '../lib/billing-totals';
@@ -385,6 +386,7 @@ router.get('/customers/search', async (req, res: Response) => {
           .lean()
       : [];
   const balanceByPhone = new Map(accounts.map((a: any) => [a.phone, Number(a.balance || 0)]));
+  const pendingByPhone = await getPendingBalancesByPhones(phones);
 
   return res.json(
     rows.map((row: any) => {
@@ -396,6 +398,7 @@ router.get('/customers/search', async (req, res: Response) => {
         totalBills: Number(row.totalBills || 0),
         lastVisit: row.lastVisit,
         pointsBalance: balanceByPhone.get(normalized) ?? 0,
+        pendingBalance: pendingByPhone.get(normalized) ?? 0,
       };
     })
   );
@@ -516,6 +519,14 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
           ...(Number(payload.splitPayment?.gpay || 0) > 0 ? [{ method: 'gpay', amount: Number(payload.splitPayment.gpay || 0) }] : []),
         ];
     const paymentMethod = payload.paymentMethod || 'cash';
+    const completeWithPending = Boolean(payload.completeWithPending);
+
+    if (paymentMethod === 'pending') {
+      const phone = normalizeBillingPhone(String(payload.customer?.phone || ''));
+      if (phone.length < 10) {
+        return res.status(400).json({ error: 'Customer phone is required for pending payment' });
+      }
+    }
 
     if (paymentMethod === 'partial') {
       if (!paymentBreakdown.length) {
@@ -531,11 +542,28 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
       }
       const totalPaid = paymentBreakdown.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
       const diff = Math.abs(totalPaid - totals.totalAmount);
-      if (diff > 1) {
+      if (diff > 1 && !completeWithPending) {
         return res.status(400).json({
           error: `Payment mismatch: paid ₹${totalPaid}, bill is ₹${totals.totalAmount}`,
         });
       }
+      if (completeWithPending && totalPaid >= totals.totalAmount) {
+        return res.status(400).json({ error: 'No pending balance when bill is fully paid' });
+      }
+      if (completeWithPending) {
+        const phone = normalizeBillingPhone(String(payload.customer?.phone || ''));
+        if (phone.length < 10) {
+          return res.status(400).json({ error: 'Customer phone is required when keeping a pending balance' });
+        }
+      }
+    }
+
+    let pendingAmount = 0;
+    if (paymentMethod === 'pending') {
+      pendingAmount = totals.totalAmount;
+    } else if (paymentMethod === 'partial' && completeWithPending) {
+      const totalPaid = paymentBreakdown.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+      pendingAmount = Math.max(0, Math.round(totals.totalAmount - totalPaid));
     }
 
     const cashPortion =
@@ -552,6 +580,7 @@ router.post('/complete', billingAuthMiddleware, async (req: BillingAuthRequest, 
       ...payload,
       paymentMethod,
       paymentBreakdown,
+      pendingAmount,
       billNumber,
       items: totals.normalizedItems,
       subtotal: totals.subtotal,

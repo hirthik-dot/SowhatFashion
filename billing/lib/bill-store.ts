@@ -5,7 +5,7 @@ import { billingApi } from "@/lib/api";
 import { calcPointsDiscountRupees, type PointsMode } from "@/lib/points";
 import { computeBillTotals as computeBillTotalsCore } from "@/lib/billing-totals";
 
-export type PaymentMethod = "cash" | "gpay" | "upi" | "card" | "partial";
+export type PaymentMethod = "cash" | "gpay" | "upi" | "card" | "partial" | "pending";
 export type PaymentSplitMethod = "cash" | "gpay" | "upi" | "card";
 export type DiscountType = "percent" | "amount" | "none";
 
@@ -48,6 +48,7 @@ export type BillTab = {
   pointsMode: PointsMode;
   awardPoints: boolean;
   pointsToRedeem: number;
+  completeWithPending: boolean;
   status: "active" | "held";
   createdAt: string;
 };
@@ -95,6 +96,7 @@ type BillState = {
   setPointsMode: (tabId: string, mode: PointsMode) => void;
   setAwardPoints: (tabId: string, award: boolean) => void;
   setPointsToRedeem: (tabId: string, points: number) => void;
+  setCompleteWithPending: (tabId: string, value: boolean) => void;
   holdBill: (tabId: string) => Promise<any>;
   resumeHeldBill: (bill: any) => void;
   clearTab: (tabId: string) => void;
@@ -119,6 +121,7 @@ const makeTab = (): BillTab => ({
   pointsMode: "earn",
   awardPoints: true,
   pointsToRedeem: 0,
+  completeWithPending: false,
   status: "active",
   createdAt: new Date().toISOString(),
 });
@@ -365,10 +368,14 @@ export const useBillStore = create<BillState>((set, get) => ({
           return {
             ...tab,
             paymentMethod: method,
+            completeWithPending: false,
             paymentBreakdown: hasBreakdown ? tab.paymentBreakdown : [{ method: "cash", amount: totalAmount }],
           };
         }
-        return { ...tab, paymentMethod: method, paymentBreakdown: [] };
+        if (method === "pending") {
+          return { ...tab, paymentMethod: method, paymentBreakdown: [], completeWithPending: true };
+        }
+        return { ...tab, paymentMethod: method, paymentBreakdown: [], completeWithPending: false };
       }),
     })),
   addPaymentSplit: (tabId, method, amount) =>
@@ -456,6 +463,10 @@ export const useBillStore = create<BillState>((set, get) => ({
         tab.id === tabId ? { ...tab, pointsToRedeem: Math.max(0, Math.floor(Number(points || 0))) } : tab
       ),
     })),
+  setCompleteWithPending: (tabId, value) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, completeWithPending: value } : tab)),
+    })),
   holdBill: async (tabId) => {
     const tab = get().tabs.find((value) => value.id === tabId);
     if (!tab) return null;
@@ -472,6 +483,7 @@ export const useBillStore = create<BillState>((set, get) => ({
       pointsMode: tab.pointsMode,
       awardPoints: tab.awardPoints,
       pointsToRedeem: tab.pointsToRedeem,
+      completeWithPending: tab.completeWithPending,
       ...totals,
     };
     const held = await billingApi.holdBill(payload);
@@ -529,6 +541,7 @@ export const useBillStore = create<BillState>((set, get) => ({
         pointsMode: bill.pointsMode === "redeem" ? "redeem" : "earn",
         awardPoints: bill.awardPoints !== false,
         pointsToRedeem: Number(bill.pointsRedeemed || bill.pointsToRedeem || 0),
+        completeWithPending: bill.paymentMethod === "pending" || Number(bill.pendingAmount || 0) > 0,
         status: "active",
         createdAt: new Date().toISOString(),
       };
