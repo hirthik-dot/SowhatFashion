@@ -23,6 +23,7 @@ export default function BillingPage() {
   const [toast, setToast] = useState<string>("");
   const [receiptBill, setReceiptBill] = useState<any>(null);
   const [flashError, setFlashError] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const tabs = useBillStore((s) => s.tabs);
   const activeTabId = useBillStore((s) => s.activeTabId || s.tabs[0]?.id);
   const createTab = useBillStore((s) => s.createTab);
@@ -183,23 +184,31 @@ export default function BillingPage() {
     }
     const ok = window.confirm(`Complete bill for ₹${totals.totalAmount}?`);
     if (!ok) return;
-    const completed = await billingApi.completeBill({
-      customer: activeTab.customer,
-      salesman: activeTab.salesmanId,
-      paymentMethod: activeTab.paymentMethod,
-      paymentBreakdown: activeTab.paymentBreakdown,
-      items: activeTab.items,
-      billDiscountType: activeTab.billDiscountType,
-      billDiscountValue: activeTab.billDiscountValue,
-      cashReceived: activeTab.cashReceived,
-      pointsMode: activeTab.pointsMode,
-      awardPoints: activeTab.awardPoints,
-      pointsToRedeem: activeTab.pointsToRedeem,
-    });
-    const selectedSalesman = salesmen.find((s) => s._id === activeTab.salesmanId);
-    setReceiptBill({ ...completed, salesmanName: selectedSalesman?.name || "" });
-    clearTab(activeTab.id);
-    setToast(`Bill completed: ${completed.billNumber}`);
+    
+    setIsCompleting(true);
+    try {
+      const completed = await billingApi.completeBill({
+        customer: activeTab.customer,
+        salesman: activeTab.salesmanId,
+        paymentMethod: activeTab.paymentMethod,
+        paymentBreakdown: activeTab.paymentBreakdown,
+        items: activeTab.items,
+        billDiscountType: activeTab.billDiscountType,
+        billDiscountValue: activeTab.billDiscountValue,
+        cashReceived: activeTab.cashReceived,
+        pointsMode: activeTab.pointsMode,
+        awardPoints: activeTab.awardPoints,
+        pointsToRedeem: activeTab.pointsToRedeem,
+      });
+      const selectedSalesman = salesmen.find((s) => s._id === activeTab.salesmanId);
+      setReceiptBill({ ...completed, salesmanName: selectedSalesman?.name || "" });
+      clearTab(activeTab.id);
+      setToast(`Bill completed: ${completed.billNumber}`);
+    } catch (error: any) {
+      setToast(error.message || "Failed to complete bill");
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   return (
@@ -349,12 +358,16 @@ export default function BillingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button className="h-11 rounded border border-[var(--border)]" onClick={onHold}>HOLD BILL</button>
               <button className="h-11 rounded border border-[var(--border)]" onClick={() => activeTab && clearTab(activeTab.id)}>CLEAR</button>
-              <button className="h-11 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50" disabled={!canComplete} onClick={onComplete}>COMPLETE & PRINT</button>
+              <button className="h-11 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50" disabled={!canComplete || isCompleting} onClick={onComplete}>
+                {isCompleting ? "COMPLETING..." : "COMPLETE & PRINT"}
+              </button>
             </div>
           </div>
         </div>
         <div className="text-xs text-[var(--text-secondary)]">F2 Scanner · F4 New Bill · F9 Hold · F12 Complete</div>
-        <button className="md:hidden fixed bottom-3 left-3 right-3 h-12 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50" disabled={!canComplete} onClick={onComplete}>COMPLETE & PRINT</button>
+        <button className="md:hidden fixed bottom-3 left-3 right-3 h-12 rounded bg-[var(--gold)] text-black font-semibold disabled:opacity-50" disabled={!canComplete || isCompleting} onClick={onComplete}>
+          {isCompleting ? "COMPLETING..." : "COMPLETE & PRINT"}
+        </button>
       </div>
       <HeldBillsDrawer
         open={drawerOpen}
