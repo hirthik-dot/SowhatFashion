@@ -85,8 +85,8 @@ export default function CatalogueHome({
   const heroMobileSrc = p.heroMobile?.trim() || heroSlides[0];
 
   const categoryTiles = p.categoryTiles || DEFAULT_CATEGORY_TILES;
-  const row1 = categoryTiles.slice(0, 3);
-  const row2 = categoryTiles.slice(3, 5);
+  const row1 = categoryTiles.slice(0, 4);
+  const row2 = categoryTiles.slice(4);
 
   const [bestsellerTab, setBestsellerTab] = useState<BestsellerTab>('week');
   const [email, setEmail] = useState('');
@@ -173,7 +173,7 @@ export default function CatalogueHome({
         <h2 className="text-center text-[11px] uppercase tracking-[0.25em] text-[#111] mb-10 md:mb-14 font-medium">
           SHOP BY CATEGORY
         </h2>
-        <div className="grid grid-cols-3 gap-2 md:gap-4 mb-2 md:mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-2 md:mb-4">
           {row1.map((tile) => (
             <CategoryTile
               key={tile.key}
@@ -183,17 +183,18 @@ export default function CatalogueHome({
             />
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-2 md:gap-4">
-          {row2.map((tile) => (
-            <CategoryTile
-              key={tile.key}
-              label={tile.label.toUpperCase()}
-              href={tile.link}
-              image={tile.image}
-              className="col-span-1"
-            />
-          ))}
-        </div>
+        {row2.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 max-w-5xl mx-auto">
+            {row2.map((tile) => (
+              <CategoryTile
+                key={tile.key}
+                label={tile.label.toUpperCase()}
+                href={tile.link}
+                image={tile.image}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* New arrivals */}
@@ -296,9 +297,9 @@ export default function CatalogueHome({
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-2 md:gap-3">
-              {(saleProducts.length ? saleProducts : products.slice(0, 4)).map((product: any, i: number) => (
+              {(saleProducts.length ? saleProducts : products.slice(0, 4)).map((product: any) => (
                 <Link
-                  key={product._id || i}
+                  key={productListKey(product)}
                   href={`/products/${product.slug}`}
                   className="relative aspect-square bg-[#222] overflow-hidden group"
                 >

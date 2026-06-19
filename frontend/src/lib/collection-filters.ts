@@ -1,3 +1,5 @@
+import { STORE_CATEGORIES, categoryProductLink } from './store-categories';
+
 export type FilterOption = { label: string; value: string; count?: number };
 
 export type FilterGroup = {
@@ -165,10 +167,11 @@ export const COLLECTION_FILTER_GROUPS: FilterGroup[] = [
 
 export const SHOP_CATEGORY_TABS = [
   { label: 'All', href: '/products', match: { category: '', newArrival: false, featured: false, collection: '' } },
-  { label: 'T-Shirts', href: '/products?category=tshirt', match: { category: 'tshirt' } },
-  { label: 'Shirts', href: '/products?category=shirt', match: { category: 'shirt' } },
-  { label: 'Trousers', href: '/products?category=pant', match: { category: 'pant' } },
-  { label: 'Accessories', href: '/collections/accessories', match: { collection: 'accessories' } },
+  ...STORE_CATEGORIES.map((cat) => ({
+    label: cat.name,
+    href: categoryProductLink(cat.slug),
+    match: { category: cat.slug },
+  })),
   { label: 'New In', href: '/products?newArrival=true', match: { newArrival: true } },
 ] as const;
 

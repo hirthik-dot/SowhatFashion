@@ -3,6 +3,7 @@ import { WHATSAPP_NUMBER } from './contact';
 export interface WhatsAppOrderItem {
   name: string;
   size: string;
+  color?: string;
   quantity: number;
   price: number;
 }
@@ -15,19 +16,26 @@ export function buildWhatsAppOrderMessage(params: {
 }): string {
   const { customerName, items, totalAmount, address } = params;
   const itemLines = items
-    .map((item) => `- ${item.name} | Size: ${item.size} | Qty: ${item.quantity} | ₹${item.price}`)
+    .map((item) => {
+      let line = `- ${item.name} | Size: ${item.size}`;
+      if (item.color) line += ` | Color: ${item.color}`;
+      line += ` | Qty: ${item.quantity} | ₹${item.price}`;
+      return line;
+    })
     .join('\n');
 
   return [
     '*New Order — Sowaat Menswear*',
     '',
-    `Name: ${customerName}`,
-    'Items:',
+    `*Customer Name:* ${customerName}`,
+    '',
+    '*Items Ordered:*',
     itemLines,
     '',
-    `Total: ₹${totalAmount}`,
+    `*Total Amount:* ₹${totalAmount}`,
     '',
-    `Address: ${address}`,
+    `*Delivery Address:*`,
+    address,
   ].join('\n');
 }
 

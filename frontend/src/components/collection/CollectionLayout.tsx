@@ -6,6 +6,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import CollectionFilterSidebar from './CollectionFilterSidebar';
 import CollectionProductCard from './CollectionProductCard';
 import { SORT_OPTIONS, SEO_SHOP_LINKS, SHOP_CATEGORY_TABS } from '@/lib/collection-filters';
+import { getCategoryDisplayName } from '@/lib/store-categories';
 import {
   sidebarConfigToFilterGroups,
   getFacetParamKeys,
@@ -100,12 +101,7 @@ function CollectionLayoutInner({
     if (newArrival) return 'NEW ARRIVALS';
     if (featured) return 'FEATURED';
     if (category) {
-      const map: Record<string, string> = {
-        tshirt: 'T-SHIRTS',
-        shirt: 'SHIRTS',
-        pant: 'TROUSERS',
-      };
-      return map[category.toLowerCase()] || category.toUpperCase();
+      return getCategoryDisplayName(category).toUpperCase();
     }
     return 'ALL PRODUCTS';
   }, [collectionTitle, search, newArrival, featured, category]);

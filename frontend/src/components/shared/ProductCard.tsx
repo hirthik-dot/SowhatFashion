@@ -18,7 +18,7 @@ interface ProductCardProps {
     images: string[];
     price: number;
     discountPrice: number;
-    sizes: string[];
+    sizes?: string[];
     colors?: ProductColor[];
     isNewArrival: boolean;
     category: string;
@@ -27,9 +27,10 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, variant = 'default' }: ProductCardProps) {
+  const sizes = product.sizes || [];
   const addItem = useCartStore((s) => s.addItem);
   const { wishlist, toggleWishlist, isLoggedIn, openAuthModal } = useAuthStore();
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
+  const [selectedSize, setSelectedSize] = useState(sizes[0] || 'M');
   const [selectedColorIndex, setSelectedColorIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -165,7 +166,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
           {/* Add to Cart Overlay Desktop */}
           <div className="product-card-overlay absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 hidden md:block opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             <div className="flex gap-1.5 mb-3">
-              {product.sizes.map((size) => (
+              {sizes.map((size) => (
                 <button
                   key={size}
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedSize(size); }}
@@ -219,7 +220,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
           {/* Mobile Actions: always visible Add to Cart below price */}
           <div className="md:hidden mt-3 pt-2 border-t border-[var(--border)]">
             <div className="flex flex-wrap gap-2 mb-2">
-              {product.sizes.map((size) => (
+              {sizes.map((size) => (
                 <button
                   key={size}
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedSize(size); }}

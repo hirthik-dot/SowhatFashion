@@ -22,6 +22,7 @@ export const metadata: Metadata = {
 };
 
 import AuthProvider from '@/components/shared/AuthProvider';
+import FloatingWhatsApp from '@/components/shared/FloatingWhatsApp';
 
 export default function RootLayout({
   children,
@@ -33,6 +34,7 @@ export default function RootLayout({
       <body className={`${inter.className} ${dmSans.variable} ${playfair.variable} ${cormorant.variable} bg-[var(--bg)] min-h-screen text-[var(--text-primary)] antialiased overflow-x-hidden w-full`}>
         <AuthProvider>
           {children}
+          <FloatingWhatsApp />
         </AuthProvider>
       </body>
     </html>

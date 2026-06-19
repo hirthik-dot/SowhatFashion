@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import Category from '../models/Category';
 import authMiddleware from '../middleware/authMiddleware';
+import { ensureStoreCategories } from '../lib/ensureStoreCategories';
 
 const router = Router();
 
 // GET /api/categories — public (all active categories with hierarchy)
 router.get('/', async (_req: Request, res: Response) => {
   try {
+    await ensureStoreCategories();
     const categories = await Category.find({ isActive: true }).sort({ order: 1, name: 1 });
 
     // Build hierarchy: top-level + children
@@ -37,6 +39,7 @@ router.get('/', async (_req: Request, res: Response) => {
 // GET /api/categories/all — admin (flat list, includes inactive)
 router.get('/all', authMiddleware, async (_req: Request, res: Response) => {
   try {
+    await ensureStoreCategories();
     const categories = await Category.find().sort({ order: 1, name: 1 });
     res.json(categories);
   } catch (error) {

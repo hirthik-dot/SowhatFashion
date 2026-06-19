@@ -24,7 +24,7 @@ const CategorySchema = new Schema<ICategory>(
 );
 
 CategorySchema.pre('save', function (next) {
-  if (this.isModified('name') || !this.slug) {
+  if (!this.slug || (this.isModified('name') && !this.isModified('slug'))) {
     this.slug = slugify(this.name, { lower: true, strict: true });
   }
   next();

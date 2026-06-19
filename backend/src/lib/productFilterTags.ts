@@ -1,4 +1,5 @@
 import type { ISidebarFilter } from '../models/SidebarConfig';
+import { normalizeCategorySlug } from './storeCategories';
 
 export type FilterTagsMap = Record<string, string[]>;
 
@@ -22,7 +23,8 @@ export function computeAutoFilterTags(
   const out: FilterTagsMap = {};
 
   if (product.category) {
-    out.category = [String(product.category).trim().toLowerCase().replace(/s$/i, '')];
+    const normalized = normalizeCategorySlug(product.category);
+    out.category = [normalized || String(product.category).trim().toLowerCase()];
   }
 
   if (product.sizes?.length) {

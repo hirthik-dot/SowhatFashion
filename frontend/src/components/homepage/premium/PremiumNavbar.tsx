@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { User as UserIcon } from 'lucide-react';
 import { userInitials } from '@/lib/auth-user';
 
-const CLOTHING_CATEGORIES = new Set(['tshirt', 'shirt', 'pant']);
+const CLOTHING_CATEGORIES = new Set(['tshirt', 'shirt', 'pant', 'track', 'shorts', 'innerwears', 'footwears']);
 
 const NAV_ITEMS = [
   { label: 'NEW IN', href: '/products?newArrival=true', mega: false },
@@ -57,7 +57,7 @@ function MegaMenuPanel({
     <div className="absolute top-full left-0 right-0 bg-white border-b border-[#E8E4DF] shadow-lg z-50 animate-fade-in">
       <div className="max-w-7xl mx-auto px-8 py-10 flex gap-16">
         <div className="flex gap-12 flex-1">
-          {clothingCats.slice(0, 4).map((cat) => (
+          {clothingCats.map((cat) => (
             <div key={cat.slug} className="min-w-[140px]">
               <h4 className="text-[11px] uppercase tracking-[0.2em] text-[#111] mb-4 font-semibold">{cat.name}</h4>
               <ul className="space-y-2">
@@ -91,8 +91,12 @@ function MegaMenuPanel({
             <h4 className="text-[11px] uppercase tracking-[0.2em] text-[#111] mb-4 font-semibold">Shop</h4>
             <ul className="space-y-2 text-sm text-[#6B6B6B]">
               <li><Link href="/products?category=shirt" className="premium-link hover:text-[#111]" onClick={onClose}>Shirts</Link></li>
-              <li><Link href="/products?category=pant" className="premium-link hover:text-[#111]" onClick={onClose}>Trousers</Link></li>
+              <li><Link href="/products?category=pant" className="premium-link hover:text-[#111]" onClick={onClose}>Pants</Link></li>
               <li><Link href="/products?category=tshirt" className="premium-link hover:text-[#111]" onClick={onClose}>T-Shirts</Link></li>
+              <li><Link href="/products?category=track" className="premium-link hover:text-[#111]" onClick={onClose}>Track</Link></li>
+              <li><Link href="/products?category=shorts" className="premium-link hover:text-[#111]" onClick={onClose}>Shorts</Link></li>
+              <li><Link href="/products?category=innerwears" className="premium-link hover:text-[#111]" onClick={onClose}>Innerwears</Link></li>
+              <li><Link href="/products?category=footwears" className="premium-link hover:text-[#111]" onClick={onClose}>Footwears</Link></li>
               <li><Link href="/offers" className="premium-link hover:text-[#111]" onClick={onClose}>Sale</Link></li>
             </ul>
           </div>
@@ -221,14 +225,14 @@ export default function PremiumNavbar({ overHero = true }: { overHero?: boolean 
           </div>
 
           <nav
-            className="hidden md:flex items-center justify-center gap-8 flex-1"
+            className="hidden md:flex items-center justify-center gap-8 flex-1 h-full"
             onMouseLeave={() => setMegaOpen(false)}
           >
             {NAV_ITEMS.map((item) => (
               <div
                 key={item.label}
-                className="relative"
-                onMouseEnter={() => item.mega && setMegaOpen(true)}
+                className="relative h-full flex items-center"
+                onMouseEnter={() => setMegaOpen(item.mega || false)}
               >
                 <Link
                   href={item.href}

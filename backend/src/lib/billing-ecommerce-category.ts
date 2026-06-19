@@ -10,6 +10,10 @@ export function toEcommerceCategorySlug(name: string): string {
   if (normalized.includes('tshirt')) return 'tshirt';
   if (normalized === 'shirts' || normalized === 'shirt') return 'shirt';
   if (normalized.includes('pant') || normalized.includes('trouser')) return 'pant';
+  if (normalized.includes('track')) return 'track';
+  if (normalized.includes('short')) return 'shorts';
+  if (normalized.includes('innerwear')) return 'innerwears';
+  if (normalized.includes('footwear') || normalized.includes('shoe')) return 'footwears';
 
   const slug = slugify(String(name || '').trim(), { lower: true, strict: true });
   return slug.replace(/s$/i, '') || 'other';

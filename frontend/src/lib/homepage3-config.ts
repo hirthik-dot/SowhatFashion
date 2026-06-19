@@ -1,4 +1,10 @@
 import { INSTAGRAM_URL } from './contact';
+import {
+  STORE_CATEGORIES,
+  normalizeCategorySlug,
+  categoryProductLink,
+  type StoreCategorySlug,
+} from './store-categories';
 
 /** Default Homepage 3 (catalogue / premium) image slots */
 export type CategoryTileSlot = {
@@ -36,13 +42,45 @@ export type Homepage3Placeholders = {
 const UNSPLASH = (id: string, w = 1200) =>
   `https://images.unsplash.com/${id}?w=${w}&q=80`;
 
-export const DEFAULT_CATEGORY_TILES: CategoryTileSlot[] = [
-  { key: 'shirts', label: 'Shirts', link: '/collections/shirts', image: UNSPLASH('photo-1596755094514-f87e34085b2c'), alt: 'Shirts collection' },
-  { key: 'trousers', label: 'Trousers', link: '/collections/trousers', image: UNSPLASH('photo-1473966968600-fa801b869a1a'), alt: 'Trousers collection' },
-  { key: 'outerwear', label: 'Outerwear', link: '/collections/outerwear', image: UNSPLASH('photo-1551028711-22b038b0420f'), alt: 'Outerwear collection' },
-  { key: 'accessories', label: 'Accessories', link: '/collections/accessories', image: UNSPLASH('photo-1611652022419-a9419f74343d'), alt: 'Accessories' },
-  { key: 'new-arrivals', label: 'New Arrivals', link: '/products?newArrival=true', image: UNSPLASH('photo-1617137968427-85924c800a22'), alt: 'New arrivals' },
-];
+const TILE_IMAGES: Record<StoreCategorySlug, string> = {
+  shirt: UNSPLASH('photo-1596755094514-f87e34085b2c'),
+  pant: UNSPLASH('photo-1473966968600-fa801b869a1a'),
+  tshirt: UNSPLASH('photo-1521572163474-6864f9cf17ab'),
+  track: UNSPLASH('photo-1556821840-3a63f95609a7'),
+  shorts: UNSPLASH('photo-1591195853828-11db59a1f06b'),
+  innerwears: UNSPLASH('photo-1618354691373-d8519625a276'),
+  footwears: UNSPLASH('photo-1549298916-b41d501d3772'),
+};
+
+export const DEFAULT_CATEGORY_TILES: CategoryTileSlot[] = STORE_CATEGORIES.map((cat) => ({
+  key: cat.slug,
+  label: cat.name,
+  link: categoryProductLink(cat.slug),
+  image: TILE_IMAGES[cat.slug],
+  alt: `${cat.name} collection`,
+}));
+
+function syncCategoryTiles(stored?: CategoryTileSlot[] | null): CategoryTileSlot[] {
+  const bySlug = new Map<StoreCategorySlug, CategoryTileSlot>();
+
+  for (const tile of stored || []) {
+    const slug = normalizeCategorySlug(tile.key);
+    if (!slug) continue;
+    bySlug.set(slug, { ...tile, key: slug });
+  }
+
+  return DEFAULT_CATEGORY_TILES.map((def) => {
+    const existing = bySlug.get(def.key as StoreCategorySlug);
+    if (!existing) return def;
+    return {
+      ...def,
+      label: existing.label || def.label,
+      link: existing.link || def.link,
+      image: existing.image || def.image,
+      alt: existing.alt || def.alt,
+    };
+  });
+}
 
 export const DEFAULT_HOMEPAGE3_PLACEHOLDERS: Homepage3Placeholders = {
   heroDesktop: UNSPLASH('photo-1490578474895-699cd4e2cf47', 1920),
@@ -91,11 +129,11 @@ function normalizeInstagramPosts(stored?: Homepage3Placeholders | null): Instagr
 }
 
 export function mergeHomepage3Placeholders(stored?: Homepage3Placeholders | null): Homepage3Placeholders {
-  if (!stored) return { ...DEFAULT_HOMEPAGE3_PLACEHOLDERS, categoryTiles: [...DEFAULT_CATEGORY_TILES] };
+  if (!stored) return { ...DEFAULT_HOMEPAGE3_PLACEHOLDERS, categoryTiles: syncCategoryTiles() };
   return {
     ...DEFAULT_HOMEPAGE3_PLACEHOLDERS,
     ...stored,
-    categoryTiles: stored.categoryTiles?.length ? stored.categoryTiles : DEFAULT_CATEGORY_TILES,
+    categoryTiles: syncCategoryTiles(stored.categoryTiles),
     carouselImages: stored.carouselImages?.length
       ? stored.carouselImages
       : stored.heroDesktop

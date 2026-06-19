@@ -5,6 +5,7 @@ import SidebarConfig from '../models/SidebarConfig';
 import authMiddleware from '../middleware/authMiddleware';
 import { mergeFilterTags, plainFilterTags, type FilterTagsMap } from '../lib/productFilterTags';
 import { buildFacetFilterCondition, collectFacetFiltersFromQuery } from '../lib/productFilterQuery';
+import { buildCategoryFilterCondition, normalizeCategorySlug } from '../lib/storeCategories';
 import {
   applyEcommerceVariant,
   expandProductsForEcommerce,
@@ -48,6 +49,10 @@ function filterTagsToMap(tags: FilterTagsMap): Map<string, string[]> {
 }
 
 async function applyFilterTagsToBody(body: Record<string, unknown>) {
+  if (typeof body.category === 'string' && body.category.trim()) {
+    const normalized = normalizeCategorySlug(body.category);
+    if (normalized) body.category = normalized;
+  }
   const config = await SidebarConfig.findOne();
   const sidebarFilters = config?.filters || [];
   const merged = mergeFilterTags(
@@ -77,11 +82,7 @@ router.get('/', async (req: Request, res: Response) => {
       filter.isActive = true;
     }
     if (category) {
-      // Normalize: strip trailing 's' for plurals, case-insensitive match
-      let catVal = (category as string).trim();
-      // 'tshirts' → 'tshirt', 'shirts' → 'shirt', 'pants' → 'pant'
-      catVal = catVal.replace(/s$/i, '');
-      filter.category = { $regex: new RegExp(`^${catVal}$`, 'i') };
+      Object.assign(filter, buildCategoryFilterCondition(category as string));
     }
     if (subCategory) {
       filter.subCategory = { $regex: new RegExp(`^${(subCategory as string).trim()}$`, 'i') };
@@ -141,7 +142,10 @@ router.get('/', async (req: Request, res: Response) => {
     const skip = (pageNum - 1) * limitNum;
 
     let products = await Product.find(filter).sort(sortObj).lean();
-    let expandedProducts = await expandProductsForEcommerce(products);
+    const expandVariants = req.query.expand !== 'false';
+    let expandedProducts = expandVariants
+      ? await expandProductsForEcommerce(products)
+      : products;
 
     // Post-query discount filter (computed field)
     if (discount) {
@@ -204,7 +208,8 @@ router.get('/:slug', async (req: Request, res: Response) => {
         return res.json(applyEcommerceVariant(product, variants[0], false));
       }
       if (variants.length > 1) {
-        return res.status(404).json({ message: 'Product not found' });
+        // Base slug (hero links, bookmarks): default to lowest in-stock price variant
+        return res.json(applyEcommerceVariant(product, variants[0], false));
       }
     }
 

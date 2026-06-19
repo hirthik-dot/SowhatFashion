@@ -1,5 +1,7 @@
-export function formatPrice(price: number): string {
-  return `₹${price.toLocaleString('en-IN')}`;
+export function formatPrice(price: number | null | undefined): string {
+  const value = Number(price);
+  if (!Number.isFinite(value)) return '—';
+  return `₹${value.toLocaleString('en-IN')}`;
 }
 
 /** Stable React key for product lists (handles multi-price ecommerce variants). */
@@ -16,9 +18,22 @@ export function productListKey(product: {
   return String(product._id ?? '');
 }
 
+/** One entry per MongoDB product (drops duplicate price-variant rows). */
+export function dedupeProductsById<T extends { _id?: string }>(products: T[]): T[] {
+  const seen = new Set<string>();
+  return products.filter((product) => {
+    const id = String(product._id ?? '');
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 export function calculateDiscount(price: number, discountPrice: number): number {
-  if (!discountPrice || discountPrice >= price) return 0;
-  return Math.round(((price - discountPrice) / price) * 100);
+  const base = Number(price);
+  const discounted = Number(discountPrice);
+  if (!Number.isFinite(base) || !Number.isFinite(discounted) || discounted <= 0 || discounted >= base) return 0;
+  return Math.round(((base - discounted) / base) * 100);
 }
 
 export function cn(...classes: (string | undefined | null | false)[]): string {

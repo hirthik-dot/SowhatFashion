@@ -4,6 +4,7 @@ dotenv.config();
 import mongoose from 'mongoose';
 import connectDB from './lib/db';
 import Category from './models/Category';
+import { STORE_CATEGORIES } from './lib/storeCategories';
 
 const seedCategories = async () => {
   await connectDB();
@@ -17,11 +18,16 @@ const seedCategories = async () => {
     process.exit(0);
   }
 
+  const topLevel = STORE_CATEGORIES.map((cat) => ({
+    name: cat.name,
+    slug: cat.slug,
+    parentSlug: null,
+    megaDropdownLabel: cat.name,
+    order: cat.order,
+  }));
+
   const categories = [
-    // Top-level categories
-    { name: 'T-Shirts', slug: 'tshirt', parentSlug: null, megaDropdownLabel: 'T-Shirts', order: 1 },
-    { name: 'Shirts', slug: 'shirt', parentSlug: null, megaDropdownLabel: 'Shirts', order: 2 },
-    { name: 'Pants', slug: 'pant', parentSlug: null, megaDropdownLabel: 'Pants', order: 3 },
+    ...topLevel,
 
     // T-Shirt subcategories
     { name: 'Round Neck', slug: 'round-neck', parentSlug: 'tshirt', megaDropdownLabel: 'By Neck Type', order: 1 },

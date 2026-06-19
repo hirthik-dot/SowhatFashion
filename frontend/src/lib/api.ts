@@ -25,10 +25,13 @@ export const getProducts = async (params?: string) => {
 };
 
 export const getProductBySlug = async (slug: string) => {
-  const res = await fetch(`${API}/api/products/${slug}`, {
+  const res = await fetch(`${API}/api/products/${encodeURIComponent(slug)}`, {
     next: { revalidate: 60 },
   });
-  return res.json();
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data?._id) return null;
+  return data;
 };
 
 export const getAllProductSlugs = async () => {
@@ -193,8 +196,10 @@ export const adminMe = async () => {
 };
 
 // Admin Products
-export const adminGetProducts = async () => {
-  const res = await fetch(`${API}/api/products?limit=1000`, {
+export const adminGetProducts = async (options?: { expand?: boolean }) => {
+  const params = new URLSearchParams({ limit: '1000' });
+  if (options?.expand === false) params.set('expand', 'false');
+  const res = await fetch(`${API}/api/products?${params}`, {
     credentials: 'include',
   });
   return res.json();

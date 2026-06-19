@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, productListKey } from '@/lib/utils';
 import { IconClock, IconSparkle } from '@/components/icons/PremiumIcons';
 
 type Offer = {
@@ -233,11 +233,11 @@ function TemplateSpotlight({ offer }: { offer: Offer }) {
         </h2>
         {offer.subtitle && <p className="text-center text-[var(--text-secondary)] text-sm mt-2">{offer.subtitle}</p>}
         <div className="flex justify-center gap-2 md:gap-3 mt-6">
-          {prods.slice(0, 3).map((p, i) => {
+          {prods.slice(0, 3).map((p) => {
             const src = p.images?.[0] || '/placeholder.jpg';
             const price = p.discountPrice && p.discountPrice < (p.price || 0) ? p.discountPrice : p.price || 0;
             return (
-              <div key={p._id || i} className="w-16 md:w-20 shrink-0 rounded-lg overflow-hidden border border-[var(--border)] bg-white">
+              <div key={productListKey(p)} className="w-16 md:w-20 shrink-0 rounded-lg overflow-hidden border border-[var(--border)] bg-white">
                 <div className="relative aspect-square w-full">
                   <Image src={src} alt="" fill className="object-cover" sizes="80px" />
                 </div>

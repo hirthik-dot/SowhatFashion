@@ -13,11 +13,17 @@ import { WHATSAPP_LINK } from '@/lib/contact';
 
 export default function ProductDetailClient({ product }: { product: any }) {
   const colors: ProductColor[] = product.colors || [];
+  const sizes: string[] = product.sizes || [];
+  const images: string[] = product.images || [];
+  const price = Number.isFinite(Number(product.price)) ? Number(product.price) : 0;
+  const discountPrice = Number.isFinite(Number(product.discountPrice)) ? Number(product.discountPrice) : 0;
+  const stock = Number(product.stock) || 0;
+  const productName = String(product.name || product.billingName || 'Product').trim() || 'Product';
   const hasColors = colors.length > 0;
 
   const [selectedColorIndex, setSelectedColorIndex] = useState(0);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || '');
+  const [selectedSize, setSelectedSize] = useState(sizes[0] || '');
   const [quantity, setQuantity] = useState(1);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
@@ -28,8 +34,8 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const [currentUrl, setCurrentUrl] = useState('');
 
   const displayImages = useMemo(
-    () => getDisplayImages(product.images || [], colors, selectedColorIndex),
-    [product.images, colors, selectedColorIndex]
+    () => getDisplayImages(images, colors, selectedColorIndex),
+    [images, colors, selectedColorIndex]
   );
 
   useEffect(() => {
@@ -54,13 +60,13 @@ export default function ProductDetailClient({ product }: { product: any }) {
     setTouchStart(0); setTouchEnd(0);
   };
 
-  const discount = calculateDiscount(product.price, product.discountPrice);
+  const discount = calculateDiscount(price, discountPrice);
   const hasDiscount = discount > 0;
-  const isOutOfStock = product.stock <= 0;
+  const isOutOfStock = stock <= 0;
   const selectedColor = colors[selectedColorIndex];
 
   const handleAddToCart = () => {
-    if (!selectedSize) {
+    if (sizes.length > 0 && !selectedSize) {
       alert('Please select a size');
       return;
     }
@@ -71,13 +77,13 @@ export default function ProductDetailClient({ product }: { product: any }) {
     addItem(
       {
         productId: product._id,
-        name: product.name,
-        image: displayImages[0] || product.images[0] || '',
+        name: productName,
+        image: displayImages[0] || images[0] || '',
         size: selectedSize,
         color: selectedColor?.name,
         colorHex: selectedColor?.hex,
-        price: product.price,
-        discountPrice: product.discountPrice,
+        price,
+        discountPrice,
       },
       quantity
     );
@@ -107,7 +113,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
                   selectedImage === i ? 'border-[var(--gold)] opacity-100' : 'border-transparent opacity-60 hover:opacity-100'
                 }`}
               >
-                <Image src={img} alt={`${product.name} ${i+1}`} fill className="object-cover" />
+                <Image src={img} alt={`${productName} ${i + 1}`} fill className="object-cover" />
               </button>
             ))
           ) : (
@@ -123,8 +129,8 @@ export default function ProductDetailClient({ product }: { product: any }) {
           onTouchEnd={handleTouchEnd}
         >
           <Image
-            src={displayImages[selectedImage] || product.images[0] || '/placeholder.jpg'}
-            alt={product.name}
+            src={displayImages[selectedImage] || images[0] || '/placeholder.jpg'}
+            alt={productName}
             fill
             className="object-cover"
             priority
@@ -146,7 +152,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
           {product.category}
         </div>
         <h1 className="text-3xl md:text-5xl font-playfair font-bold leading-tight mb-4">
-          {product.name}
+          {productName}
         </h1>
         
         <div className="flex items-center gap-4 mb-8">
@@ -203,27 +209,29 @@ export default function ProductDetailClient({ product }: { product: any }) {
             )}
 
             {/* Size Selector */}
-            <div className="mb-8 border-t border-[var(--border)] pt-8">
-              <div className="flex justify-between items-center mb-4">
-                <span className="font-semibold uppercase tracking-wider text-sm">Select Size</span>
-                <button className="text-[var(--text-secondary)] text-sm underline hover:text-[var(--gold)]">Size Guide</button>
+            {sizes.length > 0 && (
+              <div className="mb-8 border-t border-[var(--border)] pt-8">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="font-semibold uppercase tracking-wider text-sm">Select Size</span>
+                  <button className="text-[var(--text-secondary)] text-sm underline hover:text-[var(--gold)]">Size Guide</button>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {sizes.map((size: string) => (
+                    <button
+                      key={size}
+                      onClick={() => setSelectedSize(size)}
+                      className={`nav-link w-12 h-12 flex items-center justify-center border transition-all rounded font-medium ${
+                        selectedSize === size
+                          ? 'border-[var(--gold)] bg-[var(--gold-light)] text-black'
+                          : 'border-[var(--border)] hover:border-black text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-3">
-                {product.sizes.map((size: string) => (
-                  <button
-                    key={size}
-                    onClick={() => setSelectedSize(size)}
-                    className={`nav-link w-12 h-12 flex items-center justify-center border transition-all rounded font-medium ${
-                      selectedSize === size
-                        ? 'border-[var(--gold)] bg-[var(--gold-light)] text-black'
-                        : 'border-[var(--border)] hover:border-black text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
+            )}
 
             {/* Quantity */}
             <div className="mb-8">
@@ -234,7 +242,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
                   <span className="px-4 font-semibold w-12 text-center">{quantity}</span>
                   <button onClick={() => setQuantity(quantity + 1)} className="px-4 py-3 hover:bg-gray-50 text-[var(--text-secondary)] transition-colors">+</button>
                 </div>
-                <p className="text-xs text-[var(--text-secondary)]">Only {product.stock} left in stock</p>
+                <p className="text-xs text-[var(--text-secondary)]">Only {stock} left in stock</p>
               </div>
             </div>
 

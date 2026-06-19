@@ -192,7 +192,8 @@ export default function AdminCategoriesPage() {
 
         {/* Info box */}
         <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-          <strong>💡 Tip:</strong> Subcategories you create here will automatically appear in the <strong>Product Add/Edit form</strong> as subcategory options, and in the <strong>Mega Dropdown</strong> navigation on the storefront.
+          <strong>Tip:</strong> Top-level categories here match the homepage category tiles (Shirts, Pants, T-Shirts, Track, Shorts, Innerwears, Footwears).
+          Missing categories are added automatically when this page loads. Subcategories appear in the product form and mega dropdown navigation.
         </div>
 
         {/* Add/Edit Modal */}

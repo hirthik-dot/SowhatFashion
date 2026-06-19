@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { adminGetProducts, adminUpdateSettings, adminUploadVideo } from '@/lib/api';
 import { isInstagramReelUrl, type HeroMediaType } from '@/lib/hero-media';
+import { dedupeProductsById, productListKey } from '@/lib/utils';
 
 export default function HeroVideoProductEditor({
   settings,
@@ -16,7 +17,7 @@ export default function HeroVideoProductEditor({
   );
   const [heroVideoUrl, setHeroVideoUrl] = useState(settings?.heroVideoUrl || '');
   const [heroLinkedProductId, setHeroLinkedProductId] = useState(
-    settings?.heroLinkedProductId || ''
+    settings?.heroLinkedProductId ? String(settings.heroLinkedProductId) : ''
   );
   const [products, setProducts] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -28,12 +29,14 @@ export default function HeroVideoProductEditor({
   useEffect(() => {
     setHeroMediaType(settings?.heroMediaType === 'video' ? 'video' : 'image');
     setHeroVideoUrl(settings?.heroVideoUrl || '');
-    setHeroLinkedProductId(settings?.heroLinkedProductId || '');
+    setHeroLinkedProductId(
+      settings?.heroLinkedProductId ? String(settings.heroLinkedProductId) : ''
+    );
   }, [settings]);
 
   useEffect(() => {
-    adminGetProducts()
-      .then((data) => setProducts(data?.products || []))
+    adminGetProducts({ expand: false })
+      .then((data) => setProducts(dedupeProductsById(data?.products || [])))
       .catch(() => setProducts([]))
       .finally(() => setLoadingProducts(false));
   }, []);
@@ -90,6 +93,9 @@ export default function HeroVideoProductEditor({
   };
 
   const instagramBlocked = isInstagramReelUrl(heroVideoUrl);
+  const linkedProductMissing =
+    Boolean(heroLinkedProductId) &&
+    !products.some((p) => String(p._id) === String(heroLinkedProductId));
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-xl border border-[var(--border)] shadow-sm mt-8">
@@ -212,13 +218,23 @@ export default function HeroVideoProductEditor({
           className="w-full border border-[var(--border)] px-3 py-2.5 text-sm bg-white"
         >
           <option value="">None — link to all products</option>
+          {linkedProductMissing && (
+            <option value={heroLinkedProductId}>
+              {settings?.heroLinkedProductSlug || 'Saved product'} (inactive or removed)
+            </option>
+          )}
           {products.map((product) => (
-            <option key={product._id} value={product._id}>
+            <option key={productListKey(product)} value={String(product._id)}>
               {product.name}
               {formatPrice(product) ? ` — ${formatPrice(product)}` : ''}
             </option>
           ))}
         </select>
+        {linkedProductMissing && (
+          <p className="text-xs text-amber-700">
+            The saved linked product is no longer in the catalogue. Pick another product or choose None.
+          </p>
+        )}
       </div>
 
       <button

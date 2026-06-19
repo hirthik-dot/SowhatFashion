@@ -13,6 +13,7 @@ import {
   adminReorderOffers,
   adminToggleOfferField,
 } from '@/lib/api';
+import { dedupeProductsById, productListKey } from '@/lib/utils';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -67,9 +68,11 @@ export default function AdminOffersPage() {
     }
     const id = setTimeout(async () => {
       try {
-        const res = await fetch(`${API}/api/products?search=${encodeURIComponent(productSearch)}&limit=25`);
+        const res = await fetch(
+          `${API}/api/products?search=${encodeURIComponent(productSearch)}&limit=25&expand=false`
+        );
         const data = await res.json();
-        setSearchHits(data.products || []);
+        setSearchHits(dedupeProductsById(data.products || []));
       } catch {
         setSearchHits([]);
       }
@@ -505,7 +508,7 @@ export default function AdminOffersPage() {
                   <div className="border rounded max-h-40 overflow-y-auto mb-3 bg-white shadow-sm">
                     {searchHits.map((p) => (
                       <button
-                        key={p._id}
+                        key={productListKey(p)}
                         type="button"
                         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b last:border-0"
                         onClick={() => addProduct(p)}
@@ -517,7 +520,7 @@ export default function AdminOffersPage() {
                 )}
                 <div className="space-y-2">
                   {selectedProducts.map((p) => (
-                    <div key={p._id} className="flex items-center gap-3 border rounded px-3 py-2">
+                    <div key={productListKey(p)} className="flex items-center gap-3 border rounded px-3 py-2">
                       <div className="relative w-10 h-10 rounded overflow-hidden bg-gray-100 shrink-0">
                         <Image src={p.images?.[0] || '/placeholder.jpg'} alt="" fill className="object-cover" sizes="40px" />
                       </div>

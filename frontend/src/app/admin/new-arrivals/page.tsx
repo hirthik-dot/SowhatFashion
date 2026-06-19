@@ -26,6 +26,7 @@ import {
   adminReorderNewArrivals,
   adminToggleNewArrival,
 } from '@/lib/api';
+import { dedupeProductsById, productListKey } from '@/lib/utils';
 import Image from 'next/image';
 
 function SortableRow({
@@ -110,9 +111,11 @@ export default function AdminNewArrivalsPage() {
     const t = setTimeout(async () => {
       try {
         const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-        const res = await fetch(`${API}/api/products?search=${encodeURIComponent(search)}&limit=30`);
+        const res = await fetch(
+          `${API}/api/products?search=${encodeURIComponent(search)}&limit=30&expand=false`
+        );
         const data = await res.json();
-        setSearchResults(data.products || []);
+        setSearchResults(dedupeProductsById(data.products || []));
       } catch {
         setSearchResults([]);
       }
@@ -253,7 +256,7 @@ export default function AdminNewArrivalsPage() {
                   const isSel = selected.has(String(p._id));
                   return (
                     <label
-                      key={p._id}
+                      key={productListKey(p)}
                       className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-50 ${inList ? 'opacity-50' : ''}`}
                     >
                       <input

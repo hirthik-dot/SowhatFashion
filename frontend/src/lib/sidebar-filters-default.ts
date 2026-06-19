@@ -1,4 +1,5 @@
 import { sidebarConfigToFilterGroups } from '@/lib/sidebar-filters';
+import { STORE_CATEGORY_FILTER_OPTIONS } from '@/lib/store-categories';
 
 /** Default sidebar shape when API config is empty (matches backend catalogue defaults). */
 export const DEFAULT_FILTER_GROUPS = sidebarConfigToFilterGroups([
@@ -47,11 +48,7 @@ export const DEFAULT_FILTER_GROUPS = sidebarConfigToFilterGroups([
     filterKey: 'category',
     isVisible: true,
     order: 3,
-    options: [
-      { label: 'T-Shirts', value: 'tshirt' },
-      { label: 'Shirts', value: 'shirt' },
-      { label: 'Pants', value: 'pant' },
-    ],
+    options: STORE_CATEGORY_FILTER_OPTIONS,
   },
   {
     id: 'discount',
