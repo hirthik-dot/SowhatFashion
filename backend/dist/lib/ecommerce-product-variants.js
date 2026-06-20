@@ -11,6 +11,7 @@ exports.expandPopulatedProductsForEcommerce = expandPopulatedProductsForEcommerc
 const mongoose_1 = __importDefault(require("mongoose"));
 const StockItem_1 = __importDefault(require("../models/StockItem"));
 const stock_inventory_counts_1 = require("./stock-inventory-counts");
+const product_color_variants_1 = require("./product-color-variants");
 const variantSlugSuffix = (price) => `p${Math.round(Number(price || 0))}`;
 const buildPriceVariantSlug = (baseSlug, sellingPrice) => `${String(baseSlug || '').trim()}-${variantSlugSuffix(sellingPrice)}`;
 exports.buildPriceVariantSlug = buildPriceVariantSlug;
@@ -109,10 +110,11 @@ function applyEcommerceVariant(product, variant, splitListing) {
 }
 const normalizeProduct = (product) => typeof product?.toObject === 'function' ? product.toObject() : { ...product };
 async function expandProductsForEcommerce(products) {
-    const productIds = products.map((product) => product._id).filter(Boolean);
+    const withColorVariants = await (0, product_color_variants_1.attachVariantsForListing)(products);
+    const productIds = withColorVariants.map((product) => product._id).filter(Boolean);
     const variantsByProduct = await getEcommerceVariantsByProducts(productIds);
     const expanded = [];
-    for (const product of products) {
+    for (const product of withColorVariants) {
         const variants = variantsByProduct.get(String(product._id)) || [];
         const inStockVariants = variants.filter((variant) => variant.stock > 0);
         if (inStockVariants.length <= 1) {

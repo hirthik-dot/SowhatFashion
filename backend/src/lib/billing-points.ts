@@ -170,6 +170,88 @@ export const applyPointsLedger = async (params: {
   return newBalance;
 };
 
+/** Reconcile loyalty points when a completed bill is edited. */
+export const adjustPointsOnBillEdit = async (params: {
+  oldPhone: string;
+  newPhone: string;
+  customerName: string;
+  oldPointsEarned: number;
+  oldPointsRedeemed: number;
+  newPointsEarned: number;
+  newPointsRedeemed: number;
+  billId: unknown;
+  billNumber: string;
+  createdBy?: unknown;
+  BillingPointsAccount: any;
+  BillingPointsLedger: any;
+}): Promise<number> => {
+  const oldNormalized = normalizeBillingPhone(params.oldPhone);
+  const newNormalized = normalizeBillingPhone(params.newPhone);
+  const oldNet = params.oldPointsEarned - params.oldPointsRedeemed;
+  const newNet = params.newPointsEarned - params.newPointsRedeemed;
+
+  const applyNetDelta = async (
+    phone: string,
+    customerName: string,
+    netDelta: number,
+    note: string
+  ): Promise<number> => {
+    if (!phone || phone.length < 10) return 0;
+    if (netDelta === 0) {
+      const acc = await params.BillingPointsAccount.findOne({ phone }).lean();
+      return Number(acc?.balance || 0);
+    }
+
+    await getOrCreatePointsAccount(phone, customerName, params.BillingPointsAccount);
+    const account = await params.BillingPointsAccount.findOne({ phone });
+    if (!account) return 0;
+
+    const previousBalance = Number(account.balance || 0);
+    const newBalance = Math.max(0, previousBalance + netDelta);
+    account.balance = newBalance;
+    if (customerName) account.customerName = customerName;
+    await account.save();
+
+    await params.BillingPointsLedger.create({
+      phone,
+      type: 'adjust',
+      points: netDelta,
+      bill: params.billId,
+      billNumber: params.billNumber,
+      balanceAfter: newBalance,
+      createdBy: params.createdBy,
+      note,
+    });
+
+    return newBalance;
+  };
+
+  if (oldNormalized === newNormalized) {
+    const netDelta = newNet - oldNet;
+    return applyNetDelta(
+      newNormalized,
+      params.customerName,
+      netDelta,
+      `Bill edit: earned ${params.oldPointsEarned}→${params.newPointsEarned}, redeemed ${params.oldPointsRedeemed}→${params.newPointsRedeemed}`
+    );
+  }
+
+  if (oldNormalized.length >= 10 && oldNet !== 0) {
+    await applyNetDelta(oldNormalized, '', -oldNet, 'Bill edit: points reversed (customer phone changed)');
+  }
+
+  if (newNormalized.length >= 10) {
+    return applyNetDelta(
+      newNormalized,
+      params.customerName,
+      newNet,
+      'Bill edit: points applied (customer phone changed)'
+    );
+  }
+
+  return 0;
+};
+
 export const clawbackPointsOnReturn = async (params: {
   phone: string;
   refundAmount: number;

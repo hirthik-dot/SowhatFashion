@@ -47,7 +47,7 @@ const CategorySchema = new mongoose_1.Schema({
     isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 CategorySchema.pre('save', function (next) {
-    if (this.isModified('name') || !this.slug) {
+    if (!this.slug || (this.isModified('name') && !this.isModified('slug'))) {
         this.slug = (0, slugify_1.default)(this.name, { lower: true, strict: true });
     }
     next();

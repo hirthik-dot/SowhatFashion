@@ -44,12 +44,14 @@ const ProductSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
     billingName: { type: String, trim: true, default: '' },
     slug: { type: String, unique: true },
+    description: { type: String, trim: true, default: '' },
     category: {
         type: String,
         required: true,
     },
     subCategory: { type: String, default: '' },
     images: [{ type: String }],
+    defaultVariantId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'ProductVariant' },
     colors: [
         {
             name: { type: String, required: true, trim: true },

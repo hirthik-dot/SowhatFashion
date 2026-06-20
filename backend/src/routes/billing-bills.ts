@@ -10,7 +10,9 @@ import { triggerRevalidate } from '../lib/revalidateFrontend';
 import BillingPointsAccount from '../models/BillingPointsAccount';
 import BillingPointsLedger from '../models/BillingPointsLedger';
 import {
+  adjustPointsOnBillEdit,
   applyPointsLedger,
+  calcPointsEarned,
   normalizeBillingPhone,
   validatePointsForBill,
   type PointsMode,
@@ -808,16 +810,42 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
     if (payloadItems.length === 0) {
       return res.status(400).json({ message: 'At least one active bill item is required' });
     }
+    const oldPointsEarned = Number((bill as any).pointsEarned || 0);
+    const oldPointsRedeemed = Number((bill as any).pointsRedeemed || 0);
+    const oldPointsDiscountAmount = Number((bill as any).pointsDiscountAmount || 0);
+    const pointsMode = String((bill as any).pointsMode || 'none') as PointsMode;
+    const awardPoints = Boolean((bill as any).awardPoints);
+    const oldPhone = String((bill as any).customer?.phone || '');
+    const newPhone = String(payload.customer?.phone || '');
+
     const baseTotals = calculateBillTotals(
       payloadItems,
       payload.billDiscountType || 'none',
-      Number(payload.billDiscountValue || 0)
+      Number(payload.billDiscountValue || 0),
+      pointsMode === 'redeem' ? oldPointsDiscountAmount : 0
     );
     const normalizedItems = enrichEditedBillItems(baseTotals.normalizedItems, activeOriginal, payloadItems);
-    const totals = calculateBillTotals(
+    const preTotals = calculateBillTotals(
       normalizedItems,
       payload.billDiscountType || 'none',
       Number(payload.billDiscountValue || 0)
+    );
+
+    let newPointsEarned = 0;
+    let newPointsRedeemed = 0;
+    let newPointsDiscountAmount = 0;
+    if (pointsMode === 'earn' && awardPoints) {
+      newPointsEarned = calcPointsEarned(preTotals.prePointsTotal);
+    } else if (pointsMode === 'redeem' && oldPointsRedeemed > 0) {
+      newPointsRedeemed = oldPointsRedeemed;
+      newPointsDiscountAmount = oldPointsDiscountAmount;
+    }
+
+    const totals = calculateBillTotals(
+      normalizedItems,
+      payload.billDiscountType || 'none',
+      Number(payload.billDiscountValue || 0),
+      newPointsDiscountAmount
     );
     const paymentBreakdown = Array.isArray(payload.paymentBreakdown)
       ? payload.paymentBreakdown
@@ -907,6 +935,9 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
     (bill as any).totalAmount = totals.totalAmount;
     (bill as any).cashReceived = Number(payload.cashReceived || 0);
     (bill as any).changeReturned = Math.max(0, Number(payload.cashReceived || 0) - cashPortion);
+    (bill as any).pointsEarned = newPointsEarned;
+    (bill as any).pointsRedeemed = newPointsRedeemed;
+    (bill as any).pointsDiscountAmount = totals.pointsDiscountAmount;
     (bill as any).editHistory = [
       ...((bill as any).editHistory || []),
       {
@@ -917,6 +948,34 @@ router.put('/:id/edit', billingAuthMiddleware, async (req: BillingAuthRequest, r
         newTotal: totals.totalAmount,
       },
     ];
+
+    const hadPointsActivity =
+      oldPointsEarned > 0 ||
+      oldPointsRedeemed > 0 ||
+      newPointsEarned > 0 ||
+      newPointsRedeemed > 0;
+    if (hadPointsActivity) {
+      const balanceAfter = await adjustPointsOnBillEdit({
+        oldPhone,
+        newPhone,
+        customerName: String(payload.customer?.name || ''),
+        oldPointsEarned,
+        oldPointsRedeemed,
+        newPointsEarned,
+        newPointsRedeemed,
+        billId: bill._id,
+        billNumber: String((bill as any).billNumber || ''),
+        createdBy: req.billingAdminId,
+        BillingPointsAccount,
+        BillingPointsLedger,
+      });
+      (bill as any).pointsBalanceAfter = balanceAfter;
+    } else if (normalizeBillingPhone(newPhone).length >= 10) {
+      const account = await BillingPointsAccount.findOne({
+        phone: normalizeBillingPhone(newPhone),
+      }).lean();
+      (bill as any).pointsBalanceAfter = Number(account?.balance || 0);
+    }
 
     bill.markModified('items');
     await bill.save();

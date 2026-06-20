@@ -36,6 +36,7 @@ const billing_reports_1 = __importDefault(require("./routes/billing-reports"));
 const billing_admin_1 = __importDefault(require("./routes/billing-admin"));
 const billing_inventory_1 = __importDefault(require("./routes/billing-inventory"));
 const billing_points_1 = __importDefault(require("./routes/billing-points"));
+const billing_pending_1 = __importDefault(require("./routes/billing-pending"));
 const billing_qz_1 = __importDefault(require("./routes/billing-qz"));
 const billingAuthMiddleware_1 = require("./middleware/billingAuthMiddleware");
 const app = (0, express_1.default)();
@@ -128,6 +129,7 @@ app.use('/api/billing/reports', billingAuthMiddleware_1.billingAuthMiddleware, b
 app.use('/api/billing/admin', billingAuthMiddleware_1.billingAuthMiddleware, billing_admin_1.default);
 app.use('/api/billing/inventory', billingAuthMiddleware_1.billingAuthMiddleware, billing_inventory_1.default);
 app.use('/api/billing/points', billingAuthMiddleware_1.billingAuthMiddleware, billing_points_1.default);
+app.use('/api/billing/pending', billingAuthMiddleware_1.billingAuthMiddleware, billing_pending_1.default);
 app.use('/api/billing/qz', billingAuthMiddleware_1.billingAuthMiddleware, billing_qz_1.default);
 // Error handler
 app.use(errorHandler_1.default);

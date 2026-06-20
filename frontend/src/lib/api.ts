@@ -35,6 +35,17 @@ export const getProductBySlug = async (slug: string) => {
 };
 
 export const getAllProductSlugs = async () => {
+  try {
+    const res = await fetch(`${API}/api/products/meta/slugs`, {
+      next: { revalidate: 300 },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.slugs?.length) return data.slugs;
+    }
+  } catch {
+    // fall through to legacy list
+  }
   const res = await fetch(`${API}/api/products?limit=1000`, {
     next: { revalidate: 300 },
   });
@@ -230,6 +241,14 @@ export const adminDeleteProduct = async (id: string) => {
     method: 'DELETE',
     credentials: 'include',
   });
+  return res.json();
+};
+
+export const adminGetProductVariants = async (productId: string) => {
+  const res = await fetch(`${API}/api/products/${productId}/variants`, {
+    credentials: 'include',
+  });
+  if (!res.ok) return { variants: [] };
   return res.json();
 };
 

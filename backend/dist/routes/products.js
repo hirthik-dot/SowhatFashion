@@ -6,11 +6,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const Product_1 = __importDefault(require("../models/Product"));
+const ProductVariant_1 = __importDefault(require("../models/ProductVariant"));
 const SidebarConfig_1 = __importDefault(require("../models/SidebarConfig"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
 const productFilterTags_1 = require("../lib/productFilterTags");
 const productFilterQuery_1 = require("../lib/productFilterQuery");
+const storeCategories_1 = require("../lib/storeCategories");
 const ecommerce_product_variants_1 = require("../lib/ecommerce-product-variants");
+const product_color_variants_1 = require("../lib/product-color-variants");
 const router = (0, express_1.Router)();
 function isAdminRequest(req) {
     try {
@@ -44,9 +47,17 @@ function filterTagsToMap(tags) {
     }
     return map;
 }
-async function applyFilterTagsToBody(body) {
+async function applyFilterTagsToBody(body, variantColors) {
+    if (typeof body.category === 'string' && body.category.trim()) {
+        const normalized = (0, storeCategories_1.normalizeCategorySlug)(body.category);
+        if (normalized)
+            body.category = normalized;
+    }
     const config = await SidebarConfig_1.default.findOne();
     const sidebarFilters = config?.filters || [];
+    const colorsFromVariants = (variantColors || [])
+        .map((c) => ({ name: c.name, hex: '#000000' }))
+        .filter((c) => c.name);
     const merged = (0, productFilterTags_1.mergeFilterTags)({
         category: body.category,
         subCategory: body.subCategory,
@@ -56,6 +67,9 @@ async function applyFilterTagsToBody(body) {
         discountPrice: body.discountPrice,
         isNewArrival: body.isNewArrival,
         isFeatured: body.isFeatured,
+        colors: colorsFromVariants.length
+            ? colorsFromVariants
+            : body.colors,
     }, body.filterTags, sidebarFilters);
     body.filterTags = filterTagsToMap(merged);
 }
@@ -68,11 +82,7 @@ router.get('/', async (req, res) => {
             filter.isActive = true;
         }
         if (category) {
-            // Normalize: strip trailing 's' for plurals, case-insensitive match
-            let catVal = category.trim();
-            // 'tshirts' → 'tshirt', 'shirts' → 'shirt', 'pants' → 'pant'
-            catVal = catVal.replace(/s$/i, '');
-            filter.category = { $regex: new RegExp(`^${catVal}$`, 'i') };
+            Object.assign(filter, (0, storeCategories_1.buildCategoryFilterCondition)(category));
         }
         if (subCategory) {
             filter.subCategory = { $regex: new RegExp(`^${subCategory.trim()}$`, 'i') };
@@ -134,7 +144,10 @@ router.get('/', async (req, res) => {
         const limitNum = parseInt(limit) || 50;
         const skip = (pageNum - 1) * limitNum;
         let products = await Product_1.default.find(filter).sort(sortObj).lean();
-        let expandedProducts = await (0, ecommerce_product_variants_1.expandProductsForEcommerce)(products);
+        const expandVariants = req.query.expand !== 'false';
+        let expandedProducts = expandVariants
+            ? await (0, ecommerce_product_variants_1.expandProductsForEcommerce)(products)
+            : products;
         // Post-query discount filter (computed field)
         if (discount) {
             const discountMin = parseInt(discount);
@@ -158,10 +171,43 @@ router.get('/', async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
-// GET /api/products/:slug - single product by slug
+// GET /api/products/slugs - all variant + product slugs for SSG
+router.get('/meta/slugs', async (_req, res) => {
+    try {
+        const variants = await ProductVariant_1.default.find({ isActive: true }).select('slug').lean();
+        const slugs = variants.map((v) => v.slug).filter(Boolean);
+        res.json({ slugs });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+// GET /api/products/:slug - single product by slug (variant or legacy parent slug)
 router.get('/:slug', async (req, res) => {
     try {
         const slug = String(req.params.slug || '').trim();
+        // 1. Color variant slug
+        const colorVariantHit = await (0, product_color_variants_1.getVariantBySlug)(slug);
+        if (colorVariantHit) {
+            const parent = await Product_1.default.findOne({
+                _id: colorVariantHit.variant.parentProductId,
+                isEcommerceProduct: { $ne: false },
+                ...(isAdminRequest(req) ? {} : { isActive: true }),
+            }).lean();
+            if (!parent) {
+                return res.status(404).json({ message: 'Product not found' });
+            }
+            const merged = (0, product_color_variants_1.mergeVariantWithParent)(parent, colorVariantHit.variant, colorVariantHit.siblings);
+            if (parent.isBillingProduct) {
+                const variantsByProduct = await (0, ecommerce_product_variants_1.getEcommerceVariantsByProducts)([parent._id]);
+                const priceVariants = (variantsByProduct.get(String(parent._id)) || []).filter((e) => e.stock > 0);
+                if (priceVariants.length === 1) {
+                    return res.json((0, ecommerce_product_variants_1.applyEcommerceVariant)(merged, priceVariants[0], false));
+                }
+            }
+            return res.json(merged);
+        }
+        // 2. Price variant slug (billing products)
         const variantSlug = (0, ecommerce_product_variants_1.parsePriceVariantSlug)(slug);
         if (variantSlug) {
             const product = await Product_1.default.findOne({
@@ -179,9 +225,37 @@ router.get('/:slug', async (req, res) => {
             }
             return res.json((0, ecommerce_product_variants_1.applyEcommerceVariant)(product, variant, true));
         }
-        const product = await Product_1.default.findOne({ slug, isActive: true, isEcommerceProduct: { $ne: false } }).lean();
+        const product = await Product_1.default.findOne({
+            slug,
+            ...(isAdminRequest(req) ? {} : { isActive: true }),
+            isEcommerceProduct: { $ne: false },
+        }).lean();
         if (!product) {
             return res.status(404).json({ message: 'Product not found' });
+        }
+        // 3. Legacy parent slug → redirect to default color variant
+        const variantsMap = await (0, product_color_variants_1.getVariantsByProductIds)([product._id]);
+        const colorVariants = variantsMap.get(String(product._id)) || [];
+        if (colorVariants.length > 0) {
+            const defaultVariant = colorVariants.find((v) => String(v._id) === String(product.defaultVariantId)) ||
+                (0, product_color_variants_1.pickDefaultVariant)(colorVariants);
+            if (defaultVariant && defaultVariant.slug !== slug) {
+                return res.json({ redirectTo: defaultVariant.slug, _id: product._id });
+            }
+            if (defaultVariant) {
+                const merged = (0, product_color_variants_1.mergeVariantWithParent)(product, defaultVariant, colorVariants);
+                if (product.isBillingProduct) {
+                    const variantsByProduct = await (0, ecommerce_product_variants_1.getEcommerceVariantsByProducts)([product._id]);
+                    const priceVariants = (variantsByProduct.get(String(product._id)) || []).filter((e) => e.stock > 0);
+                    if (priceVariants.length === 1) {
+                        return res.json((0, ecommerce_product_variants_1.applyEcommerceVariant)(merged, priceVariants[0], false));
+                    }
+                    if (priceVariants.length > 1) {
+                        return res.json((0, ecommerce_product_variants_1.applyEcommerceVariant)(merged, priceVariants[0], false));
+                    }
+                }
+                return res.json(merged);
+            }
         }
         if (product.isBillingProduct) {
             const variantsByProduct = await (0, ecommerce_product_variants_1.getEcommerceVariantsByProducts)([product._id]);
@@ -190,7 +264,8 @@ router.get('/:slug', async (req, res) => {
                 return res.json((0, ecommerce_product_variants_1.applyEcommerceVariant)(product, variants[0], false));
             }
             if (variants.length > 1) {
-                return res.status(404).json({ message: 'Product not found' });
+                // Base slug (hero links, bookmarks): default to lowest in-stock price variant
+                return res.json((0, ecommerce_product_variants_1.applyEcommerceVariant)(product, variants[0], false));
             }
         }
         res.json(product);
@@ -202,10 +277,41 @@ router.get('/:slug', async (req, res) => {
 // POST /api/products - create product (protected)
 router.post('/', authMiddleware_1.default, async (req, res) => {
     try {
-        await applyFilterTagsToBody(req.body);
-        const product = new Product_1.default(req.body);
+        const { variants, ...body } = req.body;
+        await applyFilterTagsToBody(body, variants?.map((v) => ({ name: v.colorName })));
+        const product = new Product_1.default(body);
         await product.save();
-        res.status(201).json(product);
+        if (Array.isArray(variants) && variants.length) {
+            await (0, product_color_variants_1.syncProductVariants)(product._id, product.slug, variants);
+            const savedVariants = await ProductVariant_1.default.find({ parentProductId: product._id })
+                .sort({ sortOrder: 1 })
+                .lean();
+            if (savedVariants[0]) {
+                product.defaultVariantId = savedVariants[0]._id;
+                await product.save();
+            }
+        }
+        else if (Array.isArray(product.images) && product.images.length) {
+            await (0, product_color_variants_1.syncProductVariants)(product._id, product.slug, [
+                {
+                    colorName: 'Default',
+                    colorHex: '#000000',
+                    images: product.images,
+                    isActive: true,
+                },
+            ]);
+            const savedVariants = await ProductVariant_1.default.find({ parentProductId: product._id }).lean();
+            if (savedVariants[0]) {
+                product.defaultVariantId = savedVariants[0]._id;
+                await product.save();
+            }
+        }
+        const variantsMap = await (0, product_color_variants_1.getVariantsByProductIds)([product._id]);
+        const colorVariants = variantsMap.get(String(product._id)) || [];
+        const payload = colorVariants.length > 0
+            ? (0, product_color_variants_1.mergeVariantWithParent)(product.toObject(), colorVariants[0], colorVariants)
+            : product.toObject();
+        res.status(201).json({ ...payload, adminVariants: colorVariants });
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -214,18 +320,47 @@ router.post('/', authMiddleware_1.default, async (req, res) => {
 // PUT /api/products/:id - update product (protected)
 router.put('/:id', authMiddleware_1.default, async (req, res) => {
     try {
-        const shouldApplyFilterTags = FILTER_TAG_BODY_FIELDS.some((field) => field in req.body);
+        const { variants, ...body } = req.body;
+        const shouldApplyFilterTags = FILTER_TAG_BODY_FIELDS.some((field) => field in body) || Array.isArray(variants);
         if (shouldApplyFilterTags) {
-            await applyFilterTagsToBody(req.body);
+            await applyFilterTagsToBody(body, variants?.map((v) => ({ name: v.colorName })));
         }
-        const product = await Product_1.default.findByIdAndUpdate(req.params.id, req.body, {
+        const product = await Product_1.default.findByIdAndUpdate(req.params.id, body, {
             new: true,
             runValidators: true,
         });
         if (!product) {
             return res.status(404).json({ message: 'Product not found' });
         }
-        res.json(product);
+        let colorVariants = [];
+        if (Array.isArray(variants)) {
+            colorVariants = (await (0, product_color_variants_1.syncProductVariants)(product._id, product.slug, variants));
+            const defaultVariant = colorVariants[0];
+            if (defaultVariant && String(product.defaultVariantId) !== String(defaultVariant._id)) {
+                product.defaultVariantId = defaultVariant._id;
+                await product.save();
+            }
+        }
+        else {
+            const variantsMap = await (0, product_color_variants_1.getVariantsByProductIds)([product._id]);
+            colorVariants = (variantsMap.get(String(product._id)) || []);
+        }
+        const payload = colorVariants.length > 0
+            ? (0, product_color_variants_1.mergeVariantWithParent)(product.toObject(), colorVariants[0], colorVariants)
+            : product.toObject();
+        res.json({ ...payload, adminVariants: colorVariants });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+// GET /api/products/:id/variants - list variants for admin (protected)
+router.get('/:id/variants', authMiddleware_1.default, async (req, res) => {
+    try {
+        const variants = await ProductVariant_1.default.find({ parentProductId: req.params.id })
+            .sort({ sortOrder: 1, createdAt: 1 })
+            .lean();
+        res.json({ variants });
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -271,6 +406,7 @@ router.delete('/:id', authMiddleware_1.default, async (req, res) => {
             await product.save();
         }
         else {
+            await ProductVariant_1.default.deleteMany({ parentProductId: product._id });
             await Product_1.default.findByIdAndDelete(req.params.id);
         }
         res.json({ message: 'Product deleted successfully' });

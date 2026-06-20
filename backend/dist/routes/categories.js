@@ -6,10 +6,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const Category_1 = __importDefault(require("../models/Category"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
+const ensureStoreCategories_1 = require("../lib/ensureStoreCategories");
 const router = (0, express_1.Router)();
 // GET /api/categories — public (all active categories with hierarchy)
 router.get('/', async (_req, res) => {
     try {
+        await (0, ensureStoreCategories_1.ensureStoreCategories)();
         const categories = await Category_1.default.find({ isActive: true }).sort({ order: 1, name: 1 });
         // Build hierarchy: top-level + children
         const topLevel = categories.filter(c => !c.parentSlug);
@@ -38,6 +40,7 @@ router.get('/', async (_req, res) => {
 // GET /api/categories/all — admin (flat list, includes inactive)
 router.get('/all', authMiddleware_1.default, async (_req, res) => {
     try {
+        await (0, ensureStoreCategories_1.ensureStoreCategories)();
         const categories = await Category_1.default.find().sort({ order: 1, name: 1 });
         res.json(categories);
     }

@@ -8,10 +8,14 @@ export interface IProduct extends Document {
     name: string;
     billingName?: string;
     slug: string;
+    /** Shared product description (variants inherit this) */
+    description?: string;
     category: string;
     subCategory: string;
     images: string[];
     colors?: IProductColor[];
+    /** Default color variant for listing / legacy URL redirects */
+    defaultVariantId?: mongoose.Types.ObjectId;
     price: number;
     discountPrice: number;
     sizes: string[];

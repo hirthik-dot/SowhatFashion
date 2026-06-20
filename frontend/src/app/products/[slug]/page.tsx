@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { getProductBySlug, getAllProductSlugs, getProducts } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -5,7 +6,7 @@ import ProductCard from '@/components/shared/ProductCard';
 import ProductDetailClient from '@/app/products/[slug]/ProductDetailClient';
 import { productListKey } from '@/lib/utils';
 
-export const revalidate = 60; // SSG with ISR
+export const revalidate = 60;
 
 export async function generateStaticParams() {
   try {
@@ -24,16 +25,24 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   try {
     product = await getProductBySlug(resolvedParams.slug);
+
+    // Legacy parent slug → redirect to default variant
+    if (product?.redirectTo) {
+      redirect(`/products/${product.redirectTo}`);
+    }
+
     if (product) {
-      const relatedRes = await getProducts(`category=${product.category}&limit=5`);
-      // Filter out current product
-      relatedProducts = (relatedRes.products || []).filter((p: any) => p._id !== product._id).slice(0, 4);
+      const parentId = product.parentProductId || product._id;
+      const relatedRes = await getProducts(`category=${product.category}&limit=8`);
+      relatedProducts = (relatedRes.products || [])
+        .filter((p: any) => String(p.parentProductId || p._id) !== String(parentId))
+        .slice(0, 4);
     }
   } catch (error) {
     console.error('Failed to load product details:', error);
   }
 
-  if (!product) {
+  if (!product || !product._id) {
     return (
       <div className="min-h-screen flex flex-col pt-32 items-center bg-[var(--surface)] text-center">
         <h1 className="text-3xl font-playfair mb-4">Product Not Found</h1>
@@ -43,16 +52,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     );
   }
 
-  // Pass it down to client component for interactivity (gallery, size selection)
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <Navbar variant="default" />
-      
+
       <main className="flex-grow max-w-7xl mx-auto px-4 py-8 md:py-16 w-full">
-        {/* Main Product Info - Client component for interactivity */}
         <ProductDetailClient product={product} />
 
-        {/* You May Also Like */}
         {relatedProducts.length > 0 && (
           <section className="mt-24 pt-16 border-t border-[var(--border)]">
             <h2 className="text-2xl font-playfair font-bold text-center uppercase tracking-widest mb-10">You May Also Like</h2>

@@ -41,7 +41,27 @@ const MegaDropdown_1 = __importDefault(require("../models/MegaDropdown"));
 const SidebarConfig_1 = __importDefault(require("../models/SidebarConfig"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
 const revalidateFrontend_1 = require("../lib/revalidateFrontend");
+const storeCategories_1 = require("../lib/storeCategories");
 const router = (0, express_1.Router)();
+const STORE_CATEGORY_FILTER_OPTIONS = storeCategories_1.STORE_CATEGORIES.map((cat) => ({
+    label: cat.name,
+    value: cat.slug,
+    count: 0,
+}));
+/** Keep sidebar category options in sync with canonical store categories. */
+function mergeStoreCategoryOptions(filters) {
+    return filters.map((f) => {
+        if (f.filterKey !== 'category')
+            return f;
+        return {
+            ...f,
+            options: STORE_CATEGORY_FILTER_OPTIONS.map((cat) => {
+                const existing = f.options?.find((o) => o.value === cat.value);
+                return { ...cat, count: existing?.count ?? cat.count };
+            }),
+        };
+    });
+}
 // ============ MEGA DROPDOWN ============
 // GET /api/catalogue/mega-dropdown/:category — public (cached by frontend ISR)
 router.get('/mega-dropdown/:category', async (req, res) => {
@@ -91,7 +111,7 @@ router.get('/sidebar-config', async (_req, res) => {
         if (!config) {
             // Return default config
             return res.json({
-                filters: [
+                filters: mergeStoreCategoryOptions([
                     {
                         id: 'price',
                         label: 'Price',
@@ -137,11 +157,7 @@ router.get('/sidebar-config', async (_req, res) => {
                         filterKey: 'category',
                         isVisible: true,
                         order: 3,
-                        options: [
-                            { label: 'T-Shirts', value: 'tshirt', count: 0 },
-                            { label: 'Shirts', value: 'shirt', count: 0 },
-                            { label: 'Pants', value: 'pant', count: 0 },
-                        ],
+                        options: STORE_CATEGORY_FILTER_OPTIONS,
                     },
                     {
                         id: 'discount',
@@ -157,10 +173,10 @@ router.get('/sidebar-config', async (_req, res) => {
                             { label: '50% and above', value: '50', count: 0 },
                         ],
                     },
-                ],
+                ]),
             });
         }
-        res.json(config);
+        res.json({ ...config.toObject(), filters: mergeStoreCategoryOptions(config.filters) });
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -206,8 +222,7 @@ router.get('/product-counts', async (req, res) => {
         const Product = (await Promise.resolve().then(() => __importStar(require('../models/Product')))).default;
         const baseFilter = { isActive: true };
         if (req.query.category) {
-            let catVal = req.query.category.trim().replace(/s$/i, '');
-            baseFilter.category = { $regex: new RegExp(`^${catVal}$`, 'i') };
+            Object.assign(baseFilter, (0, storeCategories_1.buildCategoryFilterCondition)(req.query.category));
         }
         const [totalCount, sizeAgg, categoryAgg, newArrivalsCount, featuredCount,] = await Promise.all([
             Product.countDocuments(baseFilter),

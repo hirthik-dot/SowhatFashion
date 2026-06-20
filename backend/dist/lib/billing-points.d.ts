@@ -41,6 +41,21 @@ export declare const applyPointsLedger: (params: {
     BillingPointsAccount: any;
     BillingPointsLedger: any;
 }) => Promise<number>;
+/** Reconcile loyalty points when a completed bill is edited. */
+export declare const adjustPointsOnBillEdit: (params: {
+    oldPhone: string;
+    newPhone: string;
+    customerName: string;
+    oldPointsEarned: number;
+    oldPointsRedeemed: number;
+    newPointsEarned: number;
+    newPointsRedeemed: number;
+    billId: unknown;
+    billNumber: string;
+    createdBy?: unknown;
+    BillingPointsAccount: any;
+    BillingPointsLedger: any;
+}) => Promise<number>;
 export declare const clawbackPointsOnReturn: (params: {
     phone: string;
     refundAmount: number;

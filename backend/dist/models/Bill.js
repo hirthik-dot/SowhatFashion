@@ -73,7 +73,7 @@ const BillSchema = new mongoose_1.Schema({
     sgst: { type: Number, default: 0 },
     roundOff: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
-    paymentMethod: { type: String, enum: ['cash', 'gpay', 'upi', 'card', 'partial'], default: 'cash' },
+    paymentMethod: { type: String, enum: ['cash', 'gpay', 'upi', 'card', 'partial', 'pending'], default: 'cash' },
     paymentBreakdown: [
         {
             _id: false,
@@ -81,6 +81,7 @@ const BillSchema = new mongoose_1.Schema({
             amount: { type: Number, required: true, min: 0 },
         },
     ],
+    pendingAmount: { type: Number, default: 0, min: 0 },
     cashReceived: { type: Number, default: 0 },
     changeReturned: { type: Number, default: 0 },
     pointsMode: { type: String, enum: ['earn', 'redeem', 'none'], default: 'none' },

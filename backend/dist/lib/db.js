@@ -31,6 +31,9 @@ const connectDB = async () => {
             await db.collection('products').createIndex({ category: 1 });
             await db.collection('products').createIndex({ isActive: 1, isFeatured: 1 });
             await db.collection('products').createIndex({ isActive: 1, isNewArrival: 1 });
+            // ProductVariant indexes
+            await db.collection('productvariants').createIndex({ slug: 1 }, { unique: true });
+            await db.collection('productvariants').createIndex({ parentProductId: 1, sortOrder: 1 });
             // Offer indexes
             await db.collection('offers').createIndex({ isActive: 1, endTime: 1 });
             // Order indexes

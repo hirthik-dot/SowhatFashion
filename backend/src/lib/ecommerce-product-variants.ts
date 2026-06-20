@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import StockItem from '../models/StockItem';
 import { BILLABLE_STATUSES, compareSizes } from './stock-inventory-counts';
+import { attachVariantsForListing } from './product-color-variants';
 
 export type EcommercePriceVariant = {
   sellingPrice: number;
@@ -116,11 +117,12 @@ const normalizeProduct = (product: any) =>
   typeof product?.toObject === 'function' ? product.toObject() : { ...product };
 
 export async function expandProductsForEcommerce(products: any[]): Promise<any[]> {
-  const productIds = products.map((product) => product._id).filter(Boolean);
+  const withColorVariants = await attachVariantsForListing(products);
+  const productIds = withColorVariants.map((product) => product._id).filter(Boolean) as mongoose.Types.ObjectId[];
   const variantsByProduct = await getEcommerceVariantsByProducts(productIds);
   const expanded: any[] = [];
 
-  for (const product of products) {
+  for (const product of withColorVariants) {
     const variants = variantsByProduct.get(String(product._id)) || [];
     const inStockVariants = variants.filter((variant) => variant.stock > 0);
 

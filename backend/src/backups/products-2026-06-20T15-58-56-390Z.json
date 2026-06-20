@@ -1,0 +1,121 @@
+[
+  {
+    "_id": "6a35795132bfcd97022b05b8",
+    "name": "Men Solid Slim Fit Spread Collar Shirt with TS LYTRA",
+    "billingName": "P822",
+    "slug": "p822-1781889361185",
+    "category": "shirt",
+    "subCategory": "half-sleeve",
+    "images": [
+      "https://res.cloudinary.com/dtmtejyeg/image/upload/v1781967378/sowaat-menswear/cor6mf8hqofyq3zv1lpj.jpg",
+      "https://res.cloudinary.com/dtmtejyeg/image/upload/v1781967493/sowaat-menswear/cmx1z3xgp9tzfcgoxrc4.jpg",
+      "https://res.cloudinary.com/dtmtejyeg/image/upload/v1781967582/sowaat-menswear/gq3dy7cbodyepxlxrcwf.jpg"
+    ],
+    "price": 799,
+    "discountPrice": 600,
+    "sizes": [
+      "M"
+    ],
+    "stock": 2,
+    "tags": [],
+    "filterTags": {
+      "category": [
+        "shirt"
+      ],
+      "size": [
+        "M"
+      ],
+      "promotions": [
+        "new-arrivals",
+        "flash-sale"
+      ],
+      "discount": [
+        "10",
+        "20"
+      ]
+    },
+    "isFeatured": true,
+    "isNewArrival": true,
+    "isActive": true,
+    "sku": "",
+    "incomingPrice": 500,
+    "supplier": "6a35783532bfcd97022b0579",
+    "billingCategory": "6a35787b32bfcd97022b0592",
+    "billingSubCategory": "6a3578a332bfcd97022b0597",
+    "sizeStock": [
+      {
+        "size": "M",
+        "stock": 2,
+        "_id": "6a36ae554afa899198e5619b"
+      }
+    ],
+    "totalStock": 2,
+    "isBillingProduct": true,
+    "isEcommerceProduct": true,
+    "notes": "",
+    "colors": [
+      {
+        "name": "Blue",
+        "hex": "#8d9aaa",
+        "imageIndex": 0,
+        "_id": "6a36ae554afa899198e5619c"
+      },
+      {
+        "name": "Powder blue",
+        "hex": "#bbcedc",
+        "imageIndex": 2,
+        "_id": "6a36ae554afa899198e5619d"
+      }
+    ],
+    "createdAt": "2026-06-19T17:16:01.192Z",
+    "updatedAt": "2026-06-20T15:14:29.238Z",
+    "__v": 1
+  },
+  {
+    "_id": "6a36b5203e529d4b672c0c64",
+    "name": "BLACK CAP",
+    "billingName": "BLACK CAP",
+    "slug": "black-cap-1781970208273",
+    "category": "cap",
+    "subCategory": "plain-cap",
+    "images": [],
+    "price": 100,
+    "discountPrice": 0,
+    "sizes": [
+      "Free Size"
+    ],
+    "stock": 1,
+    "tags": [],
+    "filterTags": {
+      "category": [
+        "cap"
+      ],
+      "size": [
+        "FREE SIZE"
+      ]
+    },
+    "isFeatured": false,
+    "isNewArrival": false,
+    "isActive": true,
+    "sku": "",
+    "incomingPrice": 85,
+    "supplier": "6a36b1224afa899198e561d3",
+    "billingCategory": "6a36b4343e529d4b672c0c46",
+    "billingSubCategory": "6a36b4503e529d4b672c0c4c",
+    "sizeStock": [
+      {
+        "size": "Free Size",
+        "stock": 1,
+        "_id": "6a36b5213e529d4b672c0c6d"
+      }
+    ],
+    "totalStock": 1,
+    "isBillingProduct": true,
+    "isEcommerceProduct": true,
+    "notes": "",
+    "colors": [],
+    "createdAt": "2026-06-20T15:43:28.276Z",
+    "updatedAt": "2026-06-20T15:43:29.626Z",
+    "__v": 1
+  }
+]

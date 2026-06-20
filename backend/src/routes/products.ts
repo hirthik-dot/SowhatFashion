@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import Product from '../models/Product';
+import ProductVariant from '../models/ProductVariant';
 import SidebarConfig from '../models/SidebarConfig';
 import authMiddleware from '../middleware/authMiddleware';
 import { mergeFilterTags, plainFilterTags, type FilterTagsMap } from '../lib/productFilterTags';
@@ -12,6 +13,14 @@ import {
   getEcommerceVariantsByProducts,
   parsePriceVariantSlug,
 } from '../lib/ecommerce-product-variants';
+import {
+  getVariantBySlug,
+  getVariantsByProductIds,
+  mergeVariantWithParent,
+  pickDefaultVariant,
+  syncProductVariants,
+  type VariantInput,
+} from '../lib/product-color-variants';
 
 const router = Router();
 
@@ -48,13 +57,16 @@ function filterTagsToMap(tags: FilterTagsMap): Map<string, string[]> {
   return map;
 }
 
-async function applyFilterTagsToBody(body: Record<string, unknown>) {
+async function applyFilterTagsToBody(body: Record<string, unknown>, variantColors?: { name?: string }[]) {
   if (typeof body.category === 'string' && body.category.trim()) {
     const normalized = normalizeCategorySlug(body.category);
     if (normalized) body.category = normalized;
   }
   const config = await SidebarConfig.findOne();
   const sidebarFilters = config?.filters || [];
+  const colorsFromVariants = (variantColors || [])
+    .map((c) => ({ name: c.name, hex: '#000000' }))
+    .filter((c) => c.name);
   const merged = mergeFilterTags(
     {
       category: body.category as string,
@@ -65,6 +77,9 @@ async function applyFilterTagsToBody(body: Record<string, unknown>) {
       discountPrice: body.discountPrice as number,
       isNewArrival: body.isNewArrival as boolean,
       isFeatured: body.isFeatured as boolean,
+      colors: colorsFromVariants.length
+        ? colorsFromVariants
+        : (body.colors as { name?: string; hex?: string }[] | undefined),
     },
     body.filterTags as FilterTagsMap | undefined,
     sidebarFilters
@@ -141,7 +156,7 @@ router.get('/', async (req: Request, res: Response) => {
     const limitNum = parseInt(limit as string) || 50;
     const skip = (pageNum - 1) * limitNum;
 
-    let products = await Product.find(filter).sort(sortObj).lean();
+    let products: any[] = await Product.find(filter).sort(sortObj).lean();
     const expandVariants = req.query.expand !== 'false';
     let expandedProducts = expandVariants
       ? await expandProductsForEcommerce(products)
@@ -171,10 +186,46 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/products/:slug - single product by slug
+// GET /api/products/slugs - all variant + product slugs for SSG
+router.get('/meta/slugs', async (_req: Request, res: Response) => {
+  try {
+    const variants = await ProductVariant.find({ isActive: true }).select('slug').lean();
+    const slugs = variants.map((v) => v.slug).filter(Boolean);
+    res.json({ slugs });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+});
+
+// GET /api/products/:slug - single product by slug (variant or legacy parent slug)
 router.get('/:slug', async (req: Request, res: Response) => {
   try {
     const slug = String(req.params.slug || '').trim();
+
+    // 1. Color variant slug
+    const colorVariantHit = await getVariantBySlug(slug);
+    if (colorVariantHit) {
+      const parent = await Product.findOne({
+        _id: colorVariantHit.variant.parentProductId,
+        isEcommerceProduct: { $ne: false },
+        ...(isAdminRequest(req) ? {} : { isActive: true }),
+      }).lean();
+      if (!parent) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      const merged = mergeVariantWithParent(parent, colorVariantHit.variant, colorVariantHit.siblings);
+
+      if (parent.isBillingProduct) {
+        const variantsByProduct = await getEcommerceVariantsByProducts([parent._id]);
+        const priceVariants = (variantsByProduct.get(String(parent._id)) || []).filter((e) => e.stock > 0);
+        if (priceVariants.length === 1) {
+          return res.json(applyEcommerceVariant(merged, priceVariants[0], false));
+        }
+      }
+      return res.json(merged);
+    }
+
+    // 2. Price variant slug (billing products)
     const variantSlug = parsePriceVariantSlug(slug);
 
     if (variantSlug) {
@@ -196,9 +247,39 @@ router.get('/:slug', async (req: Request, res: Response) => {
       return res.json(applyEcommerceVariant(product, variant, true));
     }
 
-    const product = await Product.findOne({ slug, isActive: true, isEcommerceProduct: { $ne: false } }).lean();
+    const product = await Product.findOne({
+      slug,
+      ...(isAdminRequest(req) ? {} : { isActive: true }),
+      isEcommerceProduct: { $ne: false },
+    }).lean();
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
+    }
+
+    // 3. Legacy parent slug → redirect to default color variant
+    const variantsMap = await getVariantsByProductIds([product._id]);
+    const colorVariants = variantsMap.get(String(product._id)) || [];
+    if (colorVariants.length > 0) {
+      const defaultVariant =
+        colorVariants.find((v) => String(v._id) === String(product.defaultVariantId)) ||
+        pickDefaultVariant(colorVariants);
+      if (defaultVariant && defaultVariant.slug !== slug) {
+        return res.json({ redirectTo: defaultVariant.slug, _id: product._id });
+      }
+      if (defaultVariant) {
+        const merged = mergeVariantWithParent(product, defaultVariant, colorVariants);
+        if (product.isBillingProduct) {
+          const variantsByProduct = await getEcommerceVariantsByProducts([product._id]);
+          const priceVariants = (variantsByProduct.get(String(product._id)) || []).filter((e) => e.stock > 0);
+          if (priceVariants.length === 1) {
+            return res.json(applyEcommerceVariant(merged, priceVariants[0], false));
+          }
+          if (priceVariants.length > 1) {
+            return res.json(applyEcommerceVariant(merged, priceVariants[0], false));
+          }
+        }
+        return res.json(merged);
+      }
     }
 
     if (product.isBillingProduct) {
@@ -222,10 +303,44 @@ router.get('/:slug', async (req: Request, res: Response) => {
 // POST /api/products - create product (protected)
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    await applyFilterTagsToBody(req.body);
-    const product = new Product(req.body);
+    const { variants, ...body } = req.body as Record<string, unknown> & { variants?: VariantInput[] };
+    await applyFilterTagsToBody(body, variants?.map((v) => ({ name: v.colorName })));
+    const product = new Product(body);
     await product.save();
-    res.status(201).json(product);
+
+    if (Array.isArray(variants) && variants.length) {
+      await syncProductVariants(product._id, product.slug, variants);
+      const savedVariants = await ProductVariant.find({ parentProductId: product._id })
+        .sort({ sortOrder: 1 })
+        .lean();
+      if (savedVariants[0]) {
+        product.defaultVariantId = savedVariants[0]._id;
+        await product.save();
+      }
+    } else if (Array.isArray(product.images) && product.images.length) {
+      await syncProductVariants(product._id, product.slug, [
+        {
+          colorName: 'Default',
+          colorHex: '#000000',
+          images: product.images,
+          isActive: true,
+        },
+      ]);
+      const savedVariants = await ProductVariant.find({ parentProductId: product._id }).lean();
+      if (savedVariants[0]) {
+        product.defaultVariantId = savedVariants[0]._id;
+        await product.save();
+      }
+    }
+
+    const variantsMap = await getVariantsByProductIds([product._id]);
+    const colorVariants = variantsMap.get(String(product._id)) || [];
+    const payload =
+      colorVariants.length > 0
+        ? mergeVariantWithParent(product.toObject() as unknown as Record<string, unknown>, colorVariants[0] as any, colorVariants as any)
+        : product.toObject();
+
+    res.status(201).json({ ...payload, adminVariants: colorVariants });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
@@ -234,18 +349,54 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 // PUT /api/products/:id - update product (protected)
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const shouldApplyFilterTags = FILTER_TAG_BODY_FIELDS.some((field) => field in req.body);
+    const { variants, ...body } = req.body as Record<string, unknown> & { variants?: VariantInput[] };
+    const shouldApplyFilterTags = FILTER_TAG_BODY_FIELDS.some((field) => field in body) || Array.isArray(variants);
     if (shouldApplyFilterTags) {
-      await applyFilterTagsToBody(req.body);
+      await applyFilterTagsToBody(body, variants?.map((v) => ({ name: v.colorName })));
     }
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+
+    const product = await Product.findByIdAndUpdate(req.params.id, body, {
       new: true,
       runValidators: true,
     });
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
-    res.json(product);
+
+    let colorVariants: Record<string, unknown>[] = [];
+    if (Array.isArray(variants)) {
+      colorVariants = (await syncProductVariants(product._id, product.slug, variants)) as Record<
+        string,
+        unknown
+      >[];
+      const defaultVariant = colorVariants[0];
+      if (defaultVariant && String(product.defaultVariantId) !== String(defaultVariant._id)) {
+        product.defaultVariantId = defaultVariant._id as typeof product.defaultVariantId;
+        await product.save();
+      }
+    } else {
+      const variantsMap = await getVariantsByProductIds([product._id]);
+      colorVariants = (variantsMap.get(String(product._id)) || []) as Record<string, unknown>[];
+    }
+
+    const payload =
+      colorVariants.length > 0
+        ? mergeVariantWithParent(product.toObject() as unknown as Record<string, unknown>, colorVariants[0] as any, colorVariants as any)
+        : product.toObject();
+
+    res.json({ ...payload, adminVariants: colorVariants });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+});
+
+// GET /api/products/:id/variants - list variants for admin (protected)
+router.get('/:id/variants', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const variants = await ProductVariant.find({ parentProductId: req.params.id })
+      .sort({ sortOrder: 1, createdAt: 1 })
+      .lean();
+    res.json({ variants });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
@@ -295,6 +446,7 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
       product.isEcommerceProduct = false;
       await product.save();
     } else {
+      await ProductVariant.deleteMany({ parentProductId: product._id });
       await Product.findByIdAndDelete(req.params.id);
     }
     res.json({ message: 'Product deleted successfully' });

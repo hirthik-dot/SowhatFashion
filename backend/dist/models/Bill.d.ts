@@ -18,11 +18,12 @@ export interface IBill extends Document {
     sgst: number;
     roundOff: number;
     totalAmount: number;
-    paymentMethod: 'cash' | 'gpay' | 'upi' | 'card' | 'partial';
+    paymentMethod: 'cash' | 'gpay' | 'upi' | 'card' | 'partial' | 'pending';
     paymentBreakdown?: Array<{
         method: 'cash' | 'gpay' | 'upi' | 'card';
         amount: number;
     }>;
+    pendingAmount?: number;
     cashReceived?: number;
     changeReturned?: number;
     pointsMode?: 'earn' | 'redeem' | 'none';

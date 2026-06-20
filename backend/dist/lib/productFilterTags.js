@@ -3,12 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.computeAutoFilterTags = computeAutoFilterTags;
 exports.mergeFilterTags = mergeFilterTags;
 exports.plainFilterTags = plainFilterTags;
+const storeCategories_1 = require("./storeCategories");
 const BUILTIN_KEYS = new Set(['category', 'size', 'promotions', 'discount', 'price']);
 /** Infer filter tag values from product fields (category, sizes, flags, tags, subCategory). */
 function computeAutoFilterTags(product, sidebarFilters = []) {
     const out = {};
     if (product.category) {
-        out.category = [String(product.category).trim().toLowerCase().replace(/s$/i, '')];
+        const normalized = (0, storeCategories_1.normalizeCategorySlug)(product.category);
+        out.category = [normalized || String(product.category).trim().toLowerCase()];
     }
     if (product.sizes?.length) {
         out.size = product.sizes.map((s) => String(s).trim().toUpperCase()).filter(Boolean);

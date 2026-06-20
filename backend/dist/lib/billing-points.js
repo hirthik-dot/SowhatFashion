@@ -1,7 +1,7 @@
 "use strict";
 /** Loyalty points rules — earn on pre-points bill total; redeem before payment. */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clawbackPointsOnReturn = exports.applyPointsLedger = exports.getOrCreatePointsAccount = exports.validatePointsForBill = exports.maxRedeemablePoints = exports.calcPointsDiscountRupees = exports.calcPointsEarned = exports.normalizeBillingPhone = exports.MIN_REDEEM_POINTS = exports.REDEEM_RUPEES_PER_POINT = exports.EARN_RUPEES_PER_POINT = void 0;
+exports.clawbackPointsOnReturn = exports.adjustPointsOnBillEdit = exports.applyPointsLedger = exports.getOrCreatePointsAccount = exports.validatePointsForBill = exports.maxRedeemablePoints = exports.calcPointsDiscountRupees = exports.calcPointsEarned = exports.normalizeBillingPhone = exports.MIN_REDEEM_POINTS = exports.REDEEM_RUPEES_PER_POINT = exports.EARN_RUPEES_PER_POINT = void 0;
 exports.EARN_RUPEES_PER_POINT = 10;
 exports.REDEEM_RUPEES_PER_POINT = 0.25;
 exports.MIN_REDEEM_POINTS = 100;
@@ -133,6 +133,54 @@ const applyPointsLedger = async (params) => {
     return newBalance;
 };
 exports.applyPointsLedger = applyPointsLedger;
+/** Reconcile loyalty points when a completed bill is edited. */
+const adjustPointsOnBillEdit = async (params) => {
+    const oldNormalized = (0, exports.normalizeBillingPhone)(params.oldPhone);
+    const newNormalized = (0, exports.normalizeBillingPhone)(params.newPhone);
+    const oldNet = params.oldPointsEarned - params.oldPointsRedeemed;
+    const newNet = params.newPointsEarned - params.newPointsRedeemed;
+    const applyNetDelta = async (phone, customerName, netDelta, note) => {
+        if (!phone || phone.length < 10)
+            return 0;
+        if (netDelta === 0) {
+            const acc = await params.BillingPointsAccount.findOne({ phone }).lean();
+            return Number(acc?.balance || 0);
+        }
+        await (0, exports.getOrCreatePointsAccount)(phone, customerName, params.BillingPointsAccount);
+        const account = await params.BillingPointsAccount.findOne({ phone });
+        if (!account)
+            return 0;
+        const previousBalance = Number(account.balance || 0);
+        const newBalance = Math.max(0, previousBalance + netDelta);
+        account.balance = newBalance;
+        if (customerName)
+            account.customerName = customerName;
+        await account.save();
+        await params.BillingPointsLedger.create({
+            phone,
+            type: 'adjust',
+            points: netDelta,
+            bill: params.billId,
+            billNumber: params.billNumber,
+            balanceAfter: newBalance,
+            createdBy: params.createdBy,
+            note,
+        });
+        return newBalance;
+    };
+    if (oldNormalized === newNormalized) {
+        const netDelta = newNet - oldNet;
+        return applyNetDelta(newNormalized, params.customerName, netDelta, `Bill edit: earned ${params.oldPointsEarned}→${params.newPointsEarned}, redeemed ${params.oldPointsRedeemed}→${params.newPointsRedeemed}`);
+    }
+    if (oldNormalized.length >= 10 && oldNet !== 0) {
+        await applyNetDelta(oldNormalized, '', -oldNet, 'Bill edit: points reversed (customer phone changed)');
+    }
+    if (newNormalized.length >= 10) {
+        return applyNetDelta(newNormalized, params.customerName, newNet, 'Bill edit: points applied (customer phone changed)');
+    }
+    return 0;
+};
+exports.adjustPointsOnBillEdit = adjustPointsOnBillEdit;
 const clawbackPointsOnReturn = async (params) => {
     const normalized = (0, exports.normalizeBillingPhone)(params.phone);
     if (!normalized || normalized.length < 10)

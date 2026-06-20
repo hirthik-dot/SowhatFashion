@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isReservedFilterQueryKey = isReservedFilterQueryKey;
 exports.buildFacetFilterCondition = buildFacetFilterCondition;
 exports.collectFacetFiltersFromQuery = collectFacetFiltersFromQuery;
+const storeCategories_1 = require("./storeCategories");
 const RESERVED_QUERY_KEYS = new Set([
     'category',
     'subCategory',
@@ -20,6 +21,7 @@ const RESERVED_QUERY_KEYS = new Set([
     'search',
     'q',
     'inStock',
+    'expand',
 ]);
 function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -37,10 +39,14 @@ function buildFacetFilterCondition(filterKey, values) {
         return null;
     switch (filterKey) {
         case 'category': {
-            const normalized = values.map((v) => v.trim().replace(/s$/i, ''));
+            if (values.length === 1)
+                return (0, storeCategories_1.buildCategoryFilterCondition)(values[0]);
+            const allValues = [...new Set(values.flatMap((v) => (0, storeCategories_1.categoryMatchValues)(v)))];
+            if (!allValues.length)
+                return null;
             return {
                 category: {
-                    $regex: new RegExp(`^(${normalized.map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`, 'i'),
+                    $regex: new RegExp(`^(${allValues.map(escapeRegex).join('|')})$`, 'i'),
                 },
             };
         }

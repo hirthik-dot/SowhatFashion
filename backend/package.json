@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "seed": "ts-node src/seed.ts",
     "seed-categories": "ts-node src/seedCategories.ts",
-    "sync-categories": "ts-node src/syncCategories.ts"
+    "sync-categories": "ts-node src/syncCategories.ts",
+    "migrate-color-variants": "ts-node src/scripts/migrate-color-variants.ts"
   },
   "engines": {
     "node": ">=20"

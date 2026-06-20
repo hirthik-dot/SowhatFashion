@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
-import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage, adminGetCategories } from '@/lib/api';
+import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage, adminGetCategories, adminGetProductVariants } from '@/lib/api';
 import ProductFilterAssignments from '@/components/admin/ProductFilterAssignments';
-import ProductColorEditor from '@/components/admin/ProductColorEditor';
-import type { ProductColor } from '@/lib/product-colors';
+import ProductVariantManager from '@/components/admin/ProductVariantManager';
+import type { ProductVariantForm } from '@/lib/product-variants';
+import { emptyVariantForm } from '@/lib/product-variants';
 import { formatPrice, productListKey } from '@/lib/utils';
 import Image from 'next/image';
 
@@ -23,6 +24,7 @@ export default function AdminProductsPage() {
   
   const initialForm = {
     name: '',
+    description: '',
     category: '',
     subCategory: '',
     price: 0,
@@ -31,18 +33,19 @@ export default function AdminProductsPage() {
     stock: 0,
     tags: '',
     images: [] as string[],
-    colors: [] as ProductColor[],
+    variants: [] as ProductVariantForm[],
     isFeatured: false,
     isNewArrival: false,
     isActive: true,
     filterTags: {} as Record<string, string[]>,
+    slug: '',
   };
   const [formData, setFormData] = useState(initialForm);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
 
   const fetchProducts = async () => {
     try {
-      const res = await adminGetProducts();
+      const res = await adminGetProducts({ expand: false });
       setProducts(res.products || []);
     } catch (error) {
       console.error('Failed to load products');
@@ -56,9 +59,10 @@ export default function AdminProductsPage() {
     adminGetCategories().then(res => setDbCategories(Array.isArray(res) ? res : [])).catch(() => {});
   }, []);
 
-  const handleOpenModal = (product?: any) => {
+  const handleOpenModal = async (product?: any) => {
     if (product) {
-      setEditingId(resolveProductId(product));
+      const productId = resolveProductId(product);
+      setEditingId(productId);
       const ft = product.filterTags;
       const filterTags: Record<string, string[]> =
         ft instanceof Map
@@ -66,12 +70,47 @@ export default function AdminProductsPage() {
           : typeof ft === 'object' && ft
             ? ft
             : {};
+
+      let variants: ProductVariantForm[] = [];
+      try {
+        const res = await adminGetProductVariants(productId);
+        variants = (res.variants || []).map((v: any) => ({
+          _id: String(v._id),
+          slug: v.slug,
+          colorName: v.colorName,
+          colorHex: v.colorHex || '#000000',
+          images: v.images || [],
+          price: v.price ?? null,
+          discountPrice: v.discountPrice ?? null,
+          stock: v.stock ?? null,
+          sku: v.sku || '',
+          sortOrder: v.sortOrder,
+          isActive: v.isActive !== false,
+        }));
+      } catch {
+        variants = [];
+      }
+
+      // Fallback: convert legacy colors[] if no variants yet
+      if (!variants.length && product.colors?.length) {
+        variants = product.colors.map((c: any) => ({
+          colorName: c.name,
+          colorHex: c.hex || '#000000',
+          images: c.imageIndex != null && product.images?.[c.imageIndex]
+            ? [product.images[c.imageIndex], ...product.images.filter((_: string, i: number) => i !== c.imageIndex)]
+            : product.images || [],
+          isActive: true,
+        }));
+      }
+
       setFormData({
         ...product,
         name: resolveEditName(product),
+        description: product.description || '',
         subCategory: product.subCategory || '',
         tags: product.tags?.join(', ') || '',
-        colors: product.colors || [],
+        variants,
+        slug: product.slug || '',
         filterTags,
       });
     } else {
@@ -123,9 +162,10 @@ export default function AdminProductsPage() {
         tags: typeof formData.tags === 'string'
           ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
           : formData.tags,
-        colors: (formData.colors || []).filter((c: ProductColor) => c.name.trim() && c.hex.trim()),
+        variants: (formData.variants || []).filter((v: ProductVariantForm) => v.colorName.trim()),
         filterTags: formData.filterTags || {},
       };
+      delete (payload as any).colors;
 
       if (editingId) {
         await adminUpdateProduct(editingId, payload);
@@ -331,6 +371,17 @@ export default function AdminProductsPage() {
                       <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
                     </div>
 
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Description (shared across all color variants)</label>
+                      <textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        rows={4}
+                        placeholder="Product description shown on every color variant page..."
+                        className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)] text-sm"
+                      />
+                    </div>
+
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Category</label>
                       <select required value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value, subCategory: ''})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]">
@@ -436,10 +487,12 @@ export default function AdminProductsPage() {
                     </div>
 
                     <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)]">
-                      <ProductColorEditor
-                        colors={formData.colors || []}
-                        images={formData.images}
-                        onChange={(colors) => setFormData({ ...formData, colors })}
+                      <ProductVariantManager
+                        variants={formData.variants || []}
+                        baseSlug={formData.slug || formData.name}
+                        parentPrice={formData.price}
+                        parentStock={formData.stock}
+                        onChange={(variants) => setFormData({ ...formData, variants })}
                       />
                     </div>
 

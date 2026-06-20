@@ -19,6 +19,14 @@ function toEcommerceCategorySlug(name) {
         return 'shirt';
     if (normalized.includes('pant') || normalized.includes('trouser'))
         return 'pant';
+    if (normalized.includes('track'))
+        return 'track';
+    if (normalized.includes('short'))
+        return 'shorts';
+    if (normalized.includes('innerwear'))
+        return 'innerwears';
+    if (normalized.includes('footwear') || normalized.includes('shoe'))
+        return 'footwears';
     const slug = (0, slugify_1.default)(String(name || '').trim(), { lower: true, strict: true });
     return slug.replace(/s$/i, '') || 'other';
 }

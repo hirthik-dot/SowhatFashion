@@ -15,6 +15,7 @@ const revalidateFrontend_1 = require("../lib/revalidateFrontend");
 const BillingPointsAccount_1 = __importDefault(require("../models/BillingPointsAccount"));
 const BillingPointsLedger_1 = __importDefault(require("../models/BillingPointsLedger"));
 const billing_points_1 = require("../lib/billing-points");
+const billing_pending_1 = require("../lib/billing-pending");
 const billing_replacements_1 = require("../lib/billing-replacements");
 const stock_inventory_counts_1 = require("../lib/stock-inventory-counts");
 const billing_totals_1 = require("../lib/billing-totals");
@@ -336,6 +337,7 @@ router.get('/customers/search', async (req, res) => {
             .lean()
         : [];
     const balanceByPhone = new Map(accounts.map((a) => [a.phone, Number(a.balance || 0)]));
+    const pendingByPhone = await (0, billing_pending_1.getPendingBalancesByPhones)(phones);
     return res.json(rows.map((row) => {
         const phone = String(row.phone || row._id || '').trim();
         const normalized = (0, billing_points_1.normalizeBillingPhone)(phone);
@@ -345,6 +347,7 @@ router.get('/customers/search', async (req, res) => {
             totalBills: Number(row.totalBills || 0),
             lastVisit: row.lastVisit,
             pointsBalance: balanceByPhone.get(normalized) ?? 0,
+            pendingBalance: pendingByPhone.get(normalized) ?? 0,
         };
     }));
 });
@@ -440,6 +443,13 @@ router.post('/complete', billingAuthMiddleware_1.billingAuthMiddleware, async (r
                 ...(Number(payload.splitPayment?.gpay || 0) > 0 ? [{ method: 'gpay', amount: Number(payload.splitPayment.gpay || 0) }] : []),
             ];
         const paymentMethod = payload.paymentMethod || 'cash';
+        const completeWithPending = Boolean(payload.completeWithPending);
+        if (paymentMethod === 'pending') {
+            const phone = (0, billing_points_1.normalizeBillingPhone)(String(payload.customer?.phone || ''));
+            if (phone.length < 10) {
+                return res.status(400).json({ error: 'Customer phone is required for pending payment' });
+            }
+        }
         if (paymentMethod === 'partial') {
             if (!paymentBreakdown.length) {
                 return res.status(400).json({ error: 'At least one payment split is required for partial payment' });
@@ -454,11 +464,28 @@ router.post('/complete', billingAuthMiddleware_1.billingAuthMiddleware, async (r
             }
             const totalPaid = paymentBreakdown.reduce((sum, p) => sum + Number(p.amount || 0), 0);
             const diff = Math.abs(totalPaid - totals.totalAmount);
-            if (diff > 1) {
+            if (diff > 1 && !completeWithPending) {
                 return res.status(400).json({
                     error: `Payment mismatch: paid ₹${totalPaid}, bill is ₹${totals.totalAmount}`,
                 });
             }
+            if (completeWithPending && totalPaid >= totals.totalAmount) {
+                return res.status(400).json({ error: 'No pending balance when bill is fully paid' });
+            }
+            if (completeWithPending) {
+                const phone = (0, billing_points_1.normalizeBillingPhone)(String(payload.customer?.phone || ''));
+                if (phone.length < 10) {
+                    return res.status(400).json({ error: 'Customer phone is required when keeping a pending balance' });
+                }
+            }
+        }
+        let pendingAmount = 0;
+        if (paymentMethod === 'pending') {
+            pendingAmount = totals.totalAmount;
+        }
+        else if (paymentMethod === 'partial' && completeWithPending) {
+            const totalPaid = paymentBreakdown.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+            pendingAmount = Math.max(0, Math.round(totals.totalAmount - totalPaid));
         }
         const cashPortion = paymentMethod === 'partial'
             ? paymentBreakdown
@@ -472,6 +499,7 @@ router.post('/complete', billingAuthMiddleware_1.billingAuthMiddleware, async (r
             ...payload,
             paymentMethod,
             paymentBreakdown,
+            pendingAmount,
             billNumber,
             items: totals.normalizedItems,
             subtotal: totals.subtotal,
@@ -680,9 +708,27 @@ router.put('/:id/edit', billingAuthMiddleware_1.billingAuthMiddleware, async (re
         if (payloadItems.length === 0) {
             return res.status(400).json({ message: 'At least one active bill item is required' });
         }
-        const baseTotals = calculateBillTotals(payloadItems, payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+        const oldPointsEarned = Number(bill.pointsEarned || 0);
+        const oldPointsRedeemed = Number(bill.pointsRedeemed || 0);
+        const oldPointsDiscountAmount = Number(bill.pointsDiscountAmount || 0);
+        const pointsMode = String(bill.pointsMode || 'none');
+        const awardPoints = Boolean(bill.awardPoints);
+        const oldPhone = String(bill.customer?.phone || '');
+        const newPhone = String(payload.customer?.phone || '');
+        const baseTotals = calculateBillTotals(payloadItems, payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0), pointsMode === 'redeem' ? oldPointsDiscountAmount : 0);
         const normalizedItems = enrichEditedBillItems(baseTotals.normalizedItems, activeOriginal, payloadItems);
-        const totals = calculateBillTotals(normalizedItems, payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+        const preTotals = calculateBillTotals(normalizedItems, payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0));
+        let newPointsEarned = 0;
+        let newPointsRedeemed = 0;
+        let newPointsDiscountAmount = 0;
+        if (pointsMode === 'earn' && awardPoints) {
+            newPointsEarned = (0, billing_points_1.calcPointsEarned)(preTotals.prePointsTotal);
+        }
+        else if (pointsMode === 'redeem' && oldPointsRedeemed > 0) {
+            newPointsRedeemed = oldPointsRedeemed;
+            newPointsDiscountAmount = oldPointsDiscountAmount;
+        }
+        const totals = calculateBillTotals(normalizedItems, payload.billDiscountType || 'none', Number(payload.billDiscountValue || 0), newPointsDiscountAmount);
         const paymentBreakdown = Array.isArray(payload.paymentBreakdown)
             ? payload.paymentBreakdown
             : [
@@ -759,6 +805,9 @@ router.put('/:id/edit', billingAuthMiddleware_1.billingAuthMiddleware, async (re
         bill.totalAmount = totals.totalAmount;
         bill.cashReceived = Number(payload.cashReceived || 0);
         bill.changeReturned = Math.max(0, Number(payload.cashReceived || 0) - cashPortion);
+        bill.pointsEarned = newPointsEarned;
+        bill.pointsRedeemed = newPointsRedeemed;
+        bill.pointsDiscountAmount = totals.pointsDiscountAmount;
         bill.editHistory = [
             ...(bill.editHistory || []),
             {
@@ -769,6 +818,33 @@ router.put('/:id/edit', billingAuthMiddleware_1.billingAuthMiddleware, async (re
                 newTotal: totals.totalAmount,
             },
         ];
+        const hadPointsActivity = oldPointsEarned > 0 ||
+            oldPointsRedeemed > 0 ||
+            newPointsEarned > 0 ||
+            newPointsRedeemed > 0;
+        if (hadPointsActivity) {
+            const balanceAfter = await (0, billing_points_1.adjustPointsOnBillEdit)({
+                oldPhone,
+                newPhone,
+                customerName: String(payload.customer?.name || ''),
+                oldPointsEarned,
+                oldPointsRedeemed,
+                newPointsEarned,
+                newPointsRedeemed,
+                billId: bill._id,
+                billNumber: String(bill.billNumber || ''),
+                createdBy: req.billingAdminId,
+                BillingPointsAccount: BillingPointsAccount_1.default,
+                BillingPointsLedger: BillingPointsLedger_1.default,
+            });
+            bill.pointsBalanceAfter = balanceAfter;
+        }
+        else if ((0, billing_points_1.normalizeBillingPhone)(newPhone).length >= 10) {
+            const account = await BillingPointsAccount_1.default.findOne({
+                phone: (0, billing_points_1.normalizeBillingPhone)(newPhone),
+            }).lean();
+            bill.pointsBalanceAfter = Number(account?.balance || 0);
+        }
         bill.markModified('items');
         await bill.save();
         await (0, revalidateFrontend_1.triggerRevalidate)(['/', '/products', '/history', '/reports', '/billing']);

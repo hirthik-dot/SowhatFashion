@@ -5,10 +5,9 @@ import Link from 'next/link';
 import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatPrice, calculateDiscount } from '@/lib/utils';
-import { useState, useMemo } from 'react';
-import ColorSwatches from '@/components/shared/ColorSwatches';
-import type { ProductColor } from '@/lib/product-colors';
-import { getDisplayImages } from '@/lib/product-colors';
+import { useState } from 'react';
+import type { ProductVariantSummary } from '@/lib/product-variants';
+import { variantThumbnail } from '@/lib/product-variants';
 
 interface ProductCardProps {
   product: {
@@ -19,9 +18,12 @@ interface ProductCardProps {
     price: number;
     discountPrice: number;
     sizes?: string[];
-    colors?: ProductColor[];
+    variants?: ProductVariantSummary[];
+    hasColorVariants?: boolean;
     isNewArrival: boolean;
     category: string;
+    colorName?: string;
+    parentProductId?: string;
   };
   variant?: 'default' | 'compact' | 'wide';
 }
@@ -31,28 +33,24 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
   const addItem = useCartStore((s) => s.addItem);
   const { wishlist, toggleWishlist, isLoggedIn, openAuthModal } = useAuthStore();
   const [selectedSize, setSelectedSize] = useState(sizes[0] || 'M');
-  const [selectedColorIndex, setSelectedColorIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
-  const colors = product.colors || [];
-  const displayImages = getDisplayImages(product.images || [], colors, selectedColorIndex);
+  const imageUrl = product.images?.[0] || '/placeholder.jpg';
+  const allVariants = product.variants || [];
   const discount = calculateDiscount(product.price, product.discountPrice);
   const hasDiscount = discount > 0;
-  const imageUrl = displayImages[0] || product.images?.[0] || '/placeholder.jpg';
-  const selectedColor = colors[selectedColorIndex];
-  
-  const wishlisted = useMemo(() => wishlist.includes(product._id), [wishlist, product._id]);
+  const wishlisted = wishlist.includes(product._id);
+  const hoverImage = product.images?.[1];
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     addItem({
-      productId: product._id,
+      productId: product.parentProductId || product._id,
       name: product.name,
       image: imageUrl,
       size: selectedSize,
-      color: selectedColor?.name,
-      colorHex: selectedColor?.hex,
+      color: product.colorName,
       price: product.price,
       discountPrice: product.discountPrice,
     });
@@ -61,28 +59,29 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
   const handleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!isLoggedIn) {
-       openAuthModal();
-       return;
+      openAuthModal();
+      return;
     }
-    
+
     toggleWishlist(product._id);
     try {
       const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
       if (wishlisted) {
-         await fetch(`${url}/api/users/wishlist/${product._id}`, { method: 'DELETE' });
+        await fetch(`${url}/api/users/wishlist/${product._id}`, { method: 'DELETE' });
       } else {
-         await fetch(`${url}/api/users/wishlist`, {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ productId: product._id })
-         });
+        await fetch(`${url}/api/users/wishlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: product._id }),
+        });
       }
     } catch (err) {
       console.error('Failed to sync wishlist', err);
     }
   };
+
   if (variant === 'wide') {
     return (
       <Link href={`/products/${product.slug}`} className="block">
@@ -113,14 +112,13 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
 
   return (
     <Link href={`/products/${product.slug}`} className="block group">
-      <div 
+      <div
         className="product-card relative bg-white rounded-lg overflow-hidden border border-transparent hover:border-[var(--gold)] transition-all duration-300 hover:shadow-lg"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onTouchStart={() => setIsHovered(true)}
         onTouchEnd={() => setIsHovered(false)}
       >
-        {/* Image */}
         <div className="relative aspect-square md:aspect-[3/4] overflow-hidden bg-[var(--surface)]">
           <Image
             src={imageUrl}
@@ -129,9 +127,9 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             className="object-cover group-hover:scale-105 transition-transform duration-700"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
-          {(displayImages[1] || product.images?.[1]) && (
+          {hoverImage && (
             <Image
-              src={displayImages[1] || product.images[1]}
+              src={hoverImage}
               alt={product.name}
               fill
               className={`object-cover group-hover:scale-105 transition-all duration-500 ease-in-out ${isHovered ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
@@ -139,7 +137,6 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             />
           )}
 
-          {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5">
             {hasDiscount && (
               <span className="bg-[var(--sale-red)] text-white text-[11px] font-bold px-2.5 py-1 rounded">
@@ -153,7 +150,6 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             )}
           </div>
 
-          {/* Wishlist */}
           <button
             onClick={handleWishlist}
             className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-all shadow-sm"
@@ -163,7 +159,6 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             </svg>
           </button>
 
-          {/* Add to Cart Overlay Desktop */}
           <div className="product-card-overlay absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 hidden md:block opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             <div className="flex gap-1.5 mb-3">
               {sizes.map((size) => (
@@ -189,20 +184,24 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
           </div>
         </div>
 
-        {/* Info */}
         <div className="p-3">
           <h3 className="text-sm font-medium text-[var(--text-primary)] truncate group-hover:text-[var(--gold)] transition-colors">
             {product.name}
           </h3>
-          {colors.length > 0 && (
-            <div className="mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-              <ColorSwatches
-                colors={colors}
-                selectedIndex={selectedColorIndex}
-                onSelect={setSelectedColorIndex}
-                size="sm"
-                showLabels={false}
-              />
+          {allVariants.length > 1 && (
+            <div className="mt-2 flex gap-1.5 overflow-x-auto no-scrollbar" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+              {allVariants.map((v) => (
+                <Link
+                  key={v._id || v.slug}
+                  href={`/products/${v.slug}`}
+                  className={`relative w-8 h-10 shrink-0 border overflow-hidden rounded-sm ${
+                    v.slug === product.slug ? 'border-black' : 'border-[var(--border)]'
+                  }`}
+                  title={v.colorName}
+                >
+                  <Image src={variantThumbnail(v)} alt={v.colorName} fill className="object-cover" sizes="32px" />
+                </Link>
+              ))}
             </div>
           )}
           <div className="flex items-center gap-2 mt-1.5">
@@ -216,8 +215,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
               <span className="font-bold text-base">{formatPrice(product.price)}</span>
             )}
           </div>
-          
-          {/* Mobile Actions: always visible Add to Cart below price */}
+
           <div className="md:hidden mt-3 pt-2 border-t border-[var(--border)]">
             <div className="flex flex-wrap gap-2 mb-2">
               {sizes.map((size) => (

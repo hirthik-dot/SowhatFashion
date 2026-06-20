@@ -13,10 +13,14 @@ export interface IProduct extends Document {
   name: string;
   billingName?: string;
   slug: string;
+  /** Shared product description (variants inherit this) */
+  description?: string;
   category: string;
   subCategory: string;
   images: string[];
   colors?: IProductColor[];
+  /** Default color variant for listing / legacy URL redirects */
+  defaultVariantId?: mongoose.Types.ObjectId;
   price: number;
   discountPrice: number;
   sizes: string[];
@@ -46,12 +50,14 @@ const ProductSchema = new Schema<IProduct>(
     name: { type: String, required: true, trim: true },
     billingName: { type: String, trim: true, default: '' },
     slug: { type: String, unique: true },
+    description: { type: String, trim: true, default: '' },
     category: {
       type: String,
       required: true,
     },
     subCategory: { type: String, default: '' },
     images: [{ type: String }],
+    defaultVariantId: { type: Schema.Types.ObjectId, ref: 'ProductVariant' },
     colors: [
       {
         name: { type: String, required: true, trim: true },

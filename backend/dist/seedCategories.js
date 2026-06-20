@@ -7,6 +7,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const db_1 = __importDefault(require("./lib/db"));
 const Category_1 = __importDefault(require("./models/Category"));
+const storeCategories_1 = require("./lib/storeCategories");
 const seedCategories = async () => {
     await (0, db_1.default)();
     console.log('✅ Connected to DB');
@@ -17,11 +18,15 @@ const seedCategories = async () => {
         console.log('   To re-seed, first delete all: db.categories.deleteMany({})');
         process.exit(0);
     }
+    const topLevel = storeCategories_1.STORE_CATEGORIES.map((cat) => ({
+        name: cat.name,
+        slug: cat.slug,
+        parentSlug: null,
+        megaDropdownLabel: cat.name,
+        order: cat.order,
+    }));
     const categories = [
-        // Top-level categories
-        { name: 'T-Shirts', slug: 'tshirt', parentSlug: null, megaDropdownLabel: 'T-Shirts', order: 1 },
-        { name: 'Shirts', slug: 'shirt', parentSlug: null, megaDropdownLabel: 'Shirts', order: 2 },
-        { name: 'Pants', slug: 'pant', parentSlug: null, megaDropdownLabel: 'Pants', order: 3 },
+        ...topLevel,
         // T-Shirt subcategories
         { name: 'Round Neck', slug: 'round-neck', parentSlug: 'tshirt', megaDropdownLabel: 'By Neck Type', order: 1 },
         { name: 'Polo', slug: 'polo', parentSlug: 'tshirt', megaDropdownLabel: 'By Neck Type', order: 2 },
