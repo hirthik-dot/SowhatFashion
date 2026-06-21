@@ -1,3 +1,5 @@
+import { activeBillItems } from './billing-replacements';
+
 /** GST is 5% on amount after item discounts; customer discount applies to (after item discount + GST). */
 export const BILLING_GST_RATE = 0.05;
 
@@ -29,11 +31,10 @@ export const unitLineDiscountTotal = (item: any) => {
 };
 
 /** Bill lines that still count toward revenue (excludes returned-out originals). */
-export const activeBillLineItems = (bill: any) =>
-  (bill?.items || []).filter((item: any) => !item.replacedOut);
+export const activeBillLineItems = (bill: any, returns: any[] = []) => activeBillItems(bill, returns);
 
 export const billRevenueExGst = (bill: any, gstRate = BILLING_GST_RATE) => {
-  const items = activeBillLineItems(bill);
+  const items = activeBillItems(bill, bill?.returns);
   if (items.length) {
     return items.reduce((sum: number, item: any) => sum + lineRevenueExGst(item, gstRate), 0);
   }

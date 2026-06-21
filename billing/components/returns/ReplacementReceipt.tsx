@@ -2,6 +2,11 @@
 
 import React, { useMemo, useRef } from "react";
 import { useReactToPrint } from "react-to-print";
+import {
+  BILLING_GST_RATE,
+  lineCustomerValueInclusive,
+  replacementLineCustomerValueInclusive,
+} from "@/lib/billing-totals";
 
 export type ReturnLineItem = {
   product?: string;
@@ -24,6 +29,8 @@ export type ReturnDocument = {
   replacementItems?: ReturnLineItem[];
   returnType?: "replacement" | "partial" | "refund";
   priceDifference?: number;
+  returnedTotal?: number;
+  replacementTotal?: number;
   refundAmount?: number;
   refundMethod?: string;
   processedByName?: string;
@@ -56,8 +63,14 @@ const maskPhone = (phone?: string) => {
   return `${raw.slice(0, 5)}XXXXX`;
 };
 
-const lineValue = (item: ReturnLineItem) =>
-  Number(item.sellingPrice || 0) * Math.max(1, Number(item.quantity || 1));
+const returnedLineValue = (item: ReturnLineItem) => {
+  const qty = Math.max(1, Number(item.quantity || 1));
+  const unit = Number(item.sellingPrice || 0);
+  if (unit > 0) return Number((unit * qty * (1 + BILLING_GST_RATE)).toFixed(2));
+  return lineCustomerValueInclusive(item);
+};
+
+const replacementLineValue = (item: ReturnLineItem) => replacementLineCustomerValueInclusive(item);
 
 function ReceiptRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -87,12 +100,18 @@ export default function ReplacementReceipt({
     returnData.returnType === "refund" || (returnData.replacementItems || []).length === 0;
 
   const returnedTotal = useMemo(() => {
-    return (returnData.returnedItems || []).reduce((sum, item) => sum + lineValue(item), 0);
-  }, [returnData.returnedItems]);
+    if (typeof returnData.returnedTotal === "number" && returnData.returnedTotal > 0) {
+      return returnData.returnedTotal;
+    }
+    return (returnData.returnedItems || []).reduce((sum, item) => sum + returnedLineValue(item), 0);
+  }, [returnData.returnedItems, returnData.returnedTotal]);
 
   const replacementTotal = useMemo(() => {
-    return (returnData.replacementItems || []).reduce((sum, item) => sum + lineValue(item), 0);
-  }, [returnData.replacementItems]);
+    if (typeof returnData.replacementTotal === "number" && returnData.replacementTotal > 0) {
+      return returnData.replacementTotal;
+    }
+    return (returnData.replacementItems || []).reduce((sum, item) => sum + replacementLineValue(item), 0);
+  }, [returnData.replacementItems, returnData.replacementTotal]);
 
   const priceDifference = useMemo(() => {
     if (typeof returnData.priceDifference === "number") return returnData.priceDifference;
@@ -246,7 +265,7 @@ export default function ReplacementReceipt({
                       </div>
                       <div>Barcode: {item.barcode || "-"}</div>
                       <div>Reason : {item.reason || "Other"}</div>
-                      <div>Value  : {formatMoney(lineValue(item))}</div>
+                      <div>Value  : {formatMoney(returnedLineValue(item))}</div>
                     </div>
                   ))}
                 </div>
@@ -261,7 +280,7 @@ export default function ReplacementReceipt({
                             {item.name || "Item"} ({item.size || "-"}) x{Math.max(1, Number(item.quantity || 1))}
                           </div>
                           <div>Barcode: {item.barcode || "-"}</div>
-                          <div>Value  : {formatMoney(lineValue(item))}</div>
+                          <div>Value  : {formatMoney(replacementLineValue(item))}</div>
                         </div>
                       ))}
                     </div>

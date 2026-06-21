@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
-import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage, adminGetCategories, adminGetProductVariants } from '@/lib/api';
+import { adminGetProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadImage, adminGetCategories, adminGetProductVariants, adminGetProductSizeVariants } from '@/lib/api';
 import ProductFilterAssignments from '@/components/admin/ProductFilterAssignments';
 import ProductVariantManager from '@/components/admin/ProductVariantManager';
+import ProductSizeVariantManager from '@/components/admin/ProductSizeVariantManager';
 import type { ProductVariantForm } from '@/lib/product-variants';
 import { emptyVariantForm } from '@/lib/product-variants';
+import type { ProductSizeVariantForm } from '@/lib/product-size-variants';
 import { formatPrice, productListKey } from '@/lib/utils';
 import Image from 'next/image';
 
@@ -34,6 +36,8 @@ export default function AdminProductsPage() {
     tags: '',
     images: [] as string[],
     variants: [] as ProductVariantForm[],
+    sizeVariants: [] as ProductSizeVariantForm[],
+    isBillingProduct: false,
     isFeatured: false,
     isNewArrival: false,
     isActive: true,
@@ -72,6 +76,8 @@ export default function AdminProductsPage() {
             : {};
 
       let variants: ProductVariantForm[] = [];
+      let sizeVariants: ProductSizeVariantForm[] = [];
+      let isBillingProduct = Boolean(product.isBillingProduct);
       try {
         const res = await adminGetProductVariants(productId);
         variants = (res.variants || []).map((v: any) => ({
@@ -89,6 +95,39 @@ export default function AdminProductsPage() {
         }));
       } catch {
         variants = [];
+      }
+
+      try {
+        const sizeRes = await adminGetProductSizeVariants(productId);
+        isBillingProduct = Boolean(sizeRes.isBillingProduct ?? product.isBillingProduct);
+        sizeVariants = (sizeRes.variants || []).map((v: any) => ({
+          _id: String(v._id),
+          slug: v.slug,
+          sizeName: v.sizeName,
+          ecommercePrice: v.ecommercePrice ?? null,
+          ecommerceDiscountPrice: v.ecommerceDiscountPrice ?? null,
+          billingPrice: v.billingPrice ?? null,
+          stock: v.stock ?? null,
+          effectivePrice: v.effectivePrice ?? null,
+          images: v.images || [],
+          sortOrder: v.sortOrder,
+          isActive: v.isActive !== false,
+          colorVariants: (v.colorVariants || []).map((cv: any) => ({
+            _id: String(cv._id),
+            slug: cv.slug,
+            colorName: cv.colorName,
+            colorHex: cv.colorHex || '#000000',
+            images: cv.images || [],
+            price: cv.price ?? null,
+            discountPrice: cv.discountPrice ?? null,
+            stock: cv.stock ?? null,
+            sku: cv.sku || '',
+            sortOrder: cv.sortOrder,
+            isActive: cv.isActive !== false,
+          })),
+        }));
+      } catch {
+        sizeVariants = [];
       }
 
       // Fallback: convert legacy colors[] if no variants yet
@@ -110,6 +149,8 @@ export default function AdminProductsPage() {
         subCategory: product.subCategory || '',
         tags: product.tags?.join(', ') || '',
         variants,
+        sizeVariants,
+        isBillingProduct,
         slug: product.slug || '',
         filterTags,
       });
@@ -162,10 +203,19 @@ export default function AdminProductsPage() {
         tags: typeof formData.tags === 'string'
           ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
           : formData.tags,
-        variants: (formData.variants || []).filter((v: ProductVariantForm) => v.colorName.trim()),
+        sizeVariants: (formData.sizeVariants || []).filter((v: ProductSizeVariantForm) =>
+          formData.isBillingProduct ? v._id && v.sizeName.trim() : v.sizeName.trim()
+        ).map((sv) => ({
+          ...sv,
+          colorVariants: (sv.colorVariants || []).filter((cv) => cv.colorName.trim()),
+        })),
+        variants: (formData.sizeVariants?.length ?? 0) > 0
+          ? []
+          : (formData.variants || []).filter((v: ProductVariantForm) => v.colorName.trim()),
         filterTags: formData.filterTags || {},
       };
       delete (payload as any).colors;
+      delete (payload as any).isBillingProduct;
 
       if (editingId) {
         await adminUpdateProduct(editingId, payload);
@@ -212,6 +262,9 @@ export default function AdminProductsPage() {
 
   const resolveProductId = (product: any) => String(product.parentProductId || product._id);
   const resolveEditName = (product: any) => {
+    if (product.isSizeVariant && product.name) {
+      return String(product.name).replace(/ \([^)]+\)$/, '');
+    }
     if (product.isPriceVariant && product.name) {
       return String(product.name).replace(/ \(₹[\d,]+\)$/, '');
     }
@@ -298,6 +351,9 @@ export default function AdminProductsPage() {
                     <div className="font-semibold text-black">{product.name}</div>
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)] mt-1">{product.category}</div>
                     <div className="flex gap-1 mt-1 flex-wrap">
+                      {product.isSizeVariant ? (
+                        <span className="bg-blue-50 text-blue-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Size variant</span>
+                      ) : null}
                       {product.isPriceVariant ? (
                         <span className="bg-red-50 text-red-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Price batch</span>
                       ) : null}
@@ -403,20 +459,55 @@ export default function AdminProductsPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Stock</label>
-                      <input required type="number" min="0" value={formData.stock} onChange={(e) => setFormData({...formData, stock: Number(e.target.value)})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
+                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">
+                        Stock{formData.isBillingProduct ? ' (managed in billing)' : ''}
+                      </label>
+                      <input
+                        required={!formData.isBillingProduct}
+                        type="number"
+                        min="0"
+                        value={formData.stock}
+                        onChange={(e) => setFormData({...formData, stock: Number(e.target.value)})}
+                        readOnly={formData.isBillingProduct}
+                        className={`w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)] ${formData.isBillingProduct ? 'bg-gray-100 text-[var(--text-secondary)]' : ''}`}
+                      />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Regular Price (₹)</label>
-                      <input required type="number" min="1" value={formData.price} onChange={(e) => setFormData({...formData, price: Number(e.target.value)})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
+                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">
+                        Regular Price (₹){formData.isBillingProduct ? ' — edit per size below' : ''}
+                      </label>
+                      <input
+                        required={!formData.isBillingProduct}
+                        type="number"
+                        min="1"
+                        value={formData.price}
+                        onChange={(e) => setFormData({...formData, price: Number(e.target.value)})}
+                        readOnly={formData.isBillingProduct}
+                        className={`w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)] ${formData.isBillingProduct ? 'bg-gray-100 text-[var(--text-secondary)]' : ''}`}
+                      />
+                      {formData.isBillingProduct && (
+                        <p className="text-[10px] text-[var(--text-secondary)]">
+                          Billing prices sync automatically. Use size variant overrides for e-commerce-only pricing.
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Discount Price (₹)</label>
-                      <input type="number" min="0" value={formData.discountPrice} onChange={(e) => setFormData({...formData, discountPrice: Number(e.target.value)})} className="w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)]" />
+                      <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">
+                        Discount Price (₹){formData.isBillingProduct ? ' — per size below' : ''}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.discountPrice}
+                        onChange={(e) => setFormData({...formData, discountPrice: Number(e.target.value)})}
+                        readOnly={formData.isBillingProduct}
+                        className={`w-full border border-[var(--border)] rounded px-3 py-2 outline-none focus:border-[var(--gold)] ${formData.isBillingProduct ? 'bg-gray-100 text-[var(--text-secondary)]' : ''}`}
+                      />
                     </div>
 
+                    {!formData.isBillingProduct && (
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Available Sizes</label>
                       <div className="flex gap-3">
@@ -438,6 +529,7 @@ export default function AdminProductsPage() {
                         ))}
                       </div>
                     </div>
+                    )}
 
                     <div className="space-y-1 md:col-span-2">
                       <label className="text-xs font-bold text-[var(--text-secondary)] uppercase">Tags (comma separated)</label>
@@ -487,6 +579,16 @@ export default function AdminProductsPage() {
                     </div>
 
                     <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)]">
+                      <ProductSizeVariantManager
+                        variants={formData.sizeVariants || []}
+                        baseSlug={formData.slug || formData.name}
+                        isBillingProduct={formData.isBillingProduct}
+                        onChange={(sizeVariants) => setFormData({ ...formData, sizeVariants })}
+                      />
+                    </div>
+
+                    {(formData.sizeVariants?.length ?? 0) === 0 && (
+                    <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)]">
                       <ProductVariantManager
                         variants={formData.variants || []}
                         baseSlug={formData.slug || formData.name}
@@ -495,6 +597,7 @@ export default function AdminProductsPage() {
                         onChange={(variants) => setFormData({ ...formData, variants })}
                       />
                     </div>
+                    )}
 
                     <div className="space-y-3 md:col-span-2 pt-4 border-t border-[var(--border)] grid grid-cols-1 md:grid-cols-3 gap-4">
                       <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-3 rounded border border-[var(--border)]">

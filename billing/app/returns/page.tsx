@@ -13,7 +13,7 @@ import ReplacementReceipt, { type ReturnDocument } from "@/components/returns/Re
 import { useRole } from "@/hooks/useRole";
 import type { BillItem, DiscountType } from "@/lib/bill-store";
 import { expandSelectedToReturnedItems, returnableBillItems } from "@/lib/return-utils";
-import { BILLING_GST_RATE, itemDiscountPerUnit } from "@/lib/billing-totals";
+import { BILLING_GST_RATE, itemDiscountPerUnit, lineCustomerValueInclusive } from "@/lib/billing-totals";
 
 const computeReplacementTotals = (
   items: BillItem[],
@@ -160,12 +160,7 @@ export default function ReturnsPage() {
   );
 
   const returnedTotal = useMemo(
-    () =>
-      selectedItems.reduce(
-        (sum: number, item: any) =>
-          sum + Number(item.sellingPrice || item.lineTotal / item.quantity || item.mrp || 0) * Number(item.quantity || 1),
-        0
-      ),
+    () => selectedItems.reduce((sum: number, item: any) => sum + lineCustomerValueInclusive(item), 0),
     [selectedItems]
   );
 
@@ -279,6 +274,9 @@ export default function ReturnsPage() {
         billNumber: response?.billNumber || bill?.billNumber,
         customer: response?.customer || bill?.customer,
         processedByName: user?.name || response?.processedByName || "-",
+        returnedTotal,
+        replacementTotal: replacementTotal,
+        priceDifference,
       });
       setReceiptOpen(true);
     } catch (err: any) {
@@ -360,9 +358,7 @@ export default function ReturnsPage() {
                 {selectedItems.map((item: any, index: number) => (
                   <div key={`${item.barcode}-${index}`} className="flex justify-between gap-2">
                     <span className="truncate">{item.name} ({item.size || "-"}) x{item.quantity || 1}</span>
-                    <span className="shrink-0">
-                      ₹{(Number(item.sellingPrice || item.lineTotal / item.quantity || item.mrp || 0) * Number(item.quantity || 1)).toFixed(2)}
-                    </span>
+                    <span className="shrink-0">₹{lineCustomerValueInclusive(item).toFixed(2)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between font-medium border-t border-[var(--border)] pt-1 mt-1">

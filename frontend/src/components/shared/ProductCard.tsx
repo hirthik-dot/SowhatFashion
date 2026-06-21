@@ -4,10 +4,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
-import { formatPrice, calculateDiscount } from '@/lib/utils';
+import { formatPrice, formatPriceRange, calculateDiscount } from '@/lib/utils';
 import { useState } from 'react';
 import type { ProductVariantSummary } from '@/lib/product-variants';
+import type { ProductSizeVariantSummary } from '@/lib/product-size-variants';
 import { variantThumbnail } from '@/lib/product-variants';
+import ProductCardSizePicker from '@/components/shared/ProductCardSizePicker';
 
 interface ProductCardProps {
   product: {
@@ -18,6 +20,9 @@ interface ProductCardProps {
     price: number;
     discountPrice: number;
     sizes?: string[];
+    sizeVariants?: ProductSizeVariantSummary[];
+    hasSizeVariants?: boolean;
+    priceMax?: number;
     variants?: ProductVariantSummary[];
     hasColorVariants?: boolean;
     isNewArrival: boolean;
@@ -30,6 +35,8 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, variant = 'default' }: ProductCardProps) {
   const sizes = product.sizes || [];
+  const sizeVariants = product.sizeVariants || [];
+  const hasSizeLinks = sizeVariants.length > 0;
   const addItem = useCartStore((s) => s.addItem);
   const { wishlist, toggleWishlist, isLoggedIn, openAuthModal } = useAuthStore();
   const [selectedSize, setSelectedSize] = useState(sizes[0] || 'M');
@@ -98,7 +105,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                   <span className="text-xs text-[var(--text-secondary)] line-through">{formatPrice(product.price)}</span>
                 </>
               ) : (
-                <span className="font-bold">{formatPrice(product.price)}</span>
+                <span className="font-bold">{formatPriceRange(product.price, product.priceMax)}</span>
               )}
             </div>
           </div>
@@ -160,27 +167,21 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
           </button>
 
           <div className="product-card-overlay absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 hidden md:block opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <div className="flex gap-1.5 mb-3">
-              {sizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedSize(size); }}
-                  className={`text-[11px] px-2 py-1 rounded border min-w-[32px] min-h-[32px] ${
-                    selectedSize === size
-                      ? 'bg-[var(--gold)] border-[var(--gold)] text-black'
-                      : 'border-white/40 text-white hover:border-white'
-                  } transition-all`}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={handleAddToCart}
-              className="w-full btn-gold text-sm py-2.5 rounded hover:bg-[var(--gold-hover)]"
-            >
-              ADD TO CART
-            </button>
+            <ProductCardSizePicker
+              sizeVariants={hasSizeLinks ? sizeVariants : undefined}
+              sizes={hasSizeLinks ? undefined : sizes}
+              productSlug={product.slug}
+              variant="overlay"
+              className="mb-3"
+            />
+            {!hasSizeLinks && sizes.length > 0 && (
+              <button
+                onClick={handleAddToCart}
+                className="w-full btn-gold text-sm py-2.5 rounded hover:bg-[var(--gold-hover)]"
+              >
+                ADD TO CART
+              </button>
+            )}
           </div>
         </div>
 
@@ -207,15 +208,29 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
           <div className="flex items-center gap-2 mt-1.5">
             {hasDiscount ? (
               <>
-                <span className="font-bold text-base">{formatPrice(product.discountPrice)}</span>
-                <span className="text-xs text-[var(--text-secondary)] line-through">{formatPrice(product.price)}</span>
+                <span className="font-bold text-base">{formatPriceRange(product.discountPrice, product.priceMax)}</span>
+                <span className="text-xs text-[var(--text-secondary)] line-through">
+                  {formatPriceRange(product.price, product.priceMax)}
+                </span>
                 <span className="text-xs text-[var(--sale-red)] font-semibold">({discount}% off)</span>
               </>
             ) : (
-              <span className="font-bold text-base">{formatPrice(product.price)}</span>
+              <span className="font-bold text-base">{formatPriceRange(product.price, product.priceMax)}</span>
             )}
           </div>
 
+          {(hasSizeLinks || sizes.length > 0) && (
+            <div className="mt-2.5" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+              <ProductCardSizePicker
+                sizeVariants={hasSizeLinks ? sizeVariants : undefined}
+                sizes={hasSizeLinks ? undefined : sizes}
+                productSlug={product.slug}
+                variant="inline"
+              />
+            </div>
+          )}
+
+          {!hasSizeLinks && (
           <div className="md:hidden mt-3 pt-2 border-t border-[var(--border)]">
             <div className="flex flex-wrap gap-2 mb-2">
               {sizes.map((size) => (
@@ -239,6 +254,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
               ADD TO CART
             </button>
           </div>
+          )}
         </div>
       </div>
     </Link>

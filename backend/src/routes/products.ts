@@ -12,6 +12,7 @@ import {
   expandProductsForEcommerce,
   getEcommerceVariantsByProducts,
   parsePriceVariantSlug,
+  resolveBillingProductForSizeSlug,
 } from '../lib/ecommerce-product-variants';
 import {
   getVariantBySlug,
@@ -21,6 +22,19 @@ import {
   syncProductVariants,
   type VariantInput,
 } from '../lib/product-color-variants';
+import ProductSizeVariant from '../models/ProductSizeVariant';
+import {
+  attachAdminSizeVariants,
+  buildSizeVariantSlug,
+  ensureSizeVariantsFromBillingStock,
+  getSizeVariantBySlug,
+  loadSizePageContext,
+  mergeSizeAndColorWithParent,
+  mergeSizeVariantWithParent,
+  syncProductSizeVariants,
+  updateBillingSizeVariantOverrides,
+  type SizeVariantInput,
+} from '../lib/product-size-variants';
 
 const router = Router();
 
@@ -186,11 +200,15 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/products/slugs - all variant + product slugs for SSG
+// GET /api/products/meta/slugs - all variant + product slugs for SSG
 router.get('/meta/slugs', async (_req: Request, res: Response) => {
   try {
-    const variants = await ProductVariant.find({ isActive: true }).select('slug').lean();
-    const slugs = variants.map((v) => v.slug).filter(Boolean);
+    const colorVariants = await ProductVariant.find({ isActive: true }).select('slug').lean();
+    const sizeVariants = await ProductSizeVariant.find({ isActive: true }).select('slug').lean();
+    const slugs = [
+      ...colorVariants.map((v) => v.slug),
+      ...sizeVariants.map((v) => v.slug),
+    ].filter(Boolean);
     res.json({ slugs });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -202,7 +220,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
   try {
     const slug = String(req.params.slug || '').trim();
 
-    // 1. Color variant slug
+    // 1. Color variant slug (includes per-size colors e.g. shirt-sz-m-red)
     const colorVariantHit = await getVariantBySlug(slug);
     if (colorVariantHit) {
       const parent = await Product.findOne({
@@ -213,19 +231,96 @@ router.get('/:slug', async (req: Request, res: Response) => {
       if (!parent) {
         return res.status(404).json({ message: 'Product not found' });
       }
+
+      if (colorVariantHit.variant.sizeVariantId) {
+        const sizeVariant = await ProductSizeVariant.findById(colorVariantHit.variant.sizeVariantId).lean();
+        if (!sizeVariant) {
+          return res.status(404).json({ message: 'Product not found' });
+        }
+        const sizeSiblings = await ProductSizeVariant.find({
+          parentProductId: parent._id,
+          isActive: true,
+        })
+          .sort({ sortOrder: 1 })
+          .lean();
+        const { getBillingSizeDataByProducts } = await import('../lib/product-size-variants');
+        const billingMap = await getBillingSizeDataByProducts([parent._id]);
+        const billingSizes = billingMap.get(String(parent._id)) || [];
+        const billingBySize = new Map(billingSizes.map((b) => [b.sizeName, b]));
+
+        const merged = mergeSizeAndColorWithParent(
+          parent as Record<string, unknown>,
+          sizeVariant as any,
+          colorVariantHit.variant,
+          colorVariantHit.siblings,
+          sizeSiblings as any[],
+          billingBySize.get(sizeVariant.sizeName),
+          billingBySize
+        );
+        return res.json(merged);
+      }
+
       const merged = mergeVariantWithParent(parent, colorVariantHit.variant, colorVariantHit.siblings);
 
       if (parent.isBillingProduct) {
-        const variantsByProduct = await getEcommerceVariantsByProducts([parent._id]);
-        const priceVariants = (variantsByProduct.get(String(parent._id)) || []).filter((e) => e.stock > 0);
-        if (priceVariants.length === 1) {
-          return res.json(applyEcommerceVariant(merged, priceVariants[0], false));
+        const sizeVariants = await ProductSizeVariant.find({
+          parentProductId: parent._id,
+          isActive: true,
+        })
+          .sort({ sortOrder: 1 })
+          .lean();
+        if (sizeVariants.length >= 1) {
+          return res.json({ redirectTo: sizeVariants[0].slug, _id: parent._id });
         }
       }
       return res.json(merged);
     }
 
-    // 2. Price variant slug (billing products)
+    // 2. Size variant slug (billing products — each size is its own page)
+    const sizeVariantHit = await getSizeVariantBySlug(slug);
+    if (sizeVariantHit) {
+      const parent = await Product.findOne({
+        _id: sizeVariantHit.variant.parentProductId,
+        isEcommerceProduct: { $ne: false },
+        ...(isAdminRequest(req) ? {} : { isActive: true }),
+      }).lean();
+      if (!parent) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+
+      const colorVariants = await import('../lib/product-color-variants').then((m) =>
+        m.getVariantsForSizeVariant(sizeVariantHit.variant._id)
+      );
+      const activeColors = colorVariants.filter((c) => c.isActive !== false);
+      if (activeColors.length === 1) {
+        const { getBillingSizeDataByProducts } = await import('../lib/product-size-variants');
+        const billingMap = await getBillingSizeDataByProducts([parent._id]);
+        const billingSizes = billingMap.get(String(parent._id)) || [];
+        const billingBySize = new Map(billingSizes.map((b) => [b.sizeName, b]));
+        const merged = mergeSizeAndColorWithParent(
+          parent as Record<string, unknown>,
+          sizeVariantHit.variant,
+          activeColors[0],
+          activeColors,
+          sizeVariantHit.siblings,
+          billingBySize.get(sizeVariantHit.variant.sizeName),
+          billingBySize
+        );
+        if (merged.slug !== slug) {
+          return res.json({ redirectTo: merged.slug, _id: parent._id });
+        }
+        return res.json(merged);
+      }
+
+      const merged = await loadSizePageContext(
+        parent as Record<string, unknown>,
+        sizeVariantHit.variant,
+        sizeVariantHit.siblings
+      );
+      return res.json(merged);
+    }
+
+    // 3. Legacy price variant slug (backward compatibility)
     const variantSlug = parsePriceVariantSlug(slug);
 
     if (variantSlug) {
@@ -237,6 +332,12 @@ router.get('/:slug', async (req: Request, res: Response) => {
       if (!product) {
         return res.status(404).json({ message: 'Product not found' });
       }
+      const sizeResolved = await resolveBillingProductForSizeSlug(
+        product as Record<string, unknown>,
+        slug
+      );
+      if (sizeResolved) return res.json(sizeResolved);
+
       const variantsByProduct = await getEcommerceVariantsByProducts([product._id]);
       const variant = (variantsByProduct.get(String(product._id)) || []).find(
         (entry) => Math.round(entry.sellingPrice) === Math.round(variantSlug.sellingPrice)
@@ -256,7 +357,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    // 3. Legacy parent slug → redirect to default color variant
+    // 4. Legacy parent slug → redirect to default color variant
     const variantsMap = await getVariantsByProductIds([product._id]);
     const colorVariants = variantsMap.get(String(product._id)) || [];
     if (colorVariants.length > 0) {
@@ -269,13 +370,14 @@ router.get('/:slug', async (req: Request, res: Response) => {
       if (defaultVariant) {
         const merged = mergeVariantWithParent(product, defaultVariant, colorVariants);
         if (product.isBillingProduct) {
-          const variantsByProduct = await getEcommerceVariantsByProducts([product._id]);
-          const priceVariants = (variantsByProduct.get(String(product._id)) || []).filter((e) => e.stock > 0);
-          if (priceVariants.length === 1) {
-            return res.json(applyEcommerceVariant(merged, priceVariants[0], false));
-          }
-          if (priceVariants.length > 1) {
-            return res.json(applyEcommerceVariant(merged, priceVariants[0], false));
+          const sizeVariants = await ProductSizeVariant.find({
+            parentProductId: product._id,
+            isActive: true,
+          })
+            .sort({ sortOrder: 1 })
+            .lean();
+          if (sizeVariants.length >= 1) {
+            return res.json({ redirectTo: sizeVariants[0].slug, _id: product._id });
           }
         }
         return res.json(merged);
@@ -283,14 +385,23 @@ router.get('/:slug', async (req: Request, res: Response) => {
     }
 
     if (product.isBillingProduct) {
-      const variantsByProduct = await getEcommerceVariantsByProducts([product._id]);
-      const variants = (variantsByProduct.get(String(product._id)) || []).filter((entry) => entry.stock > 0);
-      if (variants.length === 1) {
-        return res.json(applyEcommerceVariant(product, variants[0], false));
-      }
-      if (variants.length > 1) {
-        // Base slug (hero links, bookmarks): default to lowest in-stock price variant
-        return res.json(applyEcommerceVariant(product, variants[0], false));
+      await ensureSizeVariantsFromBillingStock(product._id, product.slug);
+      const sizeVariants = await ProductSizeVariant.find({
+        parentProductId: product._id,
+        isActive: true,
+      })
+        .sort({ sortOrder: 1 })
+        .lean();
+      if (sizeVariants.length >= 1) {
+        const defaultSlug = sizeVariants[0].slug;
+        if (defaultSlug !== slug) {
+          return res.json({ redirectTo: defaultSlug, _id: product._id });
+        }
+        const resolved = await resolveBillingProductForSizeSlug(
+          product as Record<string, unknown>,
+          defaultSlug
+        );
+        if (resolved) return res.json(resolved);
       }
     }
 
@@ -303,7 +414,10 @@ router.get('/:slug', async (req: Request, res: Response) => {
 // POST /api/products - create product (protected)
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { variants, ...body } = req.body as Record<string, unknown> & { variants?: VariantInput[] };
+    const { variants, sizeVariants, ...body } = req.body as Record<string, unknown> & {
+      variants?: VariantInput[];
+      sizeVariants?: SizeVariantInput[];
+    };
     await applyFilterTagsToBody(body, variants?.map((v) => ({ name: v.colorName })));
     const product = new Product(body);
     await product.save();
@@ -333,6 +447,16 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       }
     }
 
+    let adminSizeVariants: Record<string, unknown>[] = [];
+    if (Array.isArray(sizeVariants) && sizeVariants.length) {
+      adminSizeVariants = (await syncProductSizeVariants(
+        product._id,
+        product.slug,
+        sizeVariants,
+        Boolean(product.isBillingProduct)
+      )) as Record<string, unknown>[];
+    }
+
     const variantsMap = await getVariantsByProductIds([product._id]);
     const colorVariants = variantsMap.get(String(product._id)) || [];
     const payload =
@@ -340,7 +464,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         ? mergeVariantWithParent(product.toObject() as unknown as Record<string, unknown>, colorVariants[0] as any, colorVariants as any)
         : product.toObject();
 
-    res.status(201).json({ ...payload, adminVariants: colorVariants });
+    res.status(201).json({ ...payload, adminVariants: colorVariants, adminSizeVariants });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
@@ -349,7 +473,26 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 // PUT /api/products/:id - update product (protected)
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { variants, ...body } = req.body as Record<string, unknown> & { variants?: VariantInput[] };
+    const { variants, sizeVariants, ...body } = req.body as Record<string, unknown> & {
+      variants?: VariantInput[];
+      sizeVariants?: SizeVariantInput[];
+    };
+
+    const existingProduct = await Product.findById(req.params.id);
+    if (!existingProduct) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    // E-commerce edits must not overwrite billing inventory prices/stock/sizes
+    if (existingProduct.isBillingProduct) {
+      delete body.price;
+      delete body.discountPrice;
+      delete body.stock;
+      delete body.sizes;
+      delete body.incomingPrice;
+      delete body.sizeStock;
+    }
+
     const shouldApplyFilterTags = FILTER_TAG_BODY_FIELDS.some((field) => field in body) || Array.isArray(variants);
     if (shouldApplyFilterTags) {
       await applyFilterTagsToBody(body, variants?.map((v) => ({ name: v.colorName })));
@@ -363,8 +506,47 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
+    let adminSizeVariants: Record<string, unknown>[] = [];
+    const hasSizeVariants = Array.isArray(sizeVariants) && sizeVariants.length > 0;
+
+    if (hasSizeVariants) {
+      if (product.isBillingProduct) {
+        await ensureSizeVariantsFromBillingStock(product._id, product.slug);
+        await updateBillingSizeVariantOverrides(product._id, sizeVariants);
+      } else {
+        await syncProductSizeVariants(product._id, product.slug, sizeVariants, false);
+      }
+
+      for (const sv of sizeVariants) {
+        if (!sv._id || !Array.isArray(sv.colorVariants)) continue;
+        const sizeDoc = await ProductSizeVariant.findById(sv._id).select('slug sizeName').lean();
+        const sizeSlug =
+          sizeDoc?.slug || buildSizeVariantSlug(product.slug, String(sv.sizeName || ''));
+        await syncProductVariants(
+          product._id,
+          sizeSlug,
+          sv.colorVariants.filter((c) => c.colorName?.trim()),
+          sv._id
+        );
+      }
+
+      adminSizeVariants = (await attachAdminSizeVariants(
+        product._id,
+        product.slug,
+        Boolean(product.isBillingProduct),
+        product.toObject() as unknown as Record<string, unknown>
+      )) as Record<string, unknown>[];
+    } else if (product.isBillingProduct) {
+      adminSizeVariants = (await attachAdminSizeVariants(
+        product._id,
+        product.slug,
+        true,
+        product.toObject() as unknown as Record<string, unknown>
+      )) as Record<string, unknown>[];
+    }
+
     let colorVariants: Record<string, unknown>[] = [];
-    if (Array.isArray(variants)) {
+    if (!hasSizeVariants && Array.isArray(variants)) {
       colorVariants = (await syncProductVariants(product._id, product.slug, variants)) as Record<
         string,
         unknown
@@ -374,8 +556,8 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
         product.defaultVariantId = defaultVariant._id as typeof product.defaultVariantId;
         await product.save();
       }
-    } else {
-      const variantsMap = await getVariantsByProductIds([product._id]);
+    } else if (!hasSizeVariants) {
+      const variantsMap = await getVariantsByProductIds([product._id], { productLevelOnly: true });
       colorVariants = (variantsMap.get(String(product._id)) || []) as Record<string, unknown>[];
     }
 
@@ -384,19 +566,46 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
         ? mergeVariantWithParent(product.toObject() as unknown as Record<string, unknown>, colorVariants[0] as any, colorVariants as any)
         : product.toObject();
 
-    res.json({ ...payload, adminVariants: colorVariants });
+    res.json({ ...payload, adminVariants: colorVariants, adminSizeVariants });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
 });
 
-// GET /api/products/:id/variants - list variants for admin (protected)
+// GET /api/products/:id/variants - list color variants for admin (protected)
 router.get('/:id/variants', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const variants = await ProductVariant.find({ parentProductId: req.params.id })
+    const variants = await ProductVariant.find({
+      parentProductId: req.params.id,
+      $or: [{ sizeVariantId: null }, { sizeVariantId: { $exists: false } }],
+    })
       .sort({ sortOrder: 1, createdAt: 1 })
       .lean();
     res.json({ variants });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+});
+
+// GET /api/products/:id/size-variants - list size variants for admin (protected)
+router.get('/:id/size-variants', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const product = await Product.findById(req.params.id).lean();
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const variants = await attachAdminSizeVariants(
+      product._id,
+      product.slug,
+      Boolean(product.isBillingProduct),
+      product as Record<string, unknown>
+    );
+
+    res.json({
+      variants,
+      isBillingProduct: Boolean(product.isBillingProduct),
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
@@ -447,6 +656,7 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
       await product.save();
     } else {
       await ProductVariant.deleteMany({ parentProductId: product._id });
+      await ProductSizeVariant.deleteMany({ parentProductId: product._id });
       await Product.findByIdAndDelete(req.params.id);
     }
     res.json({ message: 'Product deleted successfully' });

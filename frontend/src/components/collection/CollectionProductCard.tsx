@@ -5,8 +5,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useCartStore } from '@/lib/cart-store';
 import { useAuthStore } from '@/lib/auth-store';
-import { formatPrice, calculateDiscount } from '@/lib/utils';
+import { formatPrice, formatPriceRange, calculateDiscount } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import ProductCardSizePicker from '@/components/shared/ProductCardSizePicker';
 
 const SWATCHES = ['#111111', '#6B6B6B', '#8B7355', '#1E3A5F'];
 
@@ -22,6 +23,8 @@ export default function CollectionProductCard({ product, listView }: Props) {
   const onSale = product.discountPrice && product.discountPrice < product.price;
   const imageUrl = product.images?.[0] || '/placeholder.jpg';
   const sizes: string[] = product.sizes?.length ? product.sizes : ['S', 'M', 'L', 'XL'];
+  const sizeVariants = product.sizeVariants || [];
+  const hasSizeLinks = sizeVariants.length > 0;
 
   const handleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -111,31 +114,56 @@ export default function CollectionProductCard({ product, listView }: Props) {
             'hidden md:block'
           )}
         >
-          <p className="text-[9px] uppercase tracking-widest text-[#999] mb-1.5 text-center">Quick Add</p>
-          <div className="flex flex-wrap justify-center gap-1">
-            {sizes.slice(0, 6).map((sz) => (
-              <button
-                key={sz}
-                type="button"
-                onClick={(e) => quickAdd(e, sz)}
-                className="min-w-[28px] h-7 text-[10px] border border-[#E8E4DF] hover:bg-[#111] hover:text-white hover:border-[#111] transition-colors"
-              >
-                {sz}
-              </button>
-            ))}
-          </div>
+          <p className="text-[9px] uppercase tracking-widest text-[#999] mb-1.5 text-center">
+            {hasSizeLinks ? 'Select Size' : 'Quick Add'}
+          </p>
+          {hasSizeLinks ? (
+            <ProductCardSizePicker
+              sizeVariants={sizeVariants}
+              variant="inline"
+              className="justify-center"
+            />
+          ) : (
+            <div className="flex flex-wrap justify-center gap-1">
+              {sizes.slice(0, 6).map((sz) => (
+                <button
+                  key={sz}
+                  type="button"
+                  onClick={(e) => quickAdd(e, sz)}
+                  className="min-w-[28px] h-7 text-[10px] border border-[#E8E4DF] hover:bg-[#111] hover:text-white hover:border-[#111] transition-colors"
+                >
+                  {sz}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className={cn('pt-3', listView && 'pt-0 flex-1 min-w-0')}>
         <p className="text-[12px] uppercase tracking-[0.12em] text-[#111] truncate">{product.name}</p>
         <div className="flex items-baseline gap-2 mt-1">
           <span className="text-sm font-semibold text-[#111]">
-            {formatPrice(onSale ? product.discountPrice : product.price)}
+            {formatPriceRange(
+              onSale ? product.discountPrice : product.price,
+              product.priceMax
+            )}
           </span>
           {onSale && (
-            <span className="text-xs text-[#999] line-through">{formatPrice(product.price)}</span>
+            <span className="text-xs text-[#999] line-through">
+              {formatPriceRange(product.price, product.priceMax)}
+            </span>
           )}
         </div>
+        {(hasSizeLinks || sizes.length > 0) && (
+          <div className="mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+            <ProductCardSizePicker
+              sizeVariants={hasSizeLinks ? sizeVariants : undefined}
+              sizes={hasSizeLinks ? undefined : sizes.slice(0, 6)}
+              productSlug={product.slug}
+              variant="inline"
+            />
+          </div>
+        )}
         {discount > 0 && (
           <p className="text-[11px] text-[#C0392B] mt-0.5">{discount}% off</p>
         )}

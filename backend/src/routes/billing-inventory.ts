@@ -13,6 +13,7 @@ import {
   getProductPriceVarianceByProducts,
   getProductPriceVariantsByProducts,
 } from '../lib/stock-inventory-counts';
+import { ensureSizeVariantsFromBillingStock } from '../lib/product-size-variants';
 
 const router = express.Router();
 
@@ -497,6 +498,10 @@ router.put('/products/:id', async (req: BillingAuthRequest, res: Response) => {
     }
 
     await product.save();
+
+    if (product.isEcommerceProduct !== false) {
+      await ensureSizeVariantsFromBillingStock(product._id, product.slug);
+    }
 
     const priceUpdates: { incomingPrice?: number; sellingPrice?: number } = {};
     if (updates.incomingPrice !== undefined && variantUpdates.length === 0) {

@@ -1,4 +1,5 @@
 import type { IBill } from '../models/Bill';
+import { BILLING_GST_RATE } from './billing-totals';
 
 export type ReplacementLinePayload = {
   product?: unknown;
@@ -71,6 +72,93 @@ export const billForReturn = (bill: any) => ({
   ...(typeof bill?.toObject === 'function' ? bill.toObject() : bill),
   items: returnableBillItems(bill),
 });
+
+/** GST-inclusive amount the customer paid for a bill line (after item + bill discounts). */
+export const lineCustomerValueInclusive = (item: any, gstRate = BILLING_GST_RATE) => {
+  const netLine = Number(item?.netLineTotal || item?.lineTotal || 0);
+  if (netLine > 0) return Number((netLine * (1 + gstRate)).toFixed(2));
+  const qty = Math.max(1, Number(item?.quantity || 1));
+  const unit =
+    Number(item?.sellingPrice || 0) > 0
+      ? Number(item.sellingPrice)
+      : Math.max(0, Number(item?.mrp || 0) - Number(item?.itemDiscountAmount || 0));
+  return Number((unit * qty * (1 + gstRate)).toFixed(2));
+};
+
+export const unitCustomerValueInclusive = (item: any, gstRate = BILLING_GST_RATE) => {
+  const qty = Math.max(1, Number(item?.quantity || 1));
+  return lineCustomerValueInclusive(item, gstRate) / qty;
+};
+
+export const findBillLineForBarcode = (bill: any, barcode: string) => {
+  const code = String(barcode || '').trim();
+  if (!code) return null;
+  for (const item of bill?.items || []) {
+    if (itemBarcodes(item).includes(code)) return item;
+  }
+  return null;
+};
+
+export const replacementLineCustomerValueInclusive = (item: any, gstRate = BILLING_GST_RATE) => {
+  const netLine = Number(item?.netLineTotal || item?.lineTotal || 0);
+  if (netLine > 0) return Number((netLine * (1 + gstRate)).toFixed(2));
+  const qty = Math.max(1, Number(item?.quantity || 1));
+  const selling = Number(item?.sellingPrice || 0);
+  if (selling > 0) return Number((selling * qty * (1 + gstRate)).toFixed(2));
+  const mrp = Number(item?.mrp || 0);
+  const disc = Number(item?.itemDiscountAmount || 0) * qty;
+  const billDisc = Number(item?.billDiscountShare || 0);
+  const lineGross = Math.max(0, mrp * qty - disc) * (1 + gstRate);
+  return Number(Math.max(0, lineGross - billDisc).toFixed(2));
+};
+
+/** Recompute bill header totals from active (non returned-out) lines. */
+export const recalculateBillTotalsFromActiveItems = (bill: any, returns: any[] = []) => {
+  const activeItems = activeBillItems(bill, returns);
+  if (activeItems.length === 0) return null;
+
+  const subtotal = activeItems.reduce(
+    (sum: number, item: any) => sum + Number(item.mrp || 0) * Math.max(1, Number(item.quantity || 1)),
+    0
+  );
+  const totalItemDiscount = activeItems.reduce(
+    (sum: number, item: any) =>
+      sum + Number(item.itemDiscountAmount || 0) * Math.max(1, Number(item.quantity || 1)),
+    0
+  );
+  const afterItemDiscount = Math.max(0, subtotal - totalItemDiscount);
+  const billDiscountAmount = activeItems.reduce(
+    (sum: number, item: any) => sum + Number(item.billDiscountShare || 0),
+    0
+  );
+  const taxableAmount = afterItemDiscount;
+  const gstAmount = taxableAmount * BILLING_GST_RATE;
+  const grossWithGst = afterItemDiscount + gstAmount;
+  const prePointsRaw = activeItems.reduce(
+    (sum: number, item: any) => sum + lineCustomerValueInclusive(item),
+    0
+  );
+  const pointsDiscountAmount = Math.min(
+    Math.max(0, Number(bill?.pointsDiscountAmount || 0)),
+    Math.round(prePointsRaw)
+  );
+  const rawTotal = Math.max(0, prePointsRaw - pointsDiscountAmount);
+  const roundOff = Math.round(rawTotal) - rawTotal;
+  const totalAmount = Math.round(rawTotal);
+
+  return {
+    subtotal,
+    totalItemDiscount,
+    billDiscountAmount,
+    taxableAmount,
+    gstAmount,
+    cgst: gstAmount / 2,
+    sgst: gstAmount / 2,
+    grossWithGst,
+    roundOff,
+    totalAmount,
+  };
+};
 
 /** Mark returned lines and append replacement lines on the bill (for profit & discounts). */
 export const applyReplacementToBill = (
@@ -164,10 +252,9 @@ export const applyReplacementToBill = (
 /** Active bill lines for revenue/profit (excludes returned-out originals). */
 export const activeBillItems = (bill: any, returns: any[] = []) => {
   let items = Array.isArray(bill?.items) ? [...bill.items] : [];
-  const hasReplacementLines = items.some((item: any) => item.isReplacement);
-  const hasReplacedOut = items.some((item: any) => item.replacedOut);
+  const hasReplacementOnBill = items.some((item: any) => item.isReplacement && !item.replacedOut);
 
-  if (!hasReplacementLines && !hasReplacedOut && returns.length > 0) {
+  if (!hasReplacementOnBill && returns.length > 0) {
     const returned = new Set<string>();
     const replacementLines: any[] = [];
     for (const ret of returns) {
@@ -180,7 +267,7 @@ export const activeBillItems = (bill: any, returns: any[] = []) => {
         const qty = Math.max(1, Number(rep.quantity || 1));
         const mrp = Number(rep.mrp ?? rep.sellingPrice ?? 0);
         const sellingPrice = Number(rep.sellingPrice || 0);
-        const lineTotal = sellingPrice * qty;
+        const netLineTotal = Number(rep.netLineTotal || rep.lineTotal || 0) || sellingPrice * qty;
         replacementLines.push({
           product: rep.product,
           barcode,
@@ -188,12 +275,14 @@ export const activeBillItems = (bill: any, returns: any[] = []) => {
           name: rep.name,
           size: rep.size,
           mrp,
+          itemDiscountType: rep.itemDiscountType || 'none',
+          itemDiscountValue: Number(rep.itemDiscountValue || 0),
           itemDiscountAmount: Number(rep.itemDiscountAmount || 0),
           billDiscountShare: Number(rep.billDiscountShare || 0),
           sellingPrice,
           quantity: qty,
-          lineTotal,
-          netLineTotal: lineTotal,
+          lineTotal: netLineTotal,
+          netLineTotal,
           isReplacement: true,
           replacedOut: false,
         });

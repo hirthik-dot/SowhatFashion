@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { activeBillItemCount, activeBillItems } from "@/lib/return-utils";
+import { effectiveBillTotalAmount } from "@/lib/billing-totals";
 
 type CustomerProfileProps = {
   open: boolean;
@@ -24,11 +26,24 @@ const formatDateTime = (value?: string | Date | null) => {
 export default function CustomerProfile({ open, loading, profile, onClose }: CustomerProfileProps) {
   const [selectedBillId, setSelectedBillId] = useState<string>("");
 
+  const returnsByBillId = useMemo(() => {
+    const map = new Map<string, any[]>();
+    (profile?.returns || []).forEach((ret: any) => {
+      const key = String(ret.bill || "");
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(ret);
+    });
+    return map;
+  }, [profile?.returns]);
+
+  const billActiveItems = (bill: any) => activeBillItems(bill?.items, returnsByBillId.get(String(bill?._id)));
+
   const itemsBought = useMemo(() => {
     if (!profile?.bills?.length) return [];
     const map: Record<string, number> = {};
     profile.bills.forEach((bill: any) => {
-      (bill.items || []).forEach((item: any) => {
+      billActiveItems(bill).forEach((item: any) => {
         const key = item.category || item.name || "Other";
         map[key] = (map[key] || 0) + Number(item.quantity || 0);
       });
@@ -36,7 +51,7 @@ export default function CustomerProfile({ open, loading, profile, onClose }: Cus
     return Object.entries(map)
       .map(([name, qty]) => ({ name, qty }))
       .sort((a, b) => b.qty - a.qty);
-  }, [profile]);
+  }, [profile, returnsByBillId]);
 
   const selectedBill = useMemo(
     () => (profile?.bills || []).find((bill: any) => String(bill._id) === selectedBillId),
@@ -118,9 +133,9 @@ export default function CustomerProfile({ open, loading, profile, onClose }: Cus
                     <tr key={bill._id} className="border-t border-[var(--border)]">
                       <td>{bill.billNumber}</td>
                       <td>{formatDateTime(bill.createdAt)}</td>
-                      <td>{formatCurrency(bill.totalAmount)}</td>
+                      <td>{formatCurrency(effectiveBillTotalAmount(bill, returnsByBillId.get(String(bill._id))))}</td>
                       <td>{String(bill.paymentMethod || "-").toUpperCase()}</td>
-                      <td>{(bill.items || []).length}</td>
+                      <td>{activeBillItemCount(bill.items, returnsByBillId.get(String(bill._id)))}</td>
                       <td>
                         <button
                           className="underline"
@@ -136,7 +151,7 @@ export default function CustomerProfile({ open, loading, profile, onClose }: Cus
               {selectedBill ? (
                 <div className="mt-3 border border-[var(--border)] rounded p-3 space-y-2">
                   <p className="font-medium">Bill Items - {selectedBill.billNumber}</p>
-                  {(selectedBill.items || []).map((item: any, index: number) => (
+                  {billActiveItems(selectedBill).map((item: any, index: number) => (
                     <div key={`${item.barcode || item.name}-${index}`} className="text-sm border-t border-[var(--border)] pt-2">
                       <p>{item.name} ({item.size || "-"})</p>
                       <p className="text-[var(--text-secondary)]">

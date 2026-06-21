@@ -41,6 +41,8 @@ export interface IBillingReturn extends Document {
   replacementItems: any[];
   returnType: 'replacement' | 'partial';
   priceDifference: number;
+  returnedTotal?: number;
+  replacementTotal?: number;
   replacementSubtotal?: number;
   replacementItemDiscount?: number;
   replacementBillDiscount?: number;
@@ -64,6 +66,8 @@ const ReturnSchema = new Schema<IBillingReturn>(
     replacementItems: [ReplacementItemSchema],
     returnType: { type: String, enum: ['replacement', 'partial'], required: true },
     priceDifference: { type: Number, default: 0 },
+    returnedTotal: { type: Number, default: 0 },
+    replacementTotal: { type: Number, default: 0 },
     replacementSubtotal: { type: Number, default: 0 },
     replacementItemDiscount: { type: Number, default: 0 },
     replacementBillDiscount: { type: Number, default: 0 },

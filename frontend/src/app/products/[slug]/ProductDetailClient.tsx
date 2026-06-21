@@ -7,7 +7,9 @@ import { useAuthStore } from '@/lib/auth-store';
 import { formatPrice, calculateDiscount } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import VariantThumbnailGrid from '@/components/shared/VariantThumbnailGrid';
+import SizeVariantLinks from '@/components/shared/SizeVariantLinks';
 import type { ProductVariantSummary } from '@/lib/product-variants';
+import type { ProductSizeVariantSummary } from '@/lib/product-size-variants';
 import { WHATSAPP_LINK } from '@/lib/contact';
 
 export default function ProductDetailClient({ product }: { product: any }) {
@@ -18,14 +20,19 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const stock = Number(product.stock) || 0;
   const productName = String(product.name || product.billingName || 'Product').trim() || 'Product';
   const variants: ProductVariantSummary[] = product.variants || [];
+  const sizeVariants: ProductSizeVariantSummary[] = product.sizeVariants || [];
   const hasVariants = variants.length > 0;
+  const hasSizeVariants = sizeVariants.length > 1;
+  const isSizeVariantPage = Boolean(product.isSizeVariant);
   const currentSlug = product.slug || '';
   const description =
     product.description?.trim() ||
     `Premium quality ${product.category} crafted for maximum comfort and unparalleled style. Features our signature attention to detail and perfect fit. Tags: ${(product.tags || []).join(', ')}.`;
 
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedSize, setSelectedSize] = useState(sizes[0] || '');
+  const [selectedSize, setSelectedSize] = useState(
+    isSizeVariantPage ? (product.sizeName || sizes[0] || '') : (sizes[0] || '')
+  );
   const [quantity, setQuantity] = useState(1);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
@@ -41,7 +48,10 @@ export default function ProductDetailClient({ product }: { product: any }) {
 
   useEffect(() => {
     setSelectedImage(0);
-  }, [currentSlug]);
+    if (isSizeVariantPage && product.sizeName) {
+      setSelectedSize(product.sizeName);
+    }
+  }, [currentSlug, isSizeVariantPage, product.sizeName]);
 
   const handleTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
   const handleTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
@@ -180,14 +190,22 @@ export default function ProductDetailClient({ product }: { product: any }) {
           </div>
         ) : (
           <>
-            {hasVariants && variants.length > 1 && (
+            {variants.length > 0 && (
               <VariantThumbnailGrid
                 variants={variants}
                 currentSlug={currentSlug}
               />
             )}
 
-            {sizes.length > 0 && (
+            {hasSizeVariants && (
+              <SizeVariantLinks
+                sizeVariants={sizeVariants}
+                currentSlug={currentSlug}
+                activeSizeName={product.sizeName}
+              />
+            )}
+
+            {sizes.length > 0 && !isSizeVariantPage && !hasSizeVariants && (
               <div className="mb-8 border-t border-[var(--border)] pt-8">
                 <div className="flex justify-between items-center mb-4">
                   <span className="font-semibold uppercase tracking-wider text-sm">Select Size</span>
@@ -240,8 +258,16 @@ export default function ProductDetailClient({ product }: { product: any }) {
         )}
 
         {/* Show variant grid even when out of stock so users can pick another color */}
-        {isOutOfStock && hasVariants && variants.length > 1 && (
+        {isOutOfStock && variants.length > 0 && (
           <VariantThumbnailGrid variants={variants} currentSlug={currentSlug} />
+        )}
+
+        {isOutOfStock && hasSizeVariants && (
+          <SizeVariantLinks
+            sizeVariants={sizeVariants}
+            currentSlug={currentSlug}
+            activeSizeName={product.sizeName}
+          />
         )}
 
         <div className="mt-8 flex flex-col md:flex-row gap-4">

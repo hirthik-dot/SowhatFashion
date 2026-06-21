@@ -13,10 +13,9 @@ const lineBarcodesForActive = (item: any): string[] => {
 /** Current sold lines on a bill (excludes returned-out originals; includes replacements). */
 export const activeBillItems = (items: any[] | undefined, returns?: any[]) => {
   let list = [...(items || [])];
-  const hasReplacementLines = list.some((item) => item.isReplacement);
-  const hasReplacedOut = list.some((item) => item.replacedOut);
+  const hasReplacementOnBill = list.some((item) => item.isReplacement && !item.replacedOut);
 
-  if (!hasReplacementLines && !hasReplacedOut && (returns || []).length > 0) {
+  if (!hasReplacementOnBill && (returns || []).length > 0) {
     const returned = new Set<string>();
     const replacementLines: any[] = [];
     for (const ret of returns || []) {

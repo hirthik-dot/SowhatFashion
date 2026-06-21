@@ -2,6 +2,14 @@ import mongoose from 'mongoose';
 import StockItem from '../models/StockItem';
 import { BILLABLE_STATUSES, compareSizes } from './stock-inventory-counts';
 import { attachVariantsForListing } from './product-color-variants';
+import {
+  attachSizeVariantsForListing,
+  ensureSizeVariantsFromBillingStock,
+  expandBillingProductsBySize,
+  getBillingSizeDataByProducts,
+  getSizeVariantsByProductIds,
+  mergeSizeVariantWithParent,
+} from './product-size-variants';
 
 export type EcommercePriceVariant = {
   sellingPrice: number;
@@ -22,6 +30,7 @@ export const parsePriceVariantSlug = (slug: string): { baseSlug: string; selling
   return { baseSlug: match[1], sellingPrice: Number(match[2]) };
 };
 
+/** @deprecated Use getBillingSizeDataByProducts from product-size-variants instead */
 export async function getEcommerceVariantsByProducts(
   productIds: Array<mongoose.Types.ObjectId | string>
 ): Promise<Map<string, EcommercePriceVariant[]>> {
@@ -118,32 +127,40 @@ const normalizeProduct = (product: any) =>
 
 export async function expandProductsForEcommerce(products: any[]): Promise<any[]> {
   const withColorVariants = await attachVariantsForListing(products);
-  const productIds = withColorVariants.map((product) => product._id).filter(Boolean) as mongoose.Types.ObjectId[];
-  const variantsByProduct = await getEcommerceVariantsByProducts(productIds);
-  const expanded: any[] = [];
-
-  for (const product of withColorVariants) {
-    const variants = variantsByProduct.get(String(product._id)) || [];
-    const inStockVariants = variants.filter((variant) => variant.stock > 0);
-
-    if (inStockVariants.length <= 1) {
-      if (inStockVariants.length === 1) {
-        expanded.push(applyEcommerceVariant(product, inStockVariants[0], false));
-      } else {
-        expanded.push(normalizeProduct(product));
-      }
-      continue;
-    }
-
-    for (const variant of inStockVariants) {
-      expanded.push(applyEcommerceVariant(product, variant, true));
-    }
-  }
-
-  return expanded;
+  return attachSizeVariantsForListing(withColorVariants);
 }
 
 export async function expandPopulatedProductsForEcommerce(products: any[]): Promise<any[]> {
   if (!products?.length) return [];
   return expandProductsForEcommerce(products.filter(Boolean));
 }
+
+/** Resolve a billing product merged with live stock for a single size slug */
+export async function resolveBillingProductForSizeSlug(
+  product: Record<string, unknown>,
+  sizeSlug: string
+): Promise<Record<string, unknown> | null> {
+  const sizeVariantsMap = await getSizeVariantsByProductIds([product._id as mongoose.Types.ObjectId]);
+  const variants = sizeVariantsMap.get(String(product._id)) || [];
+  const variant = variants.find((v) => v.slug === sizeSlug);
+  if (!variant) return null;
+
+  const billingMap = await getBillingSizeDataByProducts([product._id as mongoose.Types.ObjectId]);
+  const billingSizes = billingMap.get(String(product._id)) || [];
+  const billingBySize = new Map(billingSizes.map((b) => [b.sizeName, b]));
+
+  return mergeSizeVariantWithParent(
+    product,
+    variant,
+    billingBySize.get(variant.sizeName),
+    variants.filter((v) => v.isActive !== false),
+    billingBySize
+  );
+}
+
+export {
+  getBillingSizeDataByProducts,
+  getSizeVariantsByProductIds,
+  mergeSizeVariantWithParent,
+  ensureSizeVariantsFromBillingStock,
+};

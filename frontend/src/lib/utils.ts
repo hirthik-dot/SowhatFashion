@@ -4,14 +4,30 @@ export function formatPrice(price: number | null | undefined): string {
   return `₹${value.toLocaleString('en-IN')}`;
 }
 
+/** e.g. ₹499 or ₹499 - ₹799 when sizes have different prices */
+export function formatPriceRange(price: number, priceMax?: number | null): string {
+  const min = Number(price);
+  const max = priceMax != null ? Number(priceMax) : min;
+  if (!Number.isFinite(min)) return '—';
+  if (Number.isFinite(max) && max > min) {
+    return `${formatPrice(min)} - ${formatPrice(max)}`;
+  }
+  return formatPrice(min);
+}
+
 /** Stable React key for product lists (handles multi-price ecommerce variants). */
 export function productListKey(product: {
   _id?: string;
   slug?: string;
   priceVariant?: number;
   isPriceVariant?: boolean;
+  isSizeVariant?: boolean;
+  sizeVariantId?: string;
 }): string {
   if (product.slug) return String(product.slug);
+  if (product.isSizeVariant && product.sizeVariantId) {
+    return `${product._id}-${product.sizeVariantId}`;
+  }
   if (product.isPriceVariant && product._id != null && product.priceVariant != null) {
     return `${product._id}-${Math.round(Number(product.priceVariant))}`;
   }

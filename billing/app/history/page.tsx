@@ -7,6 +7,7 @@ import ReceiptPrintModal from "@/components/billing/ReceiptPrintModal";
 import EditBillModal from "@/components/history/EditBillModal";
 import ReplacementSwapSummary from "@/components/returns/ReplacementSwapSummary";
 import { activeBillItemCount, activeBillItems } from "@/lib/return-utils";
+import { effectiveBillTotalAmount, lineCustomerValueInclusive, recalculateBillTotalsFromActiveItems } from "@/lib/billing-totals";
 import { billingApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -126,10 +127,10 @@ export default function HistoryPage() {
       Phone: bill.customer?.phone || "",
       Salesman: bill.salesman?.name || "-",
       Items: activeBillItemCount(bill.items, bill.returns),
-      Total: bill.totalAmount,
+      Total: effectiveBillTotalAmount(bill),
       PointsRedeemed: Number(bill.pointsRedeemed || 0),
       PointsCost: Number(bill.pointsDiscountAmount || 0),
-      CashCollected: Number(bill.totalAmount || 0),
+      CashCollected: effectiveBillTotalAmount(bill),
       PaymentMethod: bill.paymentMethod,
       Status: formatStatusLabel(bill),
       EditedCount: (bill.editHistory || []).length,
@@ -222,7 +223,7 @@ export default function HistoryPage() {
                       ? `₹${Number(bill.pointsDiscountAmount).toLocaleString("en-IN")}`
                       : "-"}
                   </td>
-                  <td>₹{Number(bill.totalAmount || 0).toLocaleString("en-IN")}</td>
+                  <td>₹{effectiveBillTotalAmount(bill).toLocaleString("en-IN")}</td>
                   <td>{String(bill.paymentMethod || "").toUpperCase()}</td>
                   <td>
                     {Number(bill.pendingAmount || 0) > 0 ? (
@@ -313,7 +314,7 @@ export default function HistoryPage() {
                   <p className="text-sm">
                     MRP ₹{item.mrp} · Qty {item.quantity}
                     {Number(item.itemDiscountAmount || 0) > 0 ? ` · Disc ₹${item.itemDiscountAmount}` : ""}
-                    · Line Total ₹{item.lineTotal}
+                    · Customer value ₹{lineCustomerValueInclusive(item).toFixed(2)}
                   </p>
                 </div>
               ))}
@@ -342,13 +343,22 @@ export default function HistoryPage() {
                   ))}
               </div>
             ) : null}
+            {(() => {
+              const totals =
+                recalculateBillTotalsFromActiveItems(viewBill, viewBill.returns) || {
+                  subtotal: viewBill.subtotal,
+                  totalItemDiscount: viewBill.totalItemDiscount,
+                  billDiscountAmount: viewBill.billDiscountAmount,
+                  totalAmount: effectiveBillTotalAmount(viewBill),
+                };
+              return (
             <div className="mt-4 p-3 bg-[var(--surface)] border border-[var(--border)] rounded flex flex-col items-end gap-1 text-sm">
-              <div>Total MRP: ₹{viewBill.subtotal}</div>
-              {Number(viewBill.totalItemDiscount || 0) > 0 && (
-                <div className="text-red-400">Item Discs: -₹{viewBill.totalItemDiscount}</div>
+              <div>Total MRP: ₹{totals.subtotal}</div>
+              {Number(totals.totalItemDiscount || 0) > 0 && (
+                <div className="text-red-400">Item Discs: -₹{totals.totalItemDiscount}</div>
               )}
-              {Number(viewBill.billDiscountAmount || 0) > 0 && (
-                <div className="text-red-400">Customer Disc: -₹{viewBill.billDiscountAmount}</div>
+              {Number(totals.billDiscountAmount || 0) > 0 && (
+                <div className="text-red-400">Customer Disc: -₹{totals.billDiscountAmount}</div>
               )}
               {Number(viewBill.pointsDiscountAmount || 0) > 0 && (
                 <div className="text-orange-300">
@@ -356,9 +366,11 @@ export default function HistoryPage() {
                 </div>
               )}
               <div className="font-bold text-lg pt-2 mt-1 border-t border-[var(--border)] min-w-[200px] text-right">
-                Cash Collected: ₹{viewBill.totalAmount}
+                Cash Collected: ₹{totals.totalAmount}
               </div>
             </div>
+              );
+            })()}
           </div>
         </div>
       ) : null}

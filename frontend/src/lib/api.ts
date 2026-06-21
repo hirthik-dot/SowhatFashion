@@ -30,6 +30,7 @@ export const getProductBySlug = async (slug: string) => {
   });
   if (!res.ok) return null;
   const data = await res.json();
+  if (data?.redirectTo) return data;
   if (!data?._id) return null;
   return data;
 };
@@ -249,6 +250,14 @@ export const adminGetProductVariants = async (productId: string) => {
     credentials: 'include',
   });
   if (!res.ok) return { variants: [] };
+  return res.json();
+};
+
+export const adminGetProductSizeVariants = async (productId: string) => {
+  const res = await fetch(`${API}/api/products/${productId}/size-variants`, {
+    credentials: 'include',
+  });
+  if (!res.ok) return { variants: [], isBillingProduct: false };
   return res.json();
 };
 

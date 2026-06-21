@@ -15,6 +15,7 @@ export default function VariantThumbnailGrid({ variants, currentSlug, colorLabel
   if (!variants.length) return null;
 
   const activeVariant = variants.find((v) => v.slug === currentSlug);
+  if (variants.length === 1 && activeVariant) return null;
 
   return (
     <div className="mb-8 border-t border-[var(--border)] pt-8">

@@ -3,6 +3,8 @@ import slugify from 'slugify';
 
 export interface IProductVariant extends Document {
   parentProductId: mongoose.Types.ObjectId;
+  /** When set, this color belongs to a specific size variant page */
+  sizeVariantId?: mongoose.Types.ObjectId;
   slug: string;
   colorName: string;
   colorHex: string;
@@ -20,6 +22,7 @@ export interface IProductVariant extends Document {
 const ProductVariantSchema = new Schema<IProductVariant>(
   {
     parentProductId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
+    sizeVariantId: { type: Schema.Types.ObjectId, ref: 'ProductSizeVariant', index: true },
     slug: { type: String, required: true, unique: true, trim: true },
     colorName: { type: String, required: true, trim: true },
     colorHex: { type: String, default: '#000000', trim: true },
@@ -35,6 +38,7 @@ const ProductVariantSchema = new Schema<IProductVariant>(
 );
 
 ProductVariantSchema.index({ parentProductId: 1, sortOrder: 1 });
+ProductVariantSchema.index({ sizeVariantId: 1, sortOrder: 1 });
 
 ProductVariantSchema.pre('validate', function (next) {
   if (!this.slug && this.colorName) {

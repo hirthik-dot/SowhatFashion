@@ -25,18 +25,29 @@ export type ReturnSwapRecord = {
   processedByName?: string;
 };
 
+import {
+  BILLING_GST_RATE,
+  lineCustomerValueInclusive,
+  replacementLineCustomerValueInclusive,
+} from "@/lib/billing-totals";
+
 const formatMoney = (value: number) =>
   `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+
+function swapLineCustomerValue(item: SwapLine, tone: "out" | "in") {
+  const qty = Math.max(1, Number(item.quantity || 1));
+  if (tone === "in") return replacementLineCustomerValueInclusive(item);
+  const unit = Number(item.sellingPrice || 0);
+  if (unit > 0) return Number((unit * qty * (1 + BILLING_GST_RATE)).toFixed(2));
+  return lineCustomerValueInclusive(item);
+}
 
 function SwapLineCard({ item, tone }: { item: SwapLine; tone: "out" | "in" }) {
   const qty = Math.max(1, Number(item.quantity || 1));
   const mrp = Number(item.mrp ?? item.sellingPrice ?? 0);
   const lineDisc =
     Number(item.itemDiscountAmount || 0) * qty + Number(item.billDiscountShare || 0);
-  const net =
-    Number(item.lineTotal || 0) > 0
-      ? Number(item.lineTotal)
-      : Math.max(0, mrp * qty - lineDisc);
+  const net = swapLineCustomerValue(item, tone);
 
   return (
     <div

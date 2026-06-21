@@ -9,6 +9,7 @@ import { requirePermission } from '../middleware/billingRoleMiddleware';
 import { triggerRevalidate } from '../lib/revalidateFrontend';
 import slugify from 'slugify';
 import { applyBillingCategoriesToProduct } from '../lib/billing-ecommerce-category';
+import { ensureSizeVariantsFromBillingStock } from '../lib/product-size-variants';
 import {
   getInShopCountsByProducts,
   getProductPriceVarianceByProducts,
@@ -172,6 +173,9 @@ router.post('/entry', requirePermission('canManageStock'), async (req: BillingAu
     masterProduct.price = selling;
     masterProduct.incomingPrice = incoming;
     await masterProduct.save();
+    if (masterProduct.isEcommerceProduct !== false) {
+      await ensureSizeVariantsFromBillingStock(masterProduct._id, masterProduct.slug);
+    }
 
     // 6) Update StockEntry with barcode + stockItem ids
     stockEntry.barcodes = barcodes;
@@ -321,6 +325,9 @@ router.post('/entry/bulk', requirePermission('canManageStock'), async (req: Bill
     masterProduct.price = selling;
     masterProduct.incomingPrice = incoming;
     await masterProduct.save();
+    if (masterProduct.isEcommerceProduct !== false) {
+      await ensureSizeVariantsFromBillingStock(masterProduct._id, masterProduct.slug);
+    }
 
     await triggerRevalidate(['/', '/products']);
     return res.status(201).json({ entries: createdEntries });

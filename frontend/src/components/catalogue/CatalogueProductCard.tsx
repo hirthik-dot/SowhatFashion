@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuthStore } from '@/lib/auth-store';
-import { formatPrice, calculateDiscount } from '@/lib/utils';
+import { formatPrice, formatPriceRange, calculateDiscount } from '@/lib/utils';
+
+import ProductCardSizePicker from '@/components/shared/ProductCardSizePicker';
 
 const MaxWishlistIcon = ({ filled = false, size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'var(--gold)' : 'none'} stroke={filled ? 'var(--gold)' : 'currentColor'} strokeWidth="1.5">
@@ -109,13 +111,25 @@ export default function CatalogueProductCard({ product, forceNewBadge }: Props) 
         <div className="pt-3">
           <div className="flex items-center gap-1.5 mb-1">
             <span className="font-semibold text-sm md:text-base text-[var(--text-primary)]">
-              {formatPrice(product.discountPrice || product.price)}
+              {formatPriceRange(product.discountPrice || product.price, product.priceMax)}
             </span>
             {discount > 0 && (
-              <span className="text-xs text-[var(--text-secondary)] line-through">{formatPrice(product.price)}</span>
+              <span className="text-xs text-[var(--text-secondary)] line-through">
+                {formatPriceRange(product.price, product.priceMax)}
+              </span>
             )}
           </div>
           <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">{product.name}</p>
+          {(product.sizeVariants?.length > 0 || product.sizes?.length > 0) && (
+            <div className="mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+              <ProductCardSizePicker
+                sizeVariants={product.sizeVariants?.length ? product.sizeVariants : undefined}
+                sizes={product.sizeVariants?.length ? undefined : product.sizes}
+                productSlug={product.slug}
+                variant="inline"
+              />
+            </div>
+          )}
         </div>
       </div>
     </Link>

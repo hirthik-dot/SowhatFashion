@@ -14,8 +14,12 @@ import {
   applyReplacementToBill,
   billForReturn,
   expandReturnedLineItems,
+  findBillLineForBarcode,
   itemBarcodes,
+  recalculateBillTotalsFromActiveItems,
+  replacementLineCustomerValueInclusive,
   returnableBillItems,
+  unitCustomerValueInclusive,
 } from '../lib/billing-replacements';
 
 const router = express.Router();
@@ -91,15 +95,16 @@ router.post('/', requirePermission('canReturn'), async (req: BillingAuthRequest,
       }
     }
 
-    const returnedTotal = normalizedReturned.reduce(
-      (sum: number, item: any) => sum + Number(item.sellingPrice || 0) * Number(item.quantity || 1),
-      0
-    );
+    const returnedTotal = normalizedReturned.reduce((sum: number, row: any) => {
+      const line = findBillLineForBarcode(bill, row.barcode);
+      if (line) return sum + unitCustomerValueInclusive(line);
+      return sum + Number(row.sellingPrice || 0);
+    }, 0);
     const replacementTotal = replacementItems.reduce(
-      (sum: number, item: any) => sum + Number(item.sellingPrice || 0) * Number(item.quantity || 1),
+      (sum: number, item: any) => sum + replacementLineCustomerValueInclusive(item),
       0
     );
-    const priceDifference = replacementTotal - returnedTotal;
+    const priceDifference = Number((replacementTotal - returnedTotal).toFixed(2));
 
     const returnDoc = await BillingReturn.create({
       bill: bill._id,
@@ -110,6 +115,8 @@ router.post('/', requirePermission('canReturn'), async (req: BillingAuthRequest,
       replacementItems,
       returnType,
       priceDifference,
+      returnedTotal,
+      replacementTotal,
       replacementSubtotal: Number(replacementSubtotal || replacementTotal),
       replacementItemDiscount: Number(replacementItemDiscount || 0),
       replacementBillDiscount: Number(replacementBillDiscount || 0),
@@ -119,6 +126,19 @@ router.post('/', requirePermission('canReturn'), async (req: BillingAuthRequest,
     });
 
     applyReplacementToBill(bill, normalizedReturned, replacementItems);
+
+    const recalculated = recalculateBillTotalsFromActiveItems(bill);
+    if (recalculated) {
+      (bill as any).subtotal = recalculated.subtotal;
+      (bill as any).totalItemDiscount = recalculated.totalItemDiscount;
+      (bill as any).billDiscountAmount = recalculated.billDiscountAmount;
+      (bill as any).taxableAmount = recalculated.taxableAmount;
+      (bill as any).gstAmount = recalculated.gstAmount;
+      (bill as any).cgst = recalculated.cgst;
+      (bill as any).sgst = recalculated.sgst;
+      (bill as any).roundOff = recalculated.roundOff;
+      (bill as any).totalAmount = recalculated.totalAmount;
+    }
 
     // Returned items: mark StockItem as returned (manual inspection before restock)
     for (const item of normalizedReturned) {
@@ -175,7 +195,13 @@ router.post('/', requirePermission('canReturn'), async (req: BillingAuthRequest,
 
     await triggerRevalidate(['/', '/products']);
     // Ensure key fields are always present in response JSON
-    return res.status(201).json({ ...returnDoc.toObject(), returnNumber: returnDoc.returnNumber });
+    return res.status(201).json({
+      ...returnDoc.toObject(),
+      returnNumber: returnDoc.returnNumber,
+      returnedTotal,
+      replacementTotal,
+      priceDifference,
+    });
   } catch (error: any) {
     return res.status(500).json({ message: error.message || 'Return processing failed' });
   }

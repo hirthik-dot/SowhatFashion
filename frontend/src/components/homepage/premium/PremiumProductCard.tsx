@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuthStore } from '@/lib/auth-store';
-import { formatPrice, calculateDiscount } from '@/lib/utils';
+import { formatPrice, formatPriceRange, calculateDiscount } from '@/lib/utils';
+
+import ProductCardSizePicker from '@/components/shared/ProductCardSizePicker';
 
 const SWATCH_COLORS = ['#111111', '#6B6B6B', '#8B7355', '#1E3A5F', '#FFFFFF'];
 
@@ -100,11 +102,25 @@ export default function PremiumProductCard({ product, forceNewBadge }: Props) {
           {product.name}
         </p>
         <div className="flex items-baseline gap-2">
-          <span className="text-sm text-[#111]">{formatPrice(salePrice ? product.discountPrice : product.price)}</span>
+          <span className="text-sm text-[#111]">
+            {formatPriceRange(salePrice ? product.discountPrice : product.price, product.priceMax)}
+          </span>
           {salePrice && (
-            <span className="text-sm text-[#C0392B]/80 line-through">{formatPrice(product.price)}</span>
+            <span className="text-sm text-[#C0392B]/80 line-through">
+              {formatPriceRange(product.price, product.priceMax)}
+            </span>
           )}
         </div>
+        {(product.sizeVariants?.length > 0 || product.sizes?.length > 0) && (
+          <div className="pt-1" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+            <ProductCardSizePicker
+              sizeVariants={product.sizeVariants?.length ? product.sizeVariants : undefined}
+              sizes={product.sizeVariants?.length ? undefined : product.sizes}
+              productSlug={product.slug}
+              variant="inline"
+            />
+          </div>
+        )}
         <div className="flex gap-1.5 pt-1">
           {swatches.map((color, i) => (
             <button

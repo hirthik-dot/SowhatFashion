@@ -5,6 +5,7 @@ import ProductVariant from '../models/ProductVariant';
 export type ProductVariantRecord = {
   _id: mongoose.Types.ObjectId | string;
   parentProductId: mongoose.Types.ObjectId | string;
+  sizeVariantId?: mongoose.Types.ObjectId | string;
   slug: string;
   colorName: string;
   colorHex: string;
@@ -50,6 +51,37 @@ export function resolveVariantFields(parent: Record<string, unknown>, variant: P
   return { price, discountPrice, stock, sku };
 }
 
+export function buildColorVariantPayload(
+  parent: Record<string, unknown>,
+  variant: ProductVariantRecord,
+  siblings: ProductVariantRecord[] = []
+) {
+  const { price, discountPrice, stock } = resolveVariantFields(parent, variant);
+  const images = variant.images?.length ? variant.images : (parent.images as string[]) || [];
+  const activeSiblings = siblings.filter((s) => s.isActive !== false);
+
+  return {
+    _id: String(variant._id),
+    slug: variant.slug,
+    colorName: variant.colorName,
+    colorHex: variant.colorHex,
+    images: variant.images?.length ? variant.images : [],
+    price,
+    discountPrice,
+    stock,
+    isActive: variant.isActive !== false,
+    thumbnail: (variant.images?.[0] || images[0] || (parent.images as string[])?.[0]) ?? '',
+  };
+}
+
+export function buildColorVariantsList(
+  parent: Record<string, unknown>,
+  variants: ProductVariantRecord[]
+) {
+  const active = variants.filter((v) => v.isActive !== false);
+  return active.map((v) => buildColorVariantPayload(parent, v, active));
+}
+
 export function mergeVariantWithParent(
   parent: Record<string, unknown>,
   variant: ProductVariantRecord,
@@ -71,21 +103,11 @@ export function mergeVariantWithParent(
     sku,
     variantId: String(variant._id),
     parentProductId: String(parent._id),
+    sizeVariantId: variant.sizeVariantId ? String(variant.sizeVariantId) : undefined,
     colorName: variant.colorName,
     colorHex: variant.colorHex,
     isColorVariant: true,
-    variants: activeSiblings.map((s) => ({
-      _id: String(s._id),
-      slug: s.slug,
-      colorName: s.colorName,
-      colorHex: s.colorHex,
-      images: s.images?.length ? s.images : [],
-      price: resolveVariantFields(parent, s).price,
-      discountPrice: resolveVariantFields(parent, s).discountPrice,
-      stock: resolveVariantFields(parent, s).stock,
-      isActive: s.isActive !== false,
-      thumbnail: (s.images?.[0] || images[0] || (parent.images as string[])?.[0]) ?? '',
-    })),
+    variants: buildColorVariantsList(parent, activeSiblings),
     // Legacy shape for components still reading colors[]
     colors: activeSiblings.map((s) => ({
       name: s.colorName,
@@ -96,14 +118,24 @@ export function mergeVariantWithParent(
   };
 }
 
+const productLevelVariantFilter = {
+  $or: [{ sizeVariantId: null }, { sizeVariantId: { $exists: false } }],
+};
+
 export async function getVariantsByProductIds(
-  productIds: Array<mongoose.Types.ObjectId | string>
+  productIds: Array<mongoose.Types.ObjectId | string>,
+  opts?: { productLevelOnly?: boolean }
 ): Promise<Map<string, ProductVariantRecord[]>> {
   const ids = productIds.filter(Boolean).map((id) => new mongoose.Types.ObjectId(String(id)));
   const result = new Map<string, ProductVariantRecord[]>();
   if (!ids.length) return result;
 
-  const variants = (await ProductVariant.find({ parentProductId: { $in: ids } })
+  const filter: Record<string, unknown> = { parentProductId: { $in: ids } };
+  if (opts?.productLevelOnly !== false) {
+    Object.assign(filter, productLevelVariantFilter);
+  }
+
+  const variants = (await ProductVariant.find(filter)
     .sort({ sortOrder: 1, createdAt: 1 })
     .lean()) as ProductVariantRecord[];
 
@@ -117,16 +149,55 @@ export async function getVariantsByProductIds(
   return result;
 }
 
+export async function getVariantsBySizeVariantIds(
+  sizeVariantIds: Array<mongoose.Types.ObjectId | string>
+): Promise<Map<string, ProductVariantRecord[]>> {
+  const ids = sizeVariantIds.filter(Boolean).map((id) => new mongoose.Types.ObjectId(String(id)));
+  const result = new Map<string, ProductVariantRecord[]>();
+  if (!ids.length) return result;
+
+  const variants = (await ProductVariant.find({ sizeVariantId: { $in: ids } })
+    .sort({ sortOrder: 1, createdAt: 1 })
+    .lean()) as ProductVariantRecord[];
+
+  for (const id of ids) {
+    result.set(String(id), []);
+  }
+  for (const variant of variants) {
+    const key = String(variant.sizeVariantId);
+    result.get(key)?.push(variant);
+  }
+  return result;
+}
+
+export async function getVariantsForSizeVariant(
+  sizeVariantId: mongoose.Types.ObjectId | string
+): Promise<ProductVariantRecord[]> {
+  return (await ProductVariant.find({
+    sizeVariantId: new mongoose.Types.ObjectId(String(sizeVariantId)),
+  })
+    .sort({ sortOrder: 1, createdAt: 1 })
+    .lean()) as ProductVariantRecord[];
+}
+
 export async function getVariantBySlug(slug: string): Promise<{
   variant: ProductVariantRecord;
   siblings: ProductVariantRecord[];
 } | null> {
   const variant = (await ProductVariant.findOne({ slug, isActive: true }).lean()) as ProductVariantRecord | null;
   if (!variant) return null;
-  const siblings = (await ProductVariant.find({
+
+  const siblingFilter: Record<string, unknown> = {
     parentProductId: variant.parentProductId,
     isActive: true,
-  })
+  };
+  if (variant.sizeVariantId) {
+    siblingFilter.sizeVariantId = variant.sizeVariantId;
+  } else {
+    siblingFilter.$or = [{ sizeVariantId: null }, { sizeVariantId: { $exists: false } }];
+  }
+
+  const siblings = (await ProductVariant.find(siblingFilter)
     .sort({ sortOrder: 1, createdAt: 1 })
     .lean()) as ProductVariantRecord[];
   return { variant, siblings };
@@ -153,7 +224,9 @@ export async function applyDefaultVariantToProduct(parent: Record<string, unknow
 
 export async function attachVariantsForListing(products: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
   const ids = products.map((p) => p._id).filter(Boolean);
-  const variantsMap = await getVariantsByProductIds(ids as mongoose.Types.ObjectId[]);
+  const variantsMap = await getVariantsByProductIds(ids as mongoose.Types.ObjectId[], {
+    productLevelOnly: true,
+  });
 
   return products.map((product) => {
     const variants = variantsMap.get(String(product._id)) || [];
@@ -183,15 +256,26 @@ export type VariantInput = {
   sku?: string;
   sortOrder?: number;
   isActive?: boolean;
+  sizeVariantId?: string;
 };
 
 export async function syncProductVariants(
   productId: mongoose.Types.ObjectId | string,
   baseSlug: string,
-  variants: VariantInput[]
+  variants: VariantInput[],
+  sizeVariantId?: mongoose.Types.ObjectId | string | null
 ) {
   const parentId = new mongoose.Types.ObjectId(String(productId));
-  const existing = await ProductVariant.find({ parentProductId: parentId }).lean();
+  const sizeId = sizeVariantId ? new mongoose.Types.ObjectId(String(sizeVariantId)) : null;
+
+  const existingFilter: Record<string, unknown> = { parentProductId: parentId };
+  if (sizeId) {
+    existingFilter.sizeVariantId = sizeId;
+  } else {
+    existingFilter.$or = [{ sizeVariantId: null }, { sizeVariantId: { $exists: false } }];
+  }
+
+  const existing = await ProductVariant.find(existingFilter).lean();
   const existingIds = new Set(existing.map((v) => String(v._id)));
   const keptIds = new Set<string>();
 
@@ -199,7 +283,7 @@ export async function syncProductVariants(
     const input = variants[i];
     if (!input.colorName?.trim()) continue;
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       parentProductId: parentId,
       colorName: input.colorName.trim(),
       colorHex: input.colorHex?.trim() || '#000000',
@@ -212,6 +296,10 @@ export async function syncProductVariants(
       sortOrder: input.sortOrder ?? i,
       isActive: input.isActive !== false,
     };
+
+    if (sizeId) {
+      payload.sizeVariantId = sizeId;
+    }
 
     if (input._id && existingIds.has(String(input._id))) {
       const slug =
@@ -231,5 +319,12 @@ export async function syncProductVariants(
     await ProductVariant.deleteMany({ _id: { $in: toDelete } });
   }
 
-  return ProductVariant.find({ parentProductId: parentId }).sort({ sortOrder: 1 }).lean();
+  const resultFilter: Record<string, unknown> = { parentProductId: parentId };
+  if (sizeId) {
+    resultFilter.sizeVariantId = sizeId;
+  } else {
+    resultFilter.$or = [{ sizeVariantId: null }, { sizeVariantId: { $exists: false } }];
+  }
+
+  return ProductVariant.find(resultFilter).sort({ sortOrder: 1 }).lean();
 }

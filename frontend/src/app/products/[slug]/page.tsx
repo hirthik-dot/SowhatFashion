@@ -19,30 +19,34 @@ export async function generateStaticParams() {
 }
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
-  const resolvedParams = await params;
+  const { slug } = await params;
   let product: any = null;
   let relatedProducts: any[] = [];
 
   try {
-    product = await getProductBySlug(resolvedParams.slug);
+    product = await getProductBySlug(slug);
+  } catch (error) {
+    console.error('Failed to load product details:', error);
+  }
 
-    // Legacy parent slug → redirect to default variant
-    if (product?.redirectTo) {
-      redirect(`/products/${product.redirectTo}`);
-    }
+  // Parent / legacy slug → default color or size variant (must stay outside try/catch — redirect throws)
+  if (product?.redirectTo && product.redirectTo !== slug) {
+    redirect(`/products/${product.redirectTo}`);
+  }
 
-    if (product) {
+  if (product?._id && !product.redirectTo) {
+    try {
       const parentId = product.parentProductId || product._id;
       const relatedRes = await getProducts(`category=${product.category}&limit=8`);
       relatedProducts = (relatedRes.products || [])
         .filter((p: any) => String(p.parentProductId || p._id) !== String(parentId))
         .slice(0, 4);
+    } catch (error) {
+      console.error('Failed to load related products:', error);
     }
-  } catch (error) {
-    console.error('Failed to load product details:', error);
   }
 
-  if (!product || !product._id) {
+  if (!product || !product._id || product.redirectTo) {
     return (
       <div className="min-h-screen flex flex-col pt-32 items-center bg-[var(--surface)] text-center">
         <h1 className="text-3xl font-playfair mb-4">Product Not Found</h1>

@@ -11,7 +11,7 @@ import {
   lineRevenueExGst,
 } from '../lib/billing-revenue';
 import { gstOnAfterItemDiscount } from '../lib/billing-totals';
-import { activeBillItems } from '../lib/billing-replacements';
+import { activeBillItems, recalculateBillTotalsFromActiveItems } from '../lib/billing-replacements';
 import BillingPointsAccount from '../models/BillingPointsAccount';
 import BillingPointsLedger from '../models/BillingPointsLedger';
 import { normalizeBillingPhone } from '../lib/billing-points';
@@ -20,7 +20,32 @@ const router = express.Router();
 router.use(requirePermission('canViewReports'));
 const FINALIZED_STATUSES = ['completed', 'replaced', 'partial_replaced', 'returned', 'partial_return'];
 
+const billCashCollected = (bill: any) => {
+  const recalculated = recalculateBillTotalsFromActiveItems(bill);
+  if (
+    recalculated &&
+    (String(bill?.status || '').includes('replaced') ||
+      (bill?.items || []).some((item: any) => item.isReplacement && !item.replacedOut))
+  ) {
+    return recalculated.totalAmount;
+  }
+  return Number(bill?.totalAmount || 0);
+};
+
 const gstOnBill = (bill: any) => {
+  const active = activeBillItems(bill);
+  if (active.length > 0) {
+    const subtotal = active.reduce(
+      (sum: number, item: any) => sum + Number(item.mrp || 0) * Math.max(1, Number(item.quantity || 1)),
+      0
+    );
+    const totalItemDiscount = active.reduce(
+      (sum: number, item: any) =>
+        sum + Number(item.itemDiscountAmount || 0) * Math.max(1, Number(item.quantity || 1)),
+      0
+    );
+    return gstOnAfterItemDiscount(subtotal, totalItemDiscount);
+  }
   if (Number(bill?.gstAmount || 0) > 0 && Number(bill?.taxableAmount || 0) >= 0) {
     const gstAmount = Number(bill.gstAmount);
     const taxableAmount = Number(bill.taxableAmount);
@@ -174,7 +199,7 @@ router.get('/summary', async (req, res: Response) => {
   const totalRevenue = bills.reduce((sum, bill) => sum + billRevenueExGst(bill), 0);
   const totalPointsCost = bills.reduce((sum, bill) => sum + Number(bill.pointsDiscountAmount || 0), 0);
   const totalPointsRedeemed = bills.reduce((sum, bill) => sum + Number(bill.pointsRedeemed || 0), 0);
-  const totalCashCollected = bills.reduce((sum, bill) => sum + Number(bill.totalAmount || 0), 0);
+  const totalCashCollected = bills.reduce((sum, bill) => sum + billCashCollected(bill), 0);
   const totalBills = bills.length;
   const totalItems = bills.reduce(
     (sum, bill) =>
@@ -607,7 +632,7 @@ router.get('/bill-profit/:id', async (req, res: Response) => {
         pointsRedeemed: Number((bill as any).pointsRedeemed || 0),
         pointsDiscountAmount: Number((bill as any).pointsDiscountAmount || 0),
         pointsCost: Number((bill as any).pointsDiscountAmount || 0),
-        cashCollected: Number((bill as any).totalAmount || 0),
+        cashCollected: billCashCollected(bill),
       },
       ...metrics,
     });
@@ -824,12 +849,20 @@ router.get('/customers/:phone', requirePermission('canViewCustomerReports'), asy
 
   if (!bills.length && !returns.length) return res.status(404).json({ message: 'Customer not found' });
 
+  const returnsByBill = returns.reduce((acc: Record<string, any[]>, row: any) => {
+    const key = String(row.bill || '');
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+
   const billMetrics = bills.reduce(
     (acc: any, bill: any) => {
       acc.totalSpent += billRevenueExGst(bill);
       acc.totalDiscount += Number(bill.totalItemDiscount || 0) + Number(bill.billDiscountAmount || 0);
       acc.payments[bill.paymentMethod || 'unknown'] = (acc.payments[bill.paymentMethod || 'unknown'] || 0) + 1;
-      (bill.items || []).forEach((item: any) => {
+      activeBillItems(bill, returnsByBill[String(bill._id)] || []).forEach((item: any) => {
         const categoryKey = item.category || 'Uncategorized';
         acc.categories[categoryKey] = (acc.categories[categoryKey] || 0) + Number(item.quantity || 0);
       });
@@ -870,7 +903,15 @@ router.get('/customers/:phone', requirePermission('canViewCustomerReports'), asy
       balance: Number(pointsAccount?.balance || 0),
       ledger: pointsLedger || [],
     },
-    bills,
+    bills: bills.map((bill: any) => {
+      const billReturns = returnsByBill[String(bill._id)] || [];
+      const recalculated = recalculateBillTotalsFromActiveItems(bill, billReturns);
+      return {
+        ...bill,
+        items: activeBillItems(bill, billReturns),
+        totalAmount: recalculated?.totalAmount ?? bill.totalAmount,
+      };
+    }),
     returns,
   });
 });
