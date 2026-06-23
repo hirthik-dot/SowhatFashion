@@ -29,6 +29,7 @@ const PAYMENT_OPTIONS = [
 ];
 
 const formatStatusLabel = (bill: any) => {
+  if (bill.isEcommerce) return bill.ecommerceOrderStatus ? `E-COM: ${bill.ecommerceOrderStatus.toUpperCase()}` : "E-COM";
   if ((bill.editHistory || []).length > 0) return "Edited";
   if (bill.status === "replaced") return "Returned";
   if (bill.status === "partial_replaced") return "Partial Return";
@@ -36,6 +37,7 @@ const formatStatusLabel = (bill: any) => {
 };
 
 const statusBadgeClass = (bill: any) => {
+  if (bill.isEcommerce) return "bg-purple-600/20 text-purple-300";
   if ((bill.editHistory || []).length > 0) return "bg-blue-600/20 text-blue-300";
   if (bill.status === "replaced") return "bg-red-600/20 text-red-300";
   if (bill.status === "partial_replaced") return "bg-orange-500/20 text-orange-300";

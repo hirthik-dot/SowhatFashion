@@ -52,6 +52,15 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const maxStock = (() => {
+      if (product.sizeStock && product.sizeStock.length > 0 && selectedSize) {
+        const sizeObj = product.sizeStock.find((s: any) => s.size === selectedSize);
+        return sizeObj ? Number(sizeObj.stock) || 0 : (Number(product.stock) || 0);
+      }
+      return Number(product.stock) || 0;
+    })();
+
     addItem({
       productId: product.parentProductId || product._id,
       name: product.name,
@@ -60,6 +69,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
       color: product.colorName,
       price: product.price,
       discountPrice: product.discountPrice,
+      maxStock,
     });
   };
 

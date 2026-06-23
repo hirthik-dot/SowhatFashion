@@ -107,7 +107,7 @@ export default function CartPage() {
                             <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
                               <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1, item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">-</button>
                               <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1, item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">+</button>
+                              <button onClick={() => updateQuantity(item.productId, item.size, Math.min(item.maxStock || item.quantity + 1, item.quantity + 1), item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">+</button>
                             </div>
                           </div>
                         </div>
@@ -148,7 +148,7 @@ export default function CartPage() {
                           <div className="flex items-center border border-[var(--border)] rounded">
                             <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1, item.color)} className="px-3 py-1 hover:bg-gray-100">-</button>
                             <span className="px-3 font-medium text-sm">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1, item.color)} className="px-3 py-1 hover:bg-gray-100">+</button>
+                            <button onClick={() => updateQuantity(item.productId, item.size, Math.min(item.maxStock || item.quantity + 1, item.quantity + 1), item.color)} className="px-3 py-1 hover:bg-gray-100">+</button>
                           </div>
                         </div>
 

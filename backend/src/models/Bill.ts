@@ -63,6 +63,9 @@ export interface IBill extends Document {
     previousTotal: number;
     newTotal: number;
   }>;
+  isEcommerce?: boolean;
+  ecommerceOrderId?: mongoose.Types.ObjectId;
+  ecommerceOrderStatus?: string;
 }
 
 const BillSchema = new Schema<IBill>(
@@ -119,6 +122,9 @@ const BillSchema = new Schema<IBill>(
         newTotal: { type: Number, required: true, default: 0 },
       },
     ],
+    isEcommerce: { type: Boolean, default: false },
+    ecommerceOrderId: { type: Schema.Types.ObjectId, ref: 'Order' },
+    ecommerceOrderStatus: { type: String },
   },
   { timestamps: true }
 );

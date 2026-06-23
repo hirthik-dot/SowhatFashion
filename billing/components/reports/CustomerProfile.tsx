@@ -125,6 +125,7 @@ export default function CustomerProfile({ open, loading, profile, onClose }: Cus
                     <th>Total</th>
                     <th>Payment</th>
                     <th>Items</th>
+                    <th>E-Com Status</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -136,6 +137,7 @@ export default function CustomerProfile({ open, loading, profile, onClose }: Cus
                       <td>{formatCurrency(effectiveBillTotalAmount(bill, returnsByBillId.get(String(bill._id))))}</td>
                       <td>{String(bill.paymentMethod || "-").toUpperCase()}</td>
                       <td>{activeBillItemCount(bill.items, returnsByBillId.get(String(bill._id)))}</td>
+                      <td>{bill.isEcommerce ? (bill.ecommerceOrderStatus?.toUpperCase() || 'E-COM') : "-"}</td>
                       <td>
                         <button
                           className="underline"

@@ -53,21 +53,32 @@ export default function ProductDetailClient({ product }: { product: any }) {
     }
   }, [currentSlug, isSizeVariantPage, product.sizeName]);
 
+  const nextImage = () => setSelectedImage((s) => (s === images.length - 1 ? 0 : s + 1));
+  const prevImage = () => setSelectedImage((s) => (s === 0 ? images.length - 1 : s - 1));
+
   const handleTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
   const handleTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
   const handleTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    if (distance > 50) setSelectedImage((s) => (s === images.length - 1 ? 0 : s + 1));
-    if (distance < -50) setSelectedImage((s) => (s === 0 ? images.length - 1 : s - 1));
+    if (distance > 50) nextImage();
+    if (distance < -50) prevImage();
     setTouchStart(0);
     setTouchEnd(0);
   };
 
   const discount = calculateDiscount(price, discountPrice);
   const hasDiscount = discount > 0;
-  const isOutOfStock = stock <= 0;
   const colorName = product.colorName || '';
+
+  const maxStock = (() => {
+    if (product.sizeStock && product.sizeStock.length > 0 && selectedSize) {
+      const sizeObj = product.sizeStock.find((s: any) => s.size === selectedSize);
+      return sizeObj ? Number(sizeObj.stock) || 0 : stock;
+    }
+    return stock;
+  })();
+  const isOutOfStock = maxStock <= 0;
 
   const handleAddToCart = () => {
     if (sizes.length > 0 && !selectedSize) {
@@ -85,6 +96,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
         colorHex: product.colorHex,
         price,
         discountPrice,
+        maxStock,
       },
       quantity
     );
@@ -122,7 +134,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
         </div>
 
         <div
-          className="relative aspect-square md:aspect-[3/4] w-full bg-[var(--surface)] rounded overflow-hidden"
+          className="relative aspect-square md:aspect-[3/4] w-full bg-[var(--surface)] rounded overflow-hidden group"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -135,6 +147,43 @@ export default function ProductDetailClient({ product }: { product: any }) {
             priority
             sizes="(max-width: 768px) 100vw, 50vw"
           />
+
+          {images.length > 1 && (
+            <>
+              {/* Desktop/Tablet Navigation Arrows */}
+              <button
+                onClick={(e) => { e.preventDefault(); prevImage(); }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 hover:bg-white text-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10 hidden md:flex"
+                aria-label="Previous image"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <button
+                onClick={(e) => { e.preventDefault(); nextImage(); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 hover:bg-white text-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10 hidden md:flex"
+                aria-label="Next image"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+
+              {/* Mobile Navigation Arrows (always visible, smaller) */}
+              <button
+                onClick={(e) => { e.preventDefault(); prevImage(); }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/60 text-black rounded-full flex items-center justify-center shadow-sm z-10 md:hidden"
+                aria-label="Previous image"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <button
+                onClick={(e) => { e.preventDefault(); nextImage(); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/60 text-black rounded-full flex items-center justify-center shadow-sm z-10 md:hidden"
+                aria-label="Next image"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </>
+          )}
+
           {images.length > 1 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 md:hidden">
               {images.map((_: string, i: number) => (
@@ -235,9 +284,9 @@ export default function ProductDetailClient({ product }: { product: any }) {
                 <div className="flex items-center border border-[var(--border)] rounded">
                   <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="px-4 py-3 hover:bg-gray-50 text-[var(--text-secondary)] transition-colors">-</button>
                   <span className="px-4 font-semibold w-12 text-center">{quantity}</span>
-                  <button onClick={() => setQuantity(quantity + 1)} className="px-4 py-3 hover:bg-gray-50 text-[var(--text-secondary)] transition-colors">+</button>
+                  <button onClick={() => setQuantity(Math.min(maxStock, quantity + 1))} className="px-4 py-3 hover:bg-gray-50 text-[var(--text-secondary)] transition-colors">+</button>
                 </div>
-                <p className="text-xs text-[var(--text-secondary)]">Only {stock} left in stock</p>
+                <p className="text-xs text-[var(--text-secondary)]">Only {maxStock} left in stock</p>
               </div>
             </div>
 

@@ -50,6 +50,15 @@ export default function CollectionProductCard({ product, listView }: Props) {
   const quickAdd = (e: React.MouseEvent, size: string) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const maxStock = (() => {
+      if (product.sizeStock && product.sizeStock.length > 0) {
+        const sizeObj = product.sizeStock.find((s: any) => s.size === size);
+        return sizeObj ? Number(sizeObj.stock) || 0 : (Number(product.stock) || 0);
+      }
+      return Number(product.stock) || 0;
+    })();
+
     addItem({
       productId: product._id,
       name: product.name,
@@ -57,6 +66,7 @@ export default function CollectionProductCard({ product, listView }: Props) {
       size,
       price: product.price,
       discountPrice: product.discountPrice,
+      maxStock,
     });
   };
 
