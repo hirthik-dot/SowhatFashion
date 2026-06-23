@@ -15,6 +15,7 @@ export interface CartItem {
   quantity: number;
   price: number;
   discountPrice: number;
+  stock?: number;
 }
 
 interface CartStore {
@@ -44,12 +45,15 @@ export const useCartStore = create<CartStore>()(
 
           if (existingIndex > -1) {
             const newItems = [...state.items];
-            newItems[existingIndex].quantity += quantity;
+            const existingItem = newItems[existingIndex];
+            const maxStock = existingItem.stock !== undefined ? existingItem.stock : Infinity;
+            existingItem.quantity = Math.min(existingItem.quantity + quantity, maxStock);
             return { items: newItems, cartToast: 'Added to cart' };
           }
 
+          const maxStock = item.stock !== undefined ? item.stock : Infinity;
           return {
-            items: [...state.items, { ...item, quantity }],
+            items: [...state.items, { ...item, quantity: Math.min(quantity, maxStock) }],
             cartToast: 'Added to cart',
           };
         });
@@ -73,11 +77,13 @@ export const useCartStore = create<CartStore>()(
         }
         const key = cartItemKey(productId, size, color);
         set((state) => ({
-          items: state.items.map((i) =>
-            cartItemKey(i.productId, i.size, i.color) === key
-              ? { ...i, quantity }
-              : i
-          ),
+          items: state.items.map((i) => {
+            if (cartItemKey(i.productId, i.size, i.color) === key) {
+              const maxStock = i.stock !== undefined ? i.stock : Infinity;
+              return { ...i, quantity: Math.min(quantity, maxStock) };
+            }
+            return i;
+          }),
         }));
       },
 
