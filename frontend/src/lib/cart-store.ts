@@ -12,10 +12,9 @@ export interface CartItem {
   size: string;
   color?: string;
   colorHex?: string;
+  quantity: number;
   price: number;
   discountPrice: number;
-  maxStock: number;
-  quantity: number;
 }
 
 interface CartStore {
@@ -43,30 +42,15 @@ export const useCartStore = create<CartStore>()(
             (i) => cartItemKey(i.productId, i.size, i.color) === key
           );
 
-          let newQuantity = quantity;
-          let toastMessage = 'Added to cart';
-
           if (existingIndex > -1) {
-            const existingItem = state.items[existingIndex];
-            newQuantity = existingItem.quantity + quantity;
-            if (newQuantity > item.maxStock) {
-              newQuantity = item.maxStock;
-              toastMessage = `Stock limit reached (${item.maxStock} available)`;
-            }
-            
             const newItems = [...state.items];
-            newItems[existingIndex].quantity = newQuantity;
-            return { items: newItems, cartToast: toastMessage };
-          }
-
-          if (newQuantity > item.maxStock) {
-             newQuantity = item.maxStock;
-             toastMessage = `Stock limit reached (${item.maxStock} available)`;
+            newItems[existingIndex].quantity += quantity;
+            return { items: newItems, cartToast: 'Added to cart' };
           }
 
           return {
-            items: [...state.items, { ...item, quantity: newQuantity }],
-            cartToast: toastMessage,
+            items: [...state.items, { ...item, quantity }],
+            cartToast: 'Added to cart',
           };
         });
       },
@@ -89,16 +73,11 @@ export const useCartStore = create<CartStore>()(
         }
         const key = cartItemKey(productId, size, color);
         set((state) => ({
-          items: state.items.map((i) => {
-            if (cartItemKey(i.productId, i.size, i.color) === key) {
-              let newQuantity = quantity;
-              if (newQuantity > i.maxStock) {
-                newQuantity = i.maxStock;
-              }
-              return { ...i, quantity: newQuantity };
-            }
-            return i;
-          }),
+          items: state.items.map((i) =>
+            cartItemKey(i.productId, i.size, i.color) === key
+              ? { ...i, quantity }
+              : i
+          ),
         }));
       },
 

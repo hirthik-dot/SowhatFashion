@@ -2,8 +2,6 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import Order from '../models/Order';
 import { User } from '../models/User';
-import Product from '../models/Product';
-import Bill from '../models/Bill';
 import authMiddleware from '../middleware/authMiddleware';
 import rateLimit from 'express-rate-limit';
 
@@ -19,7 +17,7 @@ const lookupLimiter = rateLimit({
 router.get('/my-orders', async (req: Request, res: Response) => {
   try {
     let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
-    
+
     const authHeader = req.headers.authorization;
     if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
       userToken = authHeader.split(' ')[1];
@@ -81,9 +79,9 @@ router.post('/customer', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Email and phone are required' });
     }
 
-    const orders = await Order.find({ 
-      'customer.email': email, 
-      'customer.phone': phone 
+    const orders = await Order.find({
+      'customer.email': email,
+      'customer.phone': phone
     }).sort({ createdAt: -1 });
 
     res.json(orders);
@@ -208,69 +206,6 @@ router.patch('/:id/confirm', async (req: Request, res: Response) => {
 
     order.orderStatus = 'confirmed';
     await order.save();
-
-    // Deduct stock and create Bill
-    const billItems = [];
-    let billSubtotal = 0;
-
-    for (const item of order.items) {
-      const product = await Product.findById(item.product);
-      if (product) {
-        // Deduct total stock
-        product.stock = Math.max(0, product.stock - item.quantity);
-
-        // Deduct size stock
-        if (product.sizeStock && product.sizeStock.length > 0) {
-          const sizeObj = product.sizeStock.find(s => s.size === item.size);
-          if (sizeObj) {
-            sizeObj.stock = Math.max(0, sizeObj.stock - item.quantity);
-          }
-        }
-        await product.save();
-
-        const lineTotal = item.price * item.quantity;
-        billSubtotal += lineTotal;
-        billItems.push({
-          product: product._id,
-          barcode: product.barcode || '',
-          name: item.name,
-          category: product.category || '',
-          size: item.size,
-          mrp: item.price,
-          itemDiscountType: 'none',
-          itemDiscountValue: 0,
-          itemDiscountAmount: 0,
-          billDiscountShare: 0,
-          sellingPrice: item.price,
-          quantity: item.quantity,
-          gstPercent: 5,
-          lineTotal: lineTotal,
-          netLineTotal: lineTotal,
-          replacedOut: false,
-          isReplacement: false
-        });
-      }
-    }
-
-    // Generate Bill
-    const billNumber = `EC-${Date.now().toString().slice(-6)}`;
-    const bill = new Bill({
-      billNumber,
-      customer: {
-        name: order.customer.name,
-        phone: order.customer.phone
-      },
-      items: billItems,
-      subtotal: billSubtotal,
-      totalAmount: order.totalAmount,
-      paymentMethod: order.paymentStatus === 'paid' ? 'pending' : 'pending', // Usually pending or paid depending on logic.
-      status: 'completed',
-      isEcommerce: true,
-      ecommerceOrderId: order._id,
-      ecommerceOrderStatus: 'confirmed',
-    });
-    await bill.save();
-
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -294,12 +229,6 @@ router.put('/:id/status', authMiddleware, async (req: Request, res: Response) =>
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
-
-    // Update Bill ecommerceOrderStatus
-    await Bill.findOneAndUpdate(
-      { ecommerceOrderId: order._id },
-      { ecommerceOrderStatus: orderStatus }
-    );
 
     res.json(order);
   } catch (error) {

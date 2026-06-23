@@ -34,7 +34,7 @@ export default function CartPage() {
   return (
     <div className="min-h-screen flex flex-col bg-[var(--surface)]">
       <Navbar variant="default" />
-      
+
       <main className="flex-grow max-w-7xl mx-auto px-4 py-8 md:py-16 w-full">
         <h1 className="text-3xl font-playfair font-bold uppercase tracking-widest mb-10 text-center md:text-left">
           Shopping Cart
@@ -43,7 +43,7 @@ export default function CartPage() {
         {items.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-xl border border-[var(--border)] shadow-sm">
             <div className="w-24 h-24 mx-auto mb-6 opacity-20">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg>
             </div>
             <h2 className="text-2xl font-playfair mb-4">Your cart is empty</h2>
             <p className="text-[var(--text-secondary)] mb-8">Looks like you haven't added anything to your cart yet.</p>
@@ -65,14 +65,14 @@ export default function CartPage() {
                   {items.map((item) => {
                     const price = item.discountPrice > 0 ? item.discountPrice : item.price;
                     const itemTotal = price * item.quantity;
-                    
+
                     return (
                       <div key={cartItemKey(item.productId, item.size, item.color)} className="p-4 md:p-6 flex flex-row md:grid md:grid-cols-12 gap-0 md:gap-4 items-center bg-white border-b border-[var(--border)] relative">
                         {/* Product Info Mobile Combo */}
                         <div className="w-20 h-24 relative bg-gray-100 rounded border border-[var(--border)] overflow-hidden shrink-0 mr-4 md:hidden">
                           <Image src={item.image || '/placeholder.jpg'} alt={item.name} fill className="object-cover" />
                         </div>
-                        
+
                         <div className="flex-1 flex flex-col justify-between md:hidden">
                           <div className="flex justify-between items-start">
                             <div className="pr-2">
@@ -97,17 +97,17 @@ export default function CartPage() {
                               </p>
                             </div>
                             <button onClick={() => removeItem(item.productId, item.size, item.color)} className="p-2 -mr-2 -mt-2 text-gray-400 hover:text-[var(--sale-red)] shrink-0">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                             </button>
                           </div>
-                          
+
                           <div className="flex justify-between items-end mt-3">
                             <span className="font-bold">{formatPrice(price)}</span>
-                            
+
                             <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
                               <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1, item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">-</button>
                               <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.productId, item.size, Math.min(item.maxStock || item.quantity + 1, item.quantity + 1), item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">+</button>
+                              <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1, item.color)} className="w-[44px] h-[36px] flex items-center justify-center hover:bg-gray-100 bg-gray-50">+</button>
                             </div>
                           </div>
                         </div>
@@ -148,7 +148,7 @@ export default function CartPage() {
                           <div className="flex items-center border border-[var(--border)] rounded">
                             <button onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1, item.color)} className="px-3 py-1 hover:bg-gray-100">-</button>
                             <span className="px-3 font-medium text-sm">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.productId, item.size, Math.min(item.maxStock || item.quantity + 1, item.quantity + 1), item.color)} className="px-3 py-1 hover:bg-gray-100">+</button>
+                            <button onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1, item.color)} className="px-3 py-1 hover:bg-gray-100">+</button>
                           </div>
                         </div>
 
@@ -167,7 +167,7 @@ export default function CartPage() {
             <div className="w-full lg:w-1/3">
               <div className="bg-white rounded-xl border border-[var(--border)] shadow-sm p-6 sticky top-[100px]">
                 <h3 className="text-xl font-playfair font-bold uppercase tracking-widest border-b border-[var(--border)] pb-4 mb-6">Order Summary</h3>
-                
+
                 <div className="space-y-4 text-sm text-[var(--text-secondary)] mb-6 border-b border-[var(--border)] pb-6">
                   <div className="flex justify-between">
                     <span>Subtotal ({totalItems} items)</span>
@@ -189,7 +189,7 @@ export default function CartPage() {
                 </button>
 
                 <p className="text-xs text-center text-gray-400 mt-4 flex items-center justify-center gap-1">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Secure Checkout
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg> Secure Checkout
                 </p>
               </div>
             </div>

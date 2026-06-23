@@ -29,7 +29,6 @@ const PAYMENT_OPTIONS = [
 ];
 
 const formatStatusLabel = (bill: any) => {
-  if (bill.isEcommerce) return bill.ecommerceOrderStatus ? `E-COM: ${bill.ecommerceOrderStatus.toUpperCase()}` : "E-COM";
   if ((bill.editHistory || []).length > 0) return "Edited";
   if (bill.status === "replaced") return "Returned";
   if (bill.status === "partial_replaced") return "Partial Return";
@@ -37,7 +36,6 @@ const formatStatusLabel = (bill: any) => {
 };
 
 const statusBadgeClass = (bill: any) => {
-  if (bill.isEcommerce) return "bg-purple-600/20 text-purple-300";
   if ((bill.editHistory || []).length > 0) return "bg-blue-600/20 text-blue-300";
   if (bill.status === "replaced") return "bg-red-600/20 text-red-300";
   if (bill.status === "partial_replaced") return "bg-orange-500/20 text-orange-300";
@@ -354,23 +352,23 @@ export default function HistoryPage() {
                   totalAmount: effectiveBillTotalAmount(viewBill),
                 };
               return (
-            <div className="mt-4 p-3 bg-[var(--surface)] border border-[var(--border)] rounded flex flex-col items-end gap-1 text-sm">
-              <div>Total MRP: ₹{totals.subtotal}</div>
-              {Number(totals.totalItemDiscount || 0) > 0 && (
-                <div className="text-red-400">Item Discs: -₹{totals.totalItemDiscount}</div>
-              )}
-              {Number(totals.billDiscountAmount || 0) > 0 && (
-                <div className="text-red-400">Customer Disc: -₹{totals.billDiscountAmount}</div>
-              )}
-              {Number(viewBill.pointsDiscountAmount || 0) > 0 && (
-                <div className="text-orange-300">
-                  Points ({Number(viewBill.pointsRedeemed || 0)} pts): -₹{viewBill.pointsDiscountAmount}
+                <div className="mt-4 p-3 bg-[var(--surface)] border border-[var(--border)] rounded flex flex-col items-end gap-1 text-sm">
+                  <div>Total MRP: ₹{totals.subtotal}</div>
+                  {Number(totals.totalItemDiscount || 0) > 0 && (
+                    <div className="text-red-400">Item Discs: -₹{totals.totalItemDiscount}</div>
+                  )}
+                  {Number(totals.billDiscountAmount || 0) > 0 && (
+                    <div className="text-red-400">Customer Disc: -₹{totals.billDiscountAmount}</div>
+                  )}
+                  {Number(viewBill.pointsDiscountAmount || 0) > 0 && (
+                    <div className="text-orange-300">
+                      Points ({Number(viewBill.pointsRedeemed || 0)} pts): -₹{viewBill.pointsDiscountAmount}
+                    </div>
+                  )}
+                  <div className="font-bold text-lg pt-2 mt-1 border-t border-[var(--border)] min-w-[200px] text-right">
+                    Cash Collected: ₹{totals.totalAmount}
+                  </div>
                 </div>
-              )}
-              <div className="font-bold text-lg pt-2 mt-1 border-t border-[var(--border)] min-w-[200px] text-right">
-                Cash Collected: ₹{totals.totalAmount}
-              </div>
-            </div>
               );
             })()}
           </div>

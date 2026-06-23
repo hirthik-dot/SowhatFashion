@@ -52,15 +52,6 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
-    const maxStock = (() => {
-      if (product.sizeStock && product.sizeStock.length > 0 && selectedSize) {
-        const sizeObj = product.sizeStock.find((s: any) => s.size === selectedSize);
-        return sizeObj ? Number(sizeObj.stock) || 0 : (Number(product.stock) || 0);
-      }
-      return Number(product.stock) || 0;
-    })();
-
     addItem({
       productId: product.parentProductId || product._id,
       name: product.name,
@@ -69,7 +60,6 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
       color: product.colorName,
       price: product.price,
       discountPrice: product.discountPrice,
-      maxStock,
     });
   };
 
@@ -120,7 +110,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             </div>
           </div>
           <div className="flex items-center">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
           </div>
         </div>
       </Link>
@@ -205,9 +195,8 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 <Link
                   key={v._id || v.slug}
                   href={`/products/${v.slug}`}
-                  className={`relative w-8 h-10 shrink-0 border overflow-hidden rounded-sm ${
-                    v.slug === product.slug ? 'border-black' : 'border-[var(--border)]'
-                  }`}
+                  className={`relative w-8 h-10 shrink-0 border overflow-hidden rounded-sm ${v.slug === product.slug ? 'border-black' : 'border-[var(--border)]'
+                    }`}
                   title={v.colorName}
                 >
                   <Image src={variantThumbnail(v)} alt={v.colorName} fill className="object-cover" sizes="32px" />
@@ -241,29 +230,28 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
           )}
 
           {!hasSizeLinks && (
-          <div className="md:hidden mt-3 pt-2 border-t border-[var(--border)]">
-            <div className="flex flex-wrap gap-2 mb-2">
-              {sizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedSize(size); }}
-                  className={`flex items-center justify-center text-[12px] font-medium min-w-[44px] h-[44px] rounded border ${
-                    selectedSize === size
-                      ? 'bg-[var(--gold)] border-[var(--gold)] text-black'
-                      : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--text-primary)]'
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+            <div className="md:hidden mt-3 pt-2 border-t border-[var(--border)]">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {sizes.map((size) => (
+                  <button
+                    key={size}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedSize(size); }}
+                    className={`flex items-center justify-center text-[12px] font-medium min-w-[44px] h-[44px] rounded border ${selectedSize === size
+                        ? 'bg-[var(--gold)] border-[var(--gold)] text-black'
+                        : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--text-primary)]'
+                      }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleAddToCart}
+                className="w-full bg-[var(--gold)] text-black text-xs font-bold uppercase tracking-wider h-[44px] rounded hover:bg-[var(--gold-hover)] active:bg-[var(--gold)] transition-colors"
+              >
+                ADD TO CART
+              </button>
             </div>
-            <button
-              onClick={handleAddToCart}
-              className="w-full bg-[var(--gold)] text-black text-xs font-bold uppercase tracking-wider h-[44px] rounded hover:bg-[var(--gold-hover)] active:bg-[var(--gold)] transition-colors"
-            >
-              ADD TO CART
-            </button>
-          </div>
           )}
         </div>
       </div>
