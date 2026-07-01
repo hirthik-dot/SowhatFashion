@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { INSTAGRAM_URL, SUPPORT_EMAIL, STORE_LOCATION, WHATSAPP_DISPLAY, WHATSAPP_LINK } from '@/lib/contact';
+import StoreMapSection from '@/components/layout/StoreMapSection';
 
 export default function Footer() {
   return (
-    <footer className="bg-[var(--navbar-bg)] text-white pt-16 pb-8">
+    <>
+      <StoreMapSection />
+      <footer className="bg-[var(--navbar-bg)] text-white pt-16 pb-8">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 border-b border-gray-800 pb-12 mb-8">
           {/* Brand */}
@@ -71,5 +74,6 @@ export default function Footer() {
         </div>
       </div>
     </footer>
+    </>
   );
 }

@@ -171,17 +171,8 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
           <div className="flex items-center justify-between h-16 md:h-18">
             {/* Left links - Desktop */}
             <div className="hidden md:flex items-center gap-8">
-              <Link href="/products?category=tshirt" className="text-xs font-semibold tracking-widest uppercase text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                T-Shirts
-              </Link>
-              <Link href="/products?category=shirt" className="text-xs font-semibold tracking-widest uppercase text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                Shirts
-              </Link>
-              <Link href="/products?category=pant" className="text-xs font-semibold tracking-widest uppercase text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                Pants
-              </Link>
-              <Link href="/offers" className="text-xs font-semibold tracking-widest uppercase text-[var(--gold)] hover:text-[var(--gold-hover)] transition-colors">
-                Offers
+              <Link href="/products" className="text-xs font-semibold tracking-widest uppercase text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                Shop All
               </Link>
             </div>
 
@@ -298,17 +289,8 @@ export default function Navbar({ variant = 'default' }: NavbarProps) {
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-8 space-y-6">
-              <Link href="/products?category=tshirt" className="flex items-center justify-between text-base font-medium" onClick={() => setMenuOpen(false)}>
-                T-Shirts <span>→</span>
-              </Link>
-              <Link href="/products?category=shirt" className="flex items-center justify-between text-base font-medium" onClick={() => setMenuOpen(false)}>
-                Shirts <span>→</span>
-              </Link>
-              <Link href="/products?category=pant" className="flex items-center justify-between text-base font-medium" onClick={() => setMenuOpen(false)}>
-                Pants <span>→</span>
-              </Link>
-              <Link href="/offers" className="flex items-center justify-between text-base font-medium text-[var(--gold)]" onClick={() => setMenuOpen(false)}>
-                Offers <span>→</span>
+              <Link href="/products" className="flex items-center justify-between text-base font-medium" onClick={() => setMenuOpen(false)}>
+                Shop All <span>→</span>
               </Link>
 
               <hr className="border-[var(--border)] my-6" />

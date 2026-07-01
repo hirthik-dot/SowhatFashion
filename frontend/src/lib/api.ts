@@ -161,6 +161,23 @@ export const confirmOrder = async (id: string) => {
   return res.json();
 };
 
+export const requestCancelOrder = async (id: string) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const res = await fetch(`${API}/api/orders/${id}/request-cancel`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to submit cancel request');
+  }
+  return res.json();
+};
+
 export const getOrderById = async (id: string) => {
   const res = await fetch(`${API}/api/orders/${id}`); // Note: Removed credentials: 'include' so it works natively for guests
   return res.json();

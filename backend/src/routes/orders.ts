@@ -212,24 +212,70 @@ router.patch('/:id/confirm', async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/orders/:id/status - update order status (protected)
-router.put('/:id/status', authMiddleware, async (req: Request, res: Response) => {
+// PATCH /api/orders/:id/request-cancel - customer requests cancellation via WhatsApp (authenticated)
+router.patch('/:id/request-cancel', async (req: Request, res: Response) => {
   try {
-    const { orderStatus } = req.body;
-    if (!['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].includes(orderStatus)) {
-      return res.status(400).json({ message: 'Invalid order status' });
+    let userToken = req.cookies?.user_token || req.cookies?.['next-auth.session-token'] || req.cookies?.['__Secure-next-auth.session-token'];
+    const authHeader = req.headers.authorization;
+    if (!userToken && authHeader && authHeader.startsWith('Bearer ')) {
+      userToken = authHeader.split(' ')[1];
     }
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { orderStatus },
-      { new: true }
-    );
+    if (!userToken) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
 
+    const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || '';
+    const decoded = jwt.verify(userToken, secret) as { email?: string };
+    const email = decoded.email;
+    if (!email) {
+      return res.status(400).json({ message: 'Invalid token' });
+    }
+
+    const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    if (order.customer.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(403).json({ message: 'Not authorized to cancel this order' });
+    }
+
+    const cancellable = ['pending', 'confirmed', 'shipped'];
+    if (!cancellable.includes(order.orderStatus)) {
+      return res.status(400).json({ message: 'This order cannot be cancelled' });
+    }
+
+    order.orderStatus = 'cancel_requested';
+    if (order.paymentStatus === 'paid') {
+      order.paymentStatus = 'refund_requested';
+    }
+    await order.save();
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+});
+
+// PUT /api/orders/:id/status - update order status (protected)
+router.put('/:id/status', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { orderStatus } = req.body;
+    if (!['pending', 'confirmed', 'shipped', 'delivered', 'cancel_requested', 'cancelled'].includes(orderStatus)) {
+      return res.status(400).json({ message: 'Invalid order status' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    order.orderStatus = orderStatus;
+    if (orderStatus === 'cancelled' && ['paid', 'refund_requested'].includes(order.paymentStatus)) {
+      order.paymentStatus = 'refunded';
+    }
+
+    await order.save();
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -240,7 +286,7 @@ router.put('/:id/status', authMiddleware, async (req: Request, res: Response) =>
 router.put('/:id/payment-status', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { paymentStatus } = req.body;
-    if (!['pending', 'paid', 'failed'].includes(paymentStatus)) {
+    if (!['pending', 'paid', 'failed', 'refund_requested', 'refunded'].includes(paymentStatus)) {
       return res.status(400).json({ message: 'Invalid payment status' });
     }
 

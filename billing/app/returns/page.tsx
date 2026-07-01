@@ -334,7 +334,7 @@ export default function ReturnsPage() {
                       onDiscountType={(type) => updateReplacementItemDiscount(index, { itemDiscountType: type })}
                       onDiscountValue={(value) =>
                         updateReplacementItemDiscount(index, {
-                          itemDiscountType: item.itemDiscountType === "none" ? "percent" : item.itemDiscountType,
+                          itemDiscountType: item.itemDiscountType === "none" ? "amount" : item.itemDiscountType,
                           itemDiscountValue: value,
                         })
                       }
@@ -405,7 +405,7 @@ export default function ReturnsPage() {
                     onChange={(e) => {
                       const value = Number(e.target.value || 0);
                       setBillDiscountValue(value);
-                      if (billDiscountType === "none") setBillDiscountType("percent");
+                      if (billDiscountType === "none") setBillDiscountType("amount");
                     }}
                   />
                   <span className={replacementTotals.billDiscountAmount > 0 ? "font-bold text-[var(--text-primary)]" : ""}>

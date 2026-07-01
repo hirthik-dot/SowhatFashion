@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { INSTAGRAM_URL, SUPPORT_EMAIL, STORE_LOCATION, WHATSAPP_DISPLAY, WHATSAPP_LINK } from '@/lib/contact';
+import StoreMapSection from '@/components/layout/StoreMapSection';
 
 const BRAND = 'Sowaat Menswear';
 
@@ -7,7 +8,9 @@ export default function PremiumFooter({ instagramHandle }: { instagramHandle?: s
   const handle = instagramHandle || '@SOWAATMENSWEAR';
 
   return (
-    <footer className="bg-[#111111] text-white">
+    <>
+      <StoreMapSection />
+      <footer className="bg-[#111111] text-white">
       <div className="max-w-7xl mx-auto px-6 pt-16 pb-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 border-b border-white/10 pb-12 mb-8">
           <div>
@@ -92,5 +95,6 @@ export default function PremiumFooter({ instagramHandle }: { instagramHandle?: s
         <p className="text-center text-[10px] text-white/30 mt-4 md:hidden">{handle}</p>
       </div>
     </footer>
+    </>
   );
 }

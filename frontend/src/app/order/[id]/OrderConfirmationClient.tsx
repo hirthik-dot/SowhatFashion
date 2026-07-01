@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { formatPrice, getOrderStatusLabel, getOrderStatusColors, getPaymentStatusLabel, getPaymentStatusColors } from '@/lib/utils';
 import { confirmOrder } from '@/lib/api';
 import { buildWhatsAppOrderLink } from '@/lib/whatsapp';
+import CancelOrderFlow from '@/components/orders/CancelOrderFlow';
 import { IconCheckCircle, IconSmartphone } from '@/components/icons/PremiumIcons';
 
 interface OrderConfirmationClientProps {
@@ -42,6 +43,7 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
   const [error, setError] = useState('');
   const isConfirmed = order.orderStatus === 'confirmed';
   const isPending = order.orderStatus === 'pending';
+  const isCancelRequested = order.orderStatus === 'cancel_requested';
   const orderStatusColor = getOrderStatusColors(order.orderStatus);
   const paymentStatusColor = getPaymentStatusColors(order.paymentStatus);
 
@@ -94,6 +96,14 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
           <h1 className="text-4xl font-playfair font-bold mb-2">Order Placed Successfully</h1>
           <p className="opacity-90 text-lg">Thank you for shopping with Sowaat Menswear.</p>
         </div>
+      ) : isCancelRequested ? (
+        <div className="bg-orange-100 text-orange-900 p-10 text-center">
+          <h1 className="text-3xl font-playfair font-bold mb-2">Cancel Request Submitted</h1>
+          <p className="opacity-90 text-base max-w-lg mx-auto">
+            We received your cancellation request and will review it shortly.
+            {order.paymentStatus === 'refund_requested' && ' Your refund will be processed upon approval.'}
+          </p>
+        </div>
       ) : (
         <div className="bg-[#FEF3C7] text-[#92400E] p-10 text-center">
           <div className="w-20 h-20 rounded-full bg-white/40 mx-auto flex items-center justify-center mb-6">
@@ -140,6 +150,11 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
                 <TrackerStep label="Order Placed" completed={true} active={false} />
                 <TrackerStep label="Cancelled" completed={false} active={false} failed={true} />
               </>
+            ) : order.orderStatus === 'cancel_requested' ? (
+              <>
+                <TrackerStep label="Order Placed" completed={true} active={false} />
+                <TrackerStep label="Cancel Request" completed={false} active={true} failed={true} />
+              </>
             ) : (
               <>
                 <TrackerStep label="Awaiting Confirmation" completed={false} active={order.orderStatus === 'pending'} />
@@ -155,6 +170,18 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
               <>
                 <TrackerStep label="Payment Pending" completed={true} active={false} />
                 <TrackerStep label="Payment Failed" completed={false} active={false} failed={true} />
+              </>
+            ) : order.paymentStatus === 'refunded' ? (
+              <>
+                <TrackerStep label="Payment Pending" completed={true} active={false} />
+                <TrackerStep label="Paid" completed={true} active={false} />
+                <TrackerStep label="Refunded" completed={false} active={false} failed={true} />
+              </>
+            ) : order.paymentStatus === 'refund_requested' ? (
+              <>
+                <TrackerStep label="Payment Pending" completed={true} active={false} />
+                <TrackerStep label="Paid" completed={true} active={false} />
+                <TrackerStep label="Refund Requested" completed={false} active={true} />
               </>
             ) : (
               <>
@@ -276,6 +303,13 @@ export default function OrderConfirmationClient({ order: initialOrder }: OrderCo
             </button>
           </div>
         )}
+
+        <div className="mt-10 pt-8 border-t border-[var(--border)]">
+          <CancelOrderFlow
+            order={order}
+            onOrderUpdated={setOrder}
+          />
+        </div>
 
         {isConfirmed && (
           <div className="mt-12 text-center pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row gap-4 justify-center">

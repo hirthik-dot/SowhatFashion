@@ -27,8 +27,8 @@ export interface IOrder extends Document {
   totalAmount: number;
   razorpayOrderId: string;
   razorpayPaymentId: string;
-  paymentStatus: 'pending' | 'paid' | 'failed';
-  orderStatus: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  paymentStatus: 'pending' | 'paid' | 'failed' | 'refund_requested' | 'refunded';
+  orderStatus: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancel_requested' | 'cancelled';
   createdAt: Date;
 }
 
@@ -62,12 +62,12 @@ const OrderSchema = new Schema<IOrder>(
     razorpayPaymentId: { type: String, default: '' },
     paymentStatus: {
       type: String,
-      enum: ['pending', 'paid', 'failed'],
+      enum: ['pending', 'paid', 'failed', 'refund_requested', 'refunded'],
       default: 'pending',
     },
     orderStatus: {
       type: String,
-      enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'],
+      enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancel_requested', 'cancelled'],
       default: 'pending',
     },
   },

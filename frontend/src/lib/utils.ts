@@ -64,6 +64,10 @@ export function truncate(str: string, len: number): string {
 const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Awaiting Confirmation',
   confirmed: 'Order Placed',
+  cancel_requested: 'Cancel Request',
+  cancelled: 'Cancelled',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
 };
 
 export function getOrderStatusLabel(status: string): string {
@@ -82,6 +86,8 @@ export function getOrderStatusColors(status: string): { bg: string; text: string
       return { bg: '#D1FAE5', text: '#065F46' };
     case 'cancelled':
       return { bg: '#FEE2E2', text: '#991B1B' };
+    case 'cancel_requested':
+      return { bg: '#FFEDD5', text: '#9A3412' };
     default:
       return { bg: '#FEF3C7', text: '#92400E' };
   }
@@ -91,6 +97,8 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   pending: 'Payment Pending',
   paid: 'Paid',
   failed: 'Payment Failed',
+  refund_requested: 'Refund Requested',
+  refunded: 'Refunded',
 };
 
 export function getPaymentStatusLabel(status: string): string {
@@ -103,6 +111,10 @@ export function getPaymentStatusColors(status: string): { bg: string; text: stri
       return { bg: '#D1FAE5', text: '#065F46' };
     case 'failed':
       return { bg: '#FEE2E2', text: '#991B1B' };
+    case 'refund_requested':
+      return { bg: '#FFEDD5', text: '#9A3412' };
+    case 'refunded':
+      return { bg: '#E0E7FF', text: '#3730A3' };
     case 'pending':
     default:
       return { bg: '#FEF3C7', text: '#92400E' };

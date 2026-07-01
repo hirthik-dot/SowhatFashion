@@ -6,8 +6,8 @@ import { adminGetOrders, adminUpdateOrderStatus, adminUpdatePaymentStatus } from
 import { formatPrice } from '@/lib/utils';
 import Image from 'next/image';
 
-const ORDER_STATUS_FILTERS = ['all', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'] as const;
-const PAYMENT_STATUS_FILTERS = ['all', 'pending', 'paid', 'failed'] as const;
+const ORDER_STATUS_FILTERS = ['all', 'pending', 'confirmed', 'shipped', 'delivered', 'cancel_requested', 'cancelled'] as const;
+const PAYMENT_STATUS_FILTERS = ['all', 'pending', 'paid', 'failed', 'refund_requested', 'refunded'] as const;
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -45,8 +45,8 @@ export default function AdminOrdersPage() {
     if (!selectedOrder) return;
     setStatusUpdateLoading(true);
     try {
-      await adminUpdateOrderStatus(selectedOrder._id, status);
-      setSelectedOrder({ ...selectedOrder, orderStatus: status });
+      const updated = await adminUpdateOrderStatus(selectedOrder._id, status);
+      setSelectedOrder(updated);
       fetchOrders();
     } catch (error) {
       alert('Failed to update status');
@@ -72,6 +72,8 @@ export default function AdminOrdersPage() {
   const paymentBadgeClass = (status: string) => {
     if (status === 'paid') return 'bg-green-100 text-green-700';
     if (status === 'failed') return 'bg-red-100 text-red-700';
+    if (status === 'refunded') return 'bg-indigo-100 text-indigo-700';
+    if (status === 'refund_requested') return 'bg-orange-100 text-orange-700';
     return 'bg-orange-100 text-orange-700';
   };
 
@@ -188,6 +190,7 @@ export default function AdminOrdersPage() {
                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                       order.orderStatus === 'pending' ? 'bg-orange-100 text-orange-700' :
                       order.orderStatus === 'delivered' ? 'bg-green-100 text-green-700' :
+                      order.orderStatus === 'cancel_requested' ? 'bg-orange-100 text-orange-800' :
                       order.orderStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
                       'bg-blue-100 text-blue-700'
                     }`}>
@@ -239,7 +242,7 @@ export default function AdminOrdersPage() {
                 <div className="bg-orange-50 border border-orange-100 rounded-lg p-5 mb-4">
                   <h3 className="font-bold uppercase tracking-widest text-xs mb-3 text-orange-800">Update Order Status</h3>
                   <div className="flex flex-wrap gap-2">
-                    {['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].map(status => (
+                    {['pending', 'confirmed', 'shipped', 'delivered', 'cancel_requested', 'cancelled'].map(status => (
                       <button
                         key={status}
                         onClick={() => handleStatusUpdate(status)}
@@ -259,7 +262,7 @@ export default function AdminOrdersPage() {
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-5">
                   <h3 className="font-bold uppercase tracking-widest text-xs mb-3 text-blue-800">Update Payment Status</h3>
                   <div className="flex flex-wrap gap-2">
-                    {['pending', 'paid', 'failed'].map(status => (
+                    {['pending', 'paid', 'failed', 'refund_requested', 'refunded'].map(status => (
                       <button
                         key={status}
                         onClick={() => handlePaymentUpdate(status)}

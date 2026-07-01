@@ -282,7 +282,7 @@ export default function BillingPage() {
                   item={item}
                   index={index}
                   onDiscountType={(type) => updateItemDiscount(activeTab.id, index, type, item.itemDiscountValue)}
-                  onDiscountValue={(value) => updateItemDiscount(activeTab.id, index, item.itemDiscountType === "none" ? "percent" : item.itemDiscountType, value)}
+                  onDiscountValue={(value) => updateItemDiscount(activeTab.id, index, item.itemDiscountType === "none" ? "amount" : item.itemDiscountType, value)}
                   atStockMax={Number(item.stock || 0) > 0 && item.quantity >= Number(item.stock || 0)}
                   onIncrement={async () => {
                     const result = await incrementItemQuantity(activeTab.id, index);
@@ -372,7 +372,7 @@ export default function BillingPage() {
                   max={isSuperAdmin ? 100 : maxDiscount}
                   disabled={!can("canDiscount")}
                   value={activeTab?.billDiscountValue || 0}
-                  onChange={(e) => activeTab && setBillDiscount(activeTab.id, activeTab.billDiscountType === "none" ? "percent" : activeTab.billDiscountType, Number(e.target.value || 0))}
+                  onChange={(e) => activeTab && setBillDiscount(activeTab.id, activeTab.billDiscountType === "none" ? "amount" : activeTab.billDiscountType, Number(e.target.value || 0))}
                 />
                 <span className={totals.billDiscountAmount > 0 ? "font-bold text-[var(--text-primary)]" : ""}>
                   -₹{totals.billDiscountAmount.toFixed(2)}
